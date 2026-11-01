@@ -1,5 +1,7 @@
 # 鸿蒙外部审计取证手册
 
+> 上架合规检查见 `docs/agc-publishing.md`；冷启动/帧率基线模板见 `docs/perf-baseline.md`。
+
 审计的价值取决于证据的独立性。这份手册是 `dwguard_audit` 的取证流程：每条判据都对应一段你能自己复现的证据。
 
 > 命令以 HarmonyOS NEXT / API 12+ 的 `hdc` 为例。不同 API 版本、设备与 Windows 终端可能有差异；命令不可用时改用 DevEco Studio 对应面板，并在证据里注明"替代来源"。

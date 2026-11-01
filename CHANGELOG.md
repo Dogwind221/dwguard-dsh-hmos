@@ -4,6 +4,38 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.0 — 2026-11-01
+
+The "learn the docs" release: backlog items become cited rules or explicit
+documentation, and the rule catalog grows to 75 entries (66 with official
+citations).
+
+### Added
+
+- **ArkUI V2 rules** — `STATE-06` @Monitor scope, `STATE-07` @Computed purity,
+  `STATE-08` @Provider/@Consumer constraints, `STATE-09` V1→V2 component-by-component
+  migration.
+- **Accessibility depth** — `A11Y-13` 2x font layout; `scripts/a11y-walkthrough.md`
+  (screen-reader walkthrough with evidence naming); `dwguard_deveco a11y`
+  snapshot (layout tree + accessibilityId + static accessibility scan).
+- **Design components** — `AES-13~21`: list row heights, text box, dialog,
+  title bar, bottom tabs, switch, progress, Symbol icons, card-style lists.
+- **Performance templates** — `docs/perf-baseline.md`: device matrix, cold-start
+  five stages, long-frame collection, memory/package-size templates.
+- **AGC + privacy** — `AGC-01~09`: release signing/debuggable, first-launch
+  privacy policy, permission denial behavior, sensitive-permission purpose &
+  minimization, store-listing consistency, test account, privacy "double list",
+  no review-bypass updates, ad-law wording. Checklist in
+  `docs/agc-publishing.md`, sourced from Huawei `50104` / `50170` / `faq-05`.
+
+### Changed
+
+- Rule catalog: 52 → **75** rules; cited 43 → **66** (function 30, aesthetic 21,
+  performance 11, accessibility 13).
+- Test suite 49; docs/rule-sources, learning-backlog and 0.4.0-plan updated.
+- npm publish workflow now skips publishing when `NPM_TOKEN` is absent (tagging
+  no longer fails on a missing secret).
+
 ## 0.3.0 — 2026-11-01
 
 The hybrid-executor release: the IDE agent stays the visual judge, a CLI agent
