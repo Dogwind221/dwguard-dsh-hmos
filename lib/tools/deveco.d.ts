@@ -2,7 +2,7 @@
  * `dwguard_deveco` — read-only-ish evidence adapter for DevEco CLI.
  *
  * Runs a fixed set of `devecocli` subcommands (build / run / log / lint / device
- * / ui) from the workspace, captures stdout/stderr + exit code into
+ * / ui / verify) from the workspace, captures stdout/stderr + exit code into
  * `artifacts/deveco-<n>/`, and reports the exact command. DSH uses the output as
  * evidence; the executor's own claims are still not trusted.
  *

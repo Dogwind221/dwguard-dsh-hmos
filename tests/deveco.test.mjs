@@ -181,6 +181,39 @@ test('background jobs start, list and stop without blocking', async () => {
   assert.equal(stopped.ok, true, stopped.detail);
 });
 
+test('device evidence actions use the real devecocli subcommands', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  const seen = [];
+  const tool = createDevecoTool(options, undefined, async (_command, args) => {
+    seen.push(args);
+    if (args[0] === 'ui' && args[1] === 'layout') {
+      return { code: 0, stdout: '{"nodes":[{"type":"Button"}]}', stderr: '', durationMs: 3 };
+    }
+    return { code: 0, stdout: '', stderr: '', durationMs: 3 };
+  });
+  const shot = await tool.execute({ action: 'screenshot' }, exec(cwd));
+  assert.equal(shot.ok, true, shot.detail);
+  assert.equal(seen[0][0], 'ui');
+  assert.equal(seen[0][1], 'screenshot');
+  assert.ok(seen[0].includes('--path'));
+
+  const layout = await tool.execute({ action: 'layout' }, exec(cwd));
+  assert.equal(layout.ok, true, layout.detail);
+  assert.deepEqual(seen[1].slice(0, 4), ['ui', 'layout', '--format', 'json']);
+  const tree = await readFile(join(cwd, '.shared', 'artifacts', 'deveco-2', 'layout.json'), 'utf8');
+  assert.match(tree, /Button/);
+
+  const verify = await tool.execute(
+    { action: 'verify', plan: '点击打卡，期望天数 +1', bundle: 'com.example.demo' },
+    exec(cwd)
+  );
+  assert.equal(verify.ok, true, verify.detail);
+  assert.equal(seen[2][0], 'verify');
+  assert.ok(seen[2].includes('--test-plan'));
+  assert.ok(seen[2].includes('--bundle-name'));
+});
+
 test('status watchdog flags a dispatch that has been waiting too long', async () => {
   const cwd = await workspace();
   const options = resolveOptions({ stallMinutes: 1 });

@@ -83,7 +83,7 @@ export async function updateState(
 export async function nextIndex(dir: string, prefix: string): Promise<number> {
   const entries = await listDir(dir);
   let max = 0;
-  const pattern = new RegExp(`^${prefix}-(\\d+)\\.(?:md|json)$`);
+  const pattern = new RegExp(`^${prefix}-(\\d+)(?:\\.(?:md|json))?$`);
   for (const entry of entries) {
     const match = pattern.exec(entry);
     if (match?.[1] === undefined) continue;
