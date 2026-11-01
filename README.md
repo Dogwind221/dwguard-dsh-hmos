@@ -221,6 +221,8 @@ dsh plugin --profile web     remove dwguard-dsh-hmos
 
 每个工具都返回同一个信封：`{ ok, summary, detail, files, next }`。`detail` 是可直接展示的 Markdown；`next` 是唯一的下一步建议。
 
+规则来源与"官方文档还没学什么"分开记录：[docs/rule-sources.md](docs/rule-sources.md)（已引用出处）与 [docs/learning-backlog.md](docs/learning-backlog.md)（未覆盖清单 + 0.4 优先顺序）。
+
 ### 三个 Skill
 
 | Skill | 内容 |
