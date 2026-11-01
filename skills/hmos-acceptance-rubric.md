@@ -27,6 +27,10 @@
 | DW-STATE-03 | V1/V2 不混用 | V1 装饰器不修饰 `@ObservedV2` 类；V1 组件不接收 `@ObservedV2` 实例（应编译报错） |
 | DW-STATE-04 | @Local 边界 | `@Local` 只在 `@ComponentV2` 中使用，且不从父组件传入初始化 |
 | DW-STATE-05 | V2 父子通信 | 输入用 `@Param`、回调用 `@Event`；不用 `@Link` 做 V2 双向同步 |
+| DW-STATE-06 | @Monitor 范围 | 只监听 `@Local/@Param/@Provider/@Consumer/@Computed`；类对象需整体监听，嵌套属性需 `@Trace` |
+| DW-STATE-07 | @Computed 纯度 | 只装饰 getter、只读、不修改依赖、不做副作用、不与双向绑定连用 |
+| DW-STATE-08 | @Provider/@Consumer | 只在 `@ComponentV2` 属性上、必须本地初始化、不能装饰 class、不接受外部传入 |
+| DW-STATE-09 | V1→V2 迁移 | 按组件分批；@Watch→@Monitor、@Provide/@Consume→@Provider/@Consumer、@Link→@Param+@Event、@Observed→@ObservedV2+@Trace |
 
 必查状态清单：首次进入 / 有数据 / 空数据 / 加载中 / 请求失败 / 无权限 / 深色模式 / 字体放大 / 横屏或折叠屏（如支持）。
 

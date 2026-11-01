@@ -70,6 +70,10 @@ dwguard_deveco(action="verify", plan="点击打卡，期望连续天数 +1", bun
 | V1/V2 不混用 | `@ObservedV2` 类上再挂 `@State`；V1 组件接 V2 实例 | DW-STATE-03 |
 | `@Local` 只在 `@ComponentV2`、不能外部初始化 | 父组件 `Child({ message: ... })` 给 `@Local` 传值 | DW-STATE-04 |
 | V2 父子通信 | 子组件用 `@Link` 而不是 `@Param` + `@Event` | DW-STATE-05 |
+| `@Monitor` 范围 | 监听普通字段或未 `@Trace` 的嵌套属性；监听类对象却指望属性变化触发 | DW-STATE-06 |
+| `@Computed` 纯度 | 在 getter 里改依赖/发请求/写状态；给 `@Computed` 赋值 | DW-STATE-07 |
+| `@Provider/@Consumer` | 装饰 class 属性、从外部传值初始化、在 `@Component` 中使用 | DW-STATE-08 |
+| V1→V2 迁移 | 一个组件里同时混 V1/V2 装饰器；迁移顺序错乱 | DW-STATE-09 |
 
 命令行无法判定的，按代码位置 + 编译错误截图取证，不要"读一遍觉得对"就写 pass。
 
