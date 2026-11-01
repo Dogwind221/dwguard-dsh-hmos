@@ -143,6 +143,9 @@ test('board history lists dispatch / audit / confirmation events', async () => {
   }
   const auditEvent = board.history.find((event) => event.kind === 'audit');
   assert.equal(auditEvent?.ok, true);
+  assert.ok(auditEvent?.labelEn.includes('Audit'));
+  // English next action for the language toggle.
+  assert.match(board.nextEn, /Round confirmed|confirmed/);
   // Newest first.
   const times = board.history.map((event) => Date.parse(event.at));
   assert.deepEqual(times, [...times].sort((left, right) => right - left));

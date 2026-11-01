@@ -17,6 +17,7 @@ import { createAuditTool } from './tools/audit.js';
 import { createAuditDimensionTool } from './tools/auditDimension.js';
 import { createCalibrationTool } from './tools/calibration.js';
 import { createConfirmTool } from './tools/confirm.js';
+import { createDevecoTool } from './tools/deveco.js';
 import { createDispatchTool } from './tools/dispatch.js';
 import { createKnowledgeTool } from './tools/knowledge.js';
 import { createPrereviewTool } from './tools/prereview.js';
@@ -65,6 +66,7 @@ export function apply(ctx: PluginContext, config?: unknown): void {
     createPrereviewTool(options, ctx),
     createDispatchTool(options, ctx),
     createScanTool(options, ctx),
+    createDevecoTool(options, ctx),
     createRulesTool(options, ctx),
     createShadowTool(options, ctx),
     createAuditDimensionTool(options, ctx),

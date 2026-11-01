@@ -4,6 +4,34 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.3.0 — 2026-11-01
+
+The hybrid-executor release: the IDE agent stays the visual judge, a CLI agent
+can implement, and DevEco CLI becomes a first-class evidence source.
+
+### Added
+
+- **Executor modes** — `executor: ide | cli`. In `cli` mode `dwguard_dispatch`
+  also writes `tasks/cli-brief.md` with the `devecocli` command contract
+  (`build` / `run` / `run --apply` / `log` / `device`), while visual evidence
+  stays on DSH's side.
+- **`dwguard_deveco`** — read-only evidence adapter over DevEco CLI:
+  `env / build / run / log / lint / device / uiHelp / ui`. Every run records the
+  exact command, exit code, duration and output under
+  `artifacts/deveco-<n>/` (`result.json` + `output.log`) and can be cited from
+  `checks[].evidenceFiles`.
+- **Panel language toggle** — `中 / EN` button before refresh, persisted in
+  `localStorage`; phase, next action and history labels switch together
+  (`board.nextEn`, `history[].labelEn`), with host-language default.
+- **Device UI probe** — `uiHelp` captures `devecocli ui --help` so the panel/agent
+  can learn the installed CLI's UI interface before calling `ui`.
+
+### Changed
+
+- README (zh + en) documents the hybrid mode and the new tool; config gains
+  `executor` and `devecocliPath`.
+- Test suite 39 → 43 (CLI brief, deveco env/failure/missing binary, unsafe args).
+
 ## 0.2.0 — 2026-11-01
 
 The hardening release: the framework stops trusting prose and starts recording

@@ -42,6 +42,7 @@ export async function readState(paths: SharedPaths, now: string): Promise<Shared
     inboxCursor: num('inboxCursor', base.inboxCursor),
     shadowRuns: num('shadowRuns', base.shadowRuns ?? 0),
     ...(typeof record['lastShadowAt'] === 'string' ? { lastShadowAt: record['lastShadowAt'] } : {}),
+    ...(typeof record['lastDevecoAt'] === 'string' ? { lastDevecoAt: record['lastDevecoAt'] } : {}),
     confirmations: num('confirmations', base.confirmations ?? 0),
     ...(typeof record['confirmedAt'] === 'string' ? { confirmedAt: record['confirmedAt'] } : {}),
     ...(typeof record['confirmedSpecVersion'] === 'number'

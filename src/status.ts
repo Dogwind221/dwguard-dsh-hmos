@@ -52,6 +52,17 @@ const NEXT_ACTION: Record<Phase, string> = {
   confirmed: '本轮已确认。开下一轮用 `dwguard_spec` 写新任务包（迭代号 +1），或结束。'
 };
 
+const NEXT_ACTION_EN: Record<Phase, string> = {
+  intake: 'Write the task pack with `dwguard_spec` (action: write): requirement + spec + four-dimension criteria.',
+  'spec-invalid': 'Fix the task pack gaps, then re-write it with `dwguard_spec` (action: write).',
+  prereview: 'Run the adversarial pre-review with `dwguard_prereview` (performance / lifecycle / concurrency / API + acceptance feasibility).',
+  ready: 'Generate the brief with `dwguard_dispatch` and hand it to the executor.',
+  dispatched: 'Wait for delivery; run `dwguard_shadow` periodically; audit with `dwguard_audit` once delivered.',
+  rework: 'Hand `tasks/rework-<n>.md` to the executor, re-run the loop, then `dwguard_audit` again.',
+  accepted: 'Take the acceptance report to the user; call `dwguard_confirm` (accept / new_round), then sediment.',
+  confirmed: 'Round confirmed. Start the next round with `dwguard_spec` (iteration +1), or stop.'
+};
+
 /** Everything `dwguard_status` needs, collected once. */
 export interface Snapshot {
   readonly paths: SharedPaths;
@@ -71,6 +82,8 @@ export interface Snapshot {
   readonly question: string | null;
   readonly phase: Phase;
   readonly nextAction: string;
+  /** English rendering of `nextAction` for the panel's language toggle. */
+  readonly nextActionEn: string;
 }
 
 function derivePhase(
@@ -132,13 +145,16 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
   const question = questionRaw !== null && questionRaw.trim().length > 0 ? questionRaw.trim() : null;
   const phase = derivePhase(spec, validation, prereview?.value ?? null, audit?.value ?? null, state);
   let action = NEXT_ACTION[phase];
+  let actionEn = NEXT_ACTION_EN[phase];
   if (prereview === null && stalePrereview !== null) {
     action += `（上一轮预审 #${stalePrereview} 不适用于 v${spec?.specVersion ?? '?'}，需要重跑预审）`;
+    actionEn += ` (pre-review #${stalePrereview} from the previous round does not apply to v${spec?.specVersion ?? '?'}; run it again)`;
   }
   if (unacked.length > 0) {
     action += `（派发 ${unacked.map((entry) => `#${entry.id ?? '?'}`).join('、')} 还没有回执：请 DevEco 在 \`outbox-deveco.md\` 追加 \`## [时间] deliver · #a-N · from=deveco to=dsh · re=#d-N | …\`）`;
+    actionEn += ` (dispatch ${unacked.map((entry) => `#${entry.id ?? '?'}`).join(', ')} has no acknowledgement: append a deliver record with re=#d-N to outbox-deveco.md)`;
   }
-  // Shadow review goes stale while DevEco codes: surface it in the one next action.
+  // Shadow review goes stale while the executor codes: surface it in the one next action.
   if (phase === 'dispatched' || phase === 'rework') {
     const last = state.lastShadowAt === undefined ? null : Date.parse(state.lastShadowAt);
     const ageMinutes = last === null || Number.isNaN(last) ? null : Math.floor((Date.parse(now) - last) / 60_000);
@@ -146,6 +162,9 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
       action += ageMinutes === null
         ? ' 影子审查还没跑过：调 `dwguard_shadow` 做一次只读巡检。'
         : ` 影子审查已 ${ageMinutes} 分钟未跑：调 \`dwguard_shadow\` 做一次只读巡检。`;
+      actionEn += ageMinutes === null
+        ? ' Shadow review has not run yet: call `dwguard_shadow` for one read-only pass.'
+        : ` Shadow review has not run for ${ageMinutes} min: call \`dwguard_shadow\` for one read-only pass.`;
     }
   }
   return {
@@ -164,7 +183,8 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
     unread,
     question,
     phase,
-    nextAction: action
+    nextAction: action,
+    nextActionEn: actionEn
   };
 }
 

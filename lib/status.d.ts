@@ -37,6 +37,8 @@ export interface Snapshot {
     readonly question: string | null;
     readonly phase: Phase;
     readonly nextAction: string;
+    /** English rendering of `nextAction` for the panel's language toggle. */
+    readonly nextActionEn: string;
 }
 /**
  * Collect the current status.

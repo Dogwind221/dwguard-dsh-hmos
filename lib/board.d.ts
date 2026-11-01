@@ -51,6 +51,8 @@ export interface BoardJson {
     } | null;
     readonly unread: number;
     readonly next: string;
+    /** English rendering of `next` for the panel's language toggle. */
+    readonly nextEn: string;
     /** Recent round events, newest first. */
     readonly history: readonly HistoryEvent[];
     readonly files: {

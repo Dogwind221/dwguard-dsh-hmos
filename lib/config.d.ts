@@ -22,6 +22,10 @@ export interface Options {
     readonly docsDir: string;
     /** Shadow-review nudge interval in minutes. */
     readonly shadowIntervalMinutes: number;
+    /** Executor mode for dispatch: `ide` | `cli`. */
+    readonly executor: 'ide' | 'cli';
+    /** `devecocli` binary; empty means resolve from PATH. */
+    readonly devecocliPath: string;
 }
 /**
  * Normalize whatever the loader passed into complete options.

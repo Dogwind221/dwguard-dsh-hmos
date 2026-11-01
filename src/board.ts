@@ -52,6 +52,8 @@ export interface BoardJson {
   readonly audit: { readonly id: number; readonly pass: boolean; readonly errors: number } | null;
   readonly unread: number;
   readonly next: string;
+  /** English rendering of `next` for the panel's language toggle. */
+  readonly nextEn: string;
   /** Recent round events, newest first. */
   readonly history: readonly HistoryEvent[];
   readonly files: {
@@ -175,6 +177,7 @@ export async function readBoard(workspace: string, options: Options, now: string
         : { id: snapshot.audit?.index ?? 0, pass: latestAudit.gate.pass, errors: latestAudit.gate.errors.length },
     unread: snapshot.unread.length,
     next: snapshot.nextAction,
+    nextEn: snapshot.nextActionEn,
     history: await readHistory(paths, 10),
     files: {
       spec: await fileExists(paths.specMd),
