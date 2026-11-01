@@ -90,6 +90,8 @@ export interface SharedState {
     readonly shadowRuns?: number;
     /** ISO time of the last shadow review (staleness nudge in status). */
     readonly lastShadowAt?: string;
+    /** ISO time of the last `devecocli` evidence run. */
+    readonly lastDevecoAt?: string;
     /** How many times the user confirmed an acceptance report. */
     readonly confirmations?: number;
     /** ISO time of the latest user confirmation. */

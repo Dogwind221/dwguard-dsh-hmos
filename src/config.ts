@@ -29,7 +29,11 @@ export const Config = z.object({
   /** Local official-docs corpus for `dwguard_rules search` (absolute, or relative to the workspace). */
   docsDir: z.string().default(''),
   /** Minutes between shadow-review nudges while DevEco is coding. */
-  shadowIntervalMinutes: z.number().default(10)
+  shadowIntervalMinutes: z.number().default(10),
+  /** Who implements the task pack: the IDE agent (`ide`) or a CLI agent (`cli`). */
+  executor: z.string().default('ide'),
+  /** `devecocli` binary; empty means `devecocli` on PATH. */
+  devecocliPath: z.string().default('')
 });
 
 /** Fully resolved options used by every tool. */
@@ -45,6 +49,10 @@ export interface Options {
   readonly docsDir: string;
   /** Shadow-review nudge interval in minutes. */
   readonly shadowIntervalMinutes: number;
+  /** Executor mode for dispatch: `ide` | `cli`. */
+  readonly executor: 'ide' | 'cli';
+  /** `devecocli` binary; empty means resolve from PATH. */
+  readonly devecocliPath: string;
 }
 
 const DEFAULTS: Options = {
@@ -56,7 +64,9 @@ const DEFAULTS: Options = {
   requirePrereviewBeforeDispatch: true,
   knowledgeMaxEntriesPerTopic: 200,
   docsDir: '',
-  shadowIntervalMinutes: 10
+  shadowIntervalMinutes: 10,
+  executor: 'ide',
+  devecocliPath: ''
 };
 
 function bool(value: unknown, fallback: boolean): boolean {
@@ -88,6 +98,8 @@ export function resolveOptions(raw: unknown): Options {
     requirePrereviewBeforeDispatch: bool(input['requirePrereviewBeforeDispatch'], DEFAULTS.requirePrereviewBeforeDispatch),
     knowledgeMaxEntriesPerTopic: positiveInt(input['knowledgeMaxEntriesPerTopic'], DEFAULTS.knowledgeMaxEntriesPerTopic, 1),
     docsDir: typeof input['docsDir'] === 'string' ? input['docsDir'].trim() : DEFAULTS.docsDir,
-    shadowIntervalMinutes: positiveInt(input['shadowIntervalMinutes'], DEFAULTS.shadowIntervalMinutes, 1)
+    shadowIntervalMinutes: positiveInt(input['shadowIntervalMinutes'], DEFAULTS.shadowIntervalMinutes, 1),
+    executor: input['executor'] === 'cli' ? 'cli' : 'ide',
+    devecocliPath: typeof input['devecocliPath'] === 'string' ? input['devecocliPath'].trim() : DEFAULTS.devecocliPath
   };
 }

@@ -9,7 +9,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
-import { appendOutboxDsh, renderDispatchEntry, renderGoalBrief } from '../dispatch.js';
+import { appendOutboxDsh, renderCliSection, renderDispatchEntry, renderGoalBrief } from '../dispatch.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import type { PrereviewReport } from '../review.js';
@@ -62,13 +62,16 @@ export function createDispatchTool(options: Options, ctx?: PluginContext): ToolD
 
       const state = await readState(paths, now);
       const counter = state.dispatches + 1;
-      const brief = renderGoalBrief(pack, paths, counter);
+      const cli = options.executor === 'cli';
+      const goalBrief = renderGoalBrief(pack, paths, counter);
+      const brief = cli ? `${goalBrief}\n\n${renderCliSection(pack)}` : goalBrief;
       await ensureShared(paths);
-      await writeTextAtomic(paths.briefMd, brief);
+      await writeTextAtomic(paths.briefMd, goalBrief);
+      if (cli) await writeTextAtomic(paths.cliBriefMd, brief);
       await appendOutboxDsh(
         paths,
         `dispatch #${counter} · 第 ${pack.iteration} 轮 · 任务包 v${pack.specVersion}`,
-        `${renderDispatchEntry(pack, paths, counter)}${note === undefined ? '' : `\n\n备注：${note}`}`,
+        `${renderDispatchEntry(pack, paths, counter, options.executor)}${note === undefined ? '' : `\n\n备注：${note}`}`,
         now,
         { kind: 'dispatch', id: `d-${counter}`, from: 'dsh', to: 'deveco' }
       );
@@ -81,8 +84,12 @@ export function createDispatchTool(options: Options, ctx?: PluginContext): ToolD
 
       return ok(`已派发第 ${counter} 次：任务包 v${pack.specVersion}，${pack.criteria.length} 条判据。`, {
         detail: brief,
-        files: [displayPath(paths, paths.briefMd), displayPath(paths, paths.outboxDsh)],
-        next: '把上面简报粘进 DevEco Code 的 Goal 模式；交付后运行 `dwguard_status` 看 outbox 新记录，再 `dwguard_audit` 独立取证。'
+        files: cli
+          ? [displayPath(paths, paths.cliBriefMd), displayPath(paths, paths.outboxDsh)]
+          : [displayPath(paths, paths.briefMd), displayPath(paths, paths.outboxDsh)],
+        next: cli
+          ? '把上面简报交给 CLI Agent（它用 `devecocli` 构建/运行）；交付后 `dwguard_status` 看 outbox，再 `dwguard_audit` 独立取证（截图/UI 树由 DSH 自己取）。'
+          : '把上面简报粘进 DevEco Code 的 Goal 模式；交付后运行 `dwguard_status` 看 outbox 新记录，再 `dwguard_audit` 独立取证。'
       });
     },
     presentCall(args) {

@@ -49,8 +49,18 @@ opens a live board in the **right sidebar** without replacing the conversation:
 - current stage spins, finished stages turn green, unstarted stages stay grey;
 - history timeline under the map (prereview / dispatch / audit / rework / shadow
   / confirmation);
-- English UI when the host language is English; `role="status"` announcements;
-  reduced-motion support.
+- **`中 / EN` toggle before refresh** (persisted, defaults to the host language);
+  phase, next action and history switch together;
+- `role="status"` announcements and reduced-motion support.
+
+## Hybrid executor (0.3+)
+
+`executor: ide` (default) hands the Goal brief to DevEco Code. `executor: cli`
+also writes `tasks/cli-brief.md` so an external CLI agent can implement with
+`devecocli build / run / run --apply / log`. DSH gathers build/log/device
+evidence itself through **`dwguard_deveco`** (written to
+`artifacts/deveco-<n>/`), and still captures screenshots and the UI tree on the
+device — the executor's self-report never becomes a `pass`.
 
 ## Tools
 
@@ -58,8 +68,9 @@ opens a live board in the **right sidebar** without replacing the conversation:
 | --- | --- |
 | `dwguard_spec` | Write / validate / read the task pack; scaffolds `.shared/` |
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
-| `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record |
+| `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
+| `dwguard_deveco` | DevEco CLI evidence adapter: `env / build / run / log / lint / device / uiHelp / ui` |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
@@ -134,6 +145,8 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     knowledgeMaxEntriesPerTopic: 200
     docsDir: ''
     shadowIntervalMinutes: 10
+    executor: ide          # ide | cli
+    devecocliPath: ''      # empty = resolve from PATH
 ```
 
 ## Boundaries
@@ -141,8 +154,9 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
 - DSH never edits application code; changes become findings, rework orders or a
   new task pack.
 - The gate is hard: no "pass with open issues" switch.
-- DSH does not run builds or drive the device by itself; verification is
-  read-only (screenshots, UI tree, logs, measurements) and recorded.
+- DSH may run build/run/log through `dwguard_deveco` as **evidence**, but never
+  edits `entry/`, `AppScope/`, `hvigor/` or `build-profile.json5`; visual proof
+  (screenshots, UI tree) is captured by DSH itself.
 - State is derived from artifacts, not from tool claims.
 
 ## Development
@@ -151,7 +165,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
 npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 npm run typecheck
 npm run build
-npm test          # 39 tests
+npm test          # 43 tests
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

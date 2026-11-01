@@ -18,6 +18,8 @@ export interface SharedPaths {
     readonly specJson: string;
     readonly specMd: string;
     readonly briefMd: string;
+    /** Brief for a CLI executor (`executor: cli`). */
+    readonly cliBriefMd: string;
     readonly questionMd: string;
     readonly knowledgeIndex: string;
     /** Per-dimension audit progress, written as each audit sub-agent returns. */

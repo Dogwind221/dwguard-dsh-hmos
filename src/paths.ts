@@ -21,6 +21,8 @@ export interface SharedPaths {
   readonly specJson: string;
   readonly specMd: string;
   readonly briefMd: string;
+  /** Brief for a CLI executor (`executor: cli`). */
+  readonly cliBriefMd: string;
   readonly questionMd: string;
   readonly knowledgeIndex: string;
   /** Per-dimension audit progress, written as each audit sub-agent returns. */
@@ -48,6 +50,7 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     specJson: resolve(shared, 'tasks', 'spec.json'),
     specMd: resolve(shared, 'tasks', 'spec.md'),
     briefMd: resolve(shared, 'tasks', 'goal-brief.md'),
+    cliBriefMd: resolve(shared, 'tasks', 'cli-brief.md'),
     questionMd: resolve(shared, 'tasks', 'question.md'),
     knowledgeIndex: resolve(shared, 'knowledge', 'index.json'),
     auditProgress: resolve(shared, 'artifacts', 'audit-progress.json'),

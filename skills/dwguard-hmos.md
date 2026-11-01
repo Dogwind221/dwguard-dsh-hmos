@@ -101,8 +101,9 @@ DevEco 说「自认为达标」不等于达标。先做一次 30 秒的一致性
 2. **先跑独立静态扫描** `dwguard_scan`（只读）：嵌套属性赋值（`STATE-NESTED-01`）、`any`、旧式 `@ohos.*`、V1/V2 混用、OHPM 伪包、ForEach/LazyForEach、定时器泄漏、无障碍文本。must 级命中要么修掉，要么作为 findings 写进审计（带 `ruleId` + `file:line`），不能当没看见。
 3. **四维并行取证**：用 4 个 subagent 并行，一个维度一个（提示词见 skill `hmos-audit-playbook` §9.3–9.6），每个子代理只负责自己那一维、只返回 `checks`（`criterionId` / `result` / `evidence` / `evidenceFiles`）。
 4. **查官方依据**：写判据或质疑规则时用 `dwguard_rules search`（子代理不用记路径）在本地官方语料里定位原文；要确认规则 ID/别名用 `dwguard_rules get` 或 `list`。报告里引用 `citation.section`。
-5. **每回来一个维度就记一次** `dwguard_audit_dimension`（`dimension` / `passed` / `failed` / `note`）——DshHoms 面板上的四张卡会按返回顺序逐张落绿，而不是同时亮。
-6. 四维齐全后，再调 `dwguard_audit` 汇总全部 `checks` 过闸门（该调用完成时会清空进度文件，下一轮从零开始）。
+5. **DevEco CLI 证据（可选）**：装了 `devecocli` 时，用 `dwguard_deveco` 跑 `env` / `build` / `log` / `run`，把命令、退出码、输出落进 `artifacts/deveco-<n>/`；`checks[].evidenceFiles` 可直接引用这些文件。**它只是证据源，不替代判定**。
+6. **每回来一个维度就记一次** `dwguard_audit_dimension`（`dimension` / `passed` / `failed` / `note`）——DshHoms 面板上的四张卡会按返回顺序逐张落绿，而不是同时亮。
+7. 四维齐全后，再调 `dwguard_audit` 汇总全部 `checks` 过闸门（该调用完成时会清空进度文件，下一轮从零开始）。
 
 > **证据要落盘**：`evidenceFiles` 写相对 `.shared/` 的路径（截图、布局树 JSON、hilog 片段），工具会校验存在、复制进 `artifacts/audit-<n>/evidence/` 并记 sha256。文件缺失会**整次拒绝**，不会"先记后补"。
 

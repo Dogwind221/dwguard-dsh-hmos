@@ -12,6 +12,8 @@ export interface HistoryEvent {
     readonly at: string;
     readonly kind: 'dispatch' | 'rework' | 'audit' | 'prereview' | 'confirm' | 'shadow';
     readonly label: string;
+    /** English label for the panel's language toggle. */
+    readonly labelEn: string;
     /** Gate/audit outcome, when the event has one. */
     readonly ok?: boolean;
 }

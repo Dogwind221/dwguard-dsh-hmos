@@ -268,13 +268,53 @@ export function outboxFile(paths: SharedPaths): string {
 }
 
 /** A compact dispatch note for DSH's own outbox. */
-export function renderDispatchEntry(pack: TaskPack, paths: SharedPaths, briefCounter: number): string {
+export function renderDispatchEntry(
+  pack: TaskPack,
+  paths: SharedPaths,
+  briefCounter: number,
+  executor: 'ide' | 'cli' = 'ide'
+): string {
   return [
     `任务包 v${pack.specVersion} 已冻结并派发（第 ${briefCounter} 次）。`,
     '',
-    `- 简报：\`${displayPath(paths, paths.briefMd)}\``,
+    `- 简报：\`${displayPath(paths, executor === 'cli' ? paths.cliBriefMd : paths.briefMd)}\``,
     `- 判据：${pack.criteria.length} 条（must ${pack.criteria.filter((criterion) => criterion.weight === 'must').length}）`,
-    '- 执行者：DevEco Code（Goal 模式）',
+    `- 执行者：${executor === 'cli' ? 'CLI Agent（devecocli）' : 'DevEco Code（Goal 模式）'}`,
     '- 交付方式：追加到 `outbox-deveco.md`，一条记录对应本轮交付'
+  ].join('\n');
+}
+
+/**
+ * The extra section appended to the brief when `executor: cli`.
+ * It pins the command surface and keeps visual evidence on DSH's side.
+ */
+export function renderCliSection(pack: TaskPack): string {
+  return [
+    '# CLI 执行模式（本轮）',
+    '',
+    '本轮由 **CLI Agent** 实现；DSH 仍然独立取证、独立判定，不采信你的自评。',
+    '',
+    '## 1. 命令约定',
+    '',
+    '用 DevEco CLI 完成构建与运行，不要手写 hvigor 命令：',
+    '',
+    '- 构建：`devecocli build --modules <module> [--build-mode release]`',
+    '- 安装并启动：`devecocli run [--module <module>] [--device <serial|name>]`',
+    '- 增量部署：`devecocli run --apply <changes.txt>`（先全量 `run` 一次；清单放工程 `.hvigor/` 下）',
+    '- 日志：`devecocli log --level E --crash --tail 100`',
+    '- 设备：`devecocli device list`',
+    '',
+    '把每条命令、退出码和关键输出原样写进交付记录，方便 DSH 复核。',
+    '',
+    '## 2. 证据边界',
+    '',
+    '- 截图、UI 树、性能数值由 **DSH 自己**在设备/模拟器上取；',
+    '- 你只提交「代码 + 构建/运行日志 + 交付说明」；',
+    '- 不要声称"已验证视觉/无障碍"——那是 DSH 的职责。',
+    '',
+    `## 3. 交付`, 
+    '',
+    `- 交付记录：追加到 \`outbox-deveco.md\`，格式见上；`,
+    `- 判据共 ${pack.criteria.length} 条，逐条写清楚你做了什么、如何自测（自测不等于验收）。`
   ].join('\n');
 }

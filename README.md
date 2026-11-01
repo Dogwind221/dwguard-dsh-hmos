@@ -134,7 +134,7 @@ dsh plugin --profile web     remove dwguard-dsh-hmos
 - **左栏（蓝/紫虚线，任务包层）**：预审不通过 → 生成任务包；澄清 Spec 有误 → 生成任务包；影子审查的结构性风险 → **理解任务包**；
 - **右栏（琥珀虚线，实现层）**：自评有分歧 → 编码实现；审计返工 → 编码实现；
 - **历史时间线**：图下方按时间倒序列出预审 / 派发 / 审计 / 返工 / 影子审查 / 用户确认，一眼看到这一轮怎么走到现在的；
-- **语言与无障碍**：界面跟随宿主语言（`en` 字典已接，`zh` 兜底）；阶段变化用 `role="status"` 播报；系统开启「减少动态效果」时关闭转圈/光晕/流动动画。
+- **语言与无障碍**：**刷新左侧有 `中 / EN` 切换**（localStorage 记忆，阶段 / 下一步 / 历史一起切）；可跟随宿主语言；阶段变化用 `role="status"` 播报；系统开启「减少动态效果」时关闭转圈/光晕/流动动画。
 
 执行段里有一张 **`自评 · 澄清 / 反馈`** 卡：DevEco 说「自认为达标」只是**声明**，不是交付。闸门只放三种结果：
 
@@ -201,13 +201,14 @@ dsh plugin --profile web     remove dwguard-dsh-hmos
 
 ---
 
-## 十二个工具
+## 十三个工具
 
 | 工具 | 阶段 | 作用 | 关键闸门 |
 | --- | --- | --- | --- |
 | `dwguard_spec` | 立项 → 任务包 | 写入 / 复检 / 查看任务包，首次调用会脚手架 `.shared/` | 四维至少各 1 条；拒绝纯形容词、缺验证方式、依赖自述的判据；`ruleId` 必须在规则目录内；至少 1 条 must |
 | `dwguard_prereview` | 派发前预审 | 记录对抗审查发现 | 阻断项必须有 `rebuttal`；未关闭的阻断项不许派发；零发现必须写审阅范围 |
-| `dwguard_dispatch` | 派发 | 生成 `tasks/goal-brief.md` 并写 `outbox-dsh.md` | 任务包合法 + 最近一次预审通过（可配置关闭） |
+| `dwguard_dispatch` | 派发 | 生成 `tasks/goal-brief.md` 并写 `outbox-dsh.md`；`executor: cli` 时另写 `tasks/cli-brief.md` | 任务包合法 + 最近一次预审通过（可配置关闭） |
+| `dwguard_deveco` | 执行期 / 取证 | 调 DevEco CLI 取证：`env / build / run / log / lint / device / uiHelp / ui`，命令、退出码与输出落到 `artifacts/deveco-<n>/` | 只跑固定子命令；超时/找不到 `devecocli` 明确失败；`ui` 参数按白名单校验 |
 | `dwguard_scan` | 取证前 | 独立 ArkTS/ArkUI 静态扫描（只读）：嵌套属性赋值、`any`、`@ohos.*`、V1/V2 混用、伪包、ForEach、定时器、无障碍文本 | 每条命中带规则 ID 与 `file:line`；写 `artifacts/scan-<n>.json`；must 级要进审计 findings |
 | `dwguard_shadow` | 执行期 | 影子审查：**增量扫描**（只看上次之后改过的文件），自动尝试调用宿主的 `harmony_ui_tree`（失败则需手动传 `uiTree`），写 `artifacts/shadow-<n>.json`；**只把新增**的 must 级风险写 `shadow-risk` 出站 | 只在 dispatched / rework 阶段可跑；`status` 超过 `shadowIntervalMinutes` 会提醒；同一问题不会重复刷屏 |
 | `dwguard_rules` | 全程 | 查规则目录（`list` / `get`，支持别名）与本地官方语料（`search`，返回 file:line + 出处 URL） | 语料目录由 `docsDir` / `DWG_DOCS_DIR` 指定；`get` 未知 ID 直接报错 |
@@ -282,6 +283,17 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
 
 简报里写死了角色、路径、逐条判据、约束、执行闭环、交付格式、提问协议与禁止事项——不需要在 DevEco 侧装任何东西。
 
+### 混合执行模式（`executor: cli`）
+
+0.3 起可以换执行器，协议不变：
+
+- `ide`（默认）：简报粘进 DevEco Code Goal 模式，人工交接；
+- `cli`：派发时同时写 `tasks/cli-brief.md`，外部 CLI Agent 用 `devecocli build / run / run --apply / log` 实现与回归；
+- DSH 用 **`dwguard_deveco`** 独立取构建/运行/日志/设备证据（落 `artifacts/deveco-<n>/`），截图与 UI 树仍由 DSH 自己在设备上取；
+- `dwguard_deveco` **不替代审计**：它只提供命令与输出，是否达标仍由 `dwguard_audit` 判定。
+
+**视觉/设备取证仍归 DSH**——执行者自述永远不会直接变成 `pass`。
+
 ---
 
 ## 配置
@@ -300,6 +312,8 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
     knowledgeMaxEntriesPerTopic: 200      # 单主题知识条目提示阈值
     docsDir: ''                           # 官方语料目录；空 = 自动探测（DWG_DOCS_DIR 等）
     shadowIntervalMinutes: 10             # 影子审查多久没跑就在 status 里提醒
+    executor: ide                         # ide | cli：谁来实现
+    devecocliPath: ''                     # devecocli 路径；空 = 从 PATH 找
 ```
 
 覆盖是**整段替换**（DSH 的补丁语义），所以要把想保留的字段一起写上。
@@ -365,7 +379,7 @@ CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（39 个用例：闸门规则、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、发布脚本、注册）；
+2. `npm test` 全绿（43 个用例：闸门规则、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、发布脚本、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

@@ -63,4 +63,9 @@ export declare function renderGoalBrief(pack: TaskPack, paths: SharedPaths, brie
 /** The DevEco outbox path (kept as a helper so the brief and status agree). */
 export declare function outboxFile(paths: SharedPaths): string;
 /** A compact dispatch note for DSH's own outbox. */
-export declare function renderDispatchEntry(pack: TaskPack, paths: SharedPaths, briefCounter: number): string;
+export declare function renderDispatchEntry(pack: TaskPack, paths: SharedPaths, briefCounter: number, executor?: 'ide' | 'cli'): string;
+/**
+ * The extra section appended to the brief when `executor: cli`.
+ * It pins the command surface and keeps visual evidence on DSH's side.
+ */
+export declare function renderCliSection(pack: TaskPack): string;

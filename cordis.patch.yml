@@ -26,3 +26,7 @@
         docsDir: ''
         # Nudge `dwguard_status` when shadow review has not run for this many minutes.
         shadowIntervalMinutes: 10
+        # Who implements: `ide` (DevEco Code Goal mode) or `cli` (external CLI agent).
+        executor: ide
+        # `devecocli` binary; empty = resolve from PATH.
+        devecocliPath: ''

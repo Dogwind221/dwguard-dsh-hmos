@@ -16,6 +16,8 @@ export interface HistoryEvent {
   readonly at: string;
   readonly kind: 'dispatch' | 'rework' | 'audit' | 'prereview' | 'confirm' | 'shadow';
   readonly label: string;
+  /** English label for the panel's language toggle. */
+  readonly labelEn: string;
   /** Gate/audit outcome, when the event has one. */
   readonly ok?: boolean;
 }
@@ -60,6 +62,7 @@ export async function readHistory(paths: SharedPaths, limit = 12): Promise<Histo
         at,
         kind: 'audit',
         label: `审计 #${entry.index} ${parsed.gate?.pass === true ? '通过' : '未通过'}`,
+        labelEn: `Audit #${entry.index} ${parsed.gate?.pass === true ? 'passed' : 'failed'}`,
         ok: parsed.gate?.pass === true
       });
     } catch {
@@ -77,6 +80,7 @@ export async function readHistory(paths: SharedPaths, limit = 12): Promise<Histo
         at,
         kind: 'prereview',
         label: `预审 #${entry.index} ${parsed.gate?.pass === true ? '通过' : '未通过'}`,
+        labelEn: `Pre-review #${entry.index} ${parsed.gate?.pass === true ? 'passed' : 'failed'}`,
         ok: parsed.gate?.pass === true
       });
     } catch {
@@ -94,6 +98,7 @@ export async function readHistory(paths: SharedPaths, limit = 12): Promise<Histo
         at,
         kind: 'confirm',
         label: parsed.decision === 'new_round' ? '用户确认 · 开下一轮' : '用户确认完成',
+        labelEn: parsed.decision === 'new_round' ? 'User confirmed · next round' : 'User confirmed',
         ok: true
       });
     } catch {
@@ -114,6 +119,7 @@ export async function readHistory(paths: SharedPaths, limit = 12): Promise<Histo
             at,
             kind: 'shadow',
             label: `影子审查 #${newestShadow.index} · must ${parsed.must ?? 0}（新增 ${newRisks}）`,
+            labelEn: `Shadow #${newestShadow.index} · must ${parsed.must ?? 0} (new ${newRisks})`,
             ok: newRisks === 0
           });
         }
@@ -133,6 +139,7 @@ export async function readHistory(paths: SharedPaths, limit = 12): Promise<Histo
       at,
       kind: entry.kind,
       label: entry.kind === 'dispatch' ? `派发 #${entry.id ?? '?'}` : `返工 #${entry.id ?? '?'}`,
+      labelEn: entry.kind === 'dispatch' ? `Dispatch #${entry.id ?? '?'}` : `Rework #${entry.id ?? '?'}`,
       ok: entry.kind === 'dispatch'
     });
   }
