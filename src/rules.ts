@@ -800,6 +800,132 @@ export const RULES: readonly RuleEntry[] = [
       section: '响应式布局',
       version: UX_FETCHED
     }
+  },
+  {
+    id: 'DW-AES-13',
+    dimension: 'aesthetic',
+    title: '列表行高与右侧元素间距',
+    verify: '布局树：效率型行高取 48/56/64/72/96vp，内容型取 64/72/80/96/120vp；右侧元素与内容间距 12vp',
+    severity: 'warn',
+    source: DESIGN,
+    citation: {
+      label: '列表 · 设备差异（效率型/内容型行高、右侧元素 12vp）',
+      url: `${UX_BASE}/list-0000001929853910.md`,
+      section: '设备差异',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-14',
+    dimension: 'aesthetic',
+    title: '文本框有标签/占位符且错误提示在下方',
+    verify: '截图：输入框有标签或占位符；非法输入在框下方给出错误文案；密码用掩码；计数器显示“已输入/上限”',
+    severity: 'must',
+    source: DESIGN,
+    citation: {
+      label: '文本框 · 如何使用（标签/占位符、错误提示、计数器）',
+      url: `${UX_BASE}/textinput-0000001957012557.md`,
+      section: '如何使用',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-15',
+    dimension: 'aesthetic',
+    title: '弹出框宽度/高度/按钮布局',
+    verify: '布局树 bounds：宽度 ≤ 400vp；高度 ≤ 0.9×(屏高-状态栏-导航栏)；≥3 个按钮改为上下布局',
+    severity: 'must',
+    source: DESIGN,
+    citation: {
+      label: '弹出框 · 布局规则（最大 400vp、0.9 屏高、按钮布局）',
+      url: `${UX_BASE}/dialog-0000001957012569.md`,
+      section: '布局规则',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-16',
+    dimension: 'aesthetic',
+    title: '标题栏高度与右侧图标数',
+    verify: '布局树：普通单行标题栏 56vp，强调型 112vp；右侧图标（含更多）≤ 3 个；一级页不出现返回',
+    severity: 'warn',
+    source: DESIGN,
+    citation: {
+      label: '标题栏 · 如何使用/组件构成（56vp/112vp、右侧最多 3 个）',
+      url: `${UX_BASE}/titlebar-0000001929628982.md`,
+      section: '组件构成',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-17',
+    dimension: 'aesthetic',
+    title: '底部页签数量与高度',
+    verify: '截图 + bounds：3–5 个页签（不超过 5）；平铺式 48vp / 悬浮式 56vp；图标 24vp；避让系统导航条',
+    severity: 'warn',
+    source: DESIGN,
+    citation: {
+      label: '底部页签 · 如何使用（3–5 个、48/56vp、图标 24vp）',
+      url: `${UX_BASE}/bottomtab-0000001956787789.md`,
+      section: '如何使用',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-18',
+    dimension: 'aesthetic',
+    title: '开关状态明确且高风险操作需二次确认',
+    verify: '截图：开/关状态可区分（颜色/位置）；仅点击开关切换，点整行不误触；重要功能切换有确认弹窗',
+    severity: 'must',
+    source: DESIGN,
+    citation: {
+      label: '开关 · 如何使用（状态反馈、二次确认、点击区域）',
+      url: `${UX_BASE}/toggleswitch-0000001956852745.md`,
+      section: '如何使用',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-19',
+    dimension: 'aesthetic',
+    title: '进度条区分确定/不确定进度',
+    verify: '截图：已知总量显示百分比且实时更新；未知总量用无限循环；<400ms 的完成过程按 400ms 线性动画呈现',
+    severity: 'must',
+    source: DESIGN,
+    citation: {
+      label: '进度条 · 如何使用（确定/不确定、400ms 动画）',
+      url: `${UX_BASE}/progress-0000001929656644.md`,
+      section: '如何使用',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-20',
+    dimension: 'aesthetic',
+    title: '系统图标用 Symbol 24vp 规格',
+    verify: '布局树：标准图标 24×24vp（主体 22×22vp）；描边 1.5vp、圆角 3/1.5vp；与文本混排用 SymbolSpan',
+    severity: 'warn',
+    source: DESIGN,
+    citation: {
+      label: 'HarmonyOS Symbol · 基础图标设计原则（24vp 网格/描边 1.5vp）',
+      url: `${UX_BASE}/system-icons-0000001929854962.md`,
+      section: '基础图标设计原则',
+      version: UX_FETCHED
+    }
+  },
+  {
+    id: 'DW-AES-21',
+    dimension: 'aesthetic',
+    title: '卡片式列表分组一致',
+    verify: '截图 + bounds：同组卡片圆角/间距/对齐一致，不把不同结构卡片混排；卡片间 ≥12vp，圆角与列表卡片规范一致',
+    severity: 'warn',
+    source: DESIGN,
+    citation: {
+      label: '列表 · 组件规则/设备差异（卡片式列表、分组一致性）',
+      url: `${UX_BASE}/list-0000001929853910.md`,
+      section: '组件规则',
+      version: UX_FETCHED
+    }
   }
 ] as const;
 
