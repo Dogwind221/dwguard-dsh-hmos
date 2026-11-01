@@ -108,7 +108,7 @@ dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
 - 桌面版：**插件** 页出现 `DwGuard-Dsh-Hmos`；
 - 命令行：`dsh --profile web --dump-config` 里能看到 `# == dwguard-dsh-hmos`。
 
-装好后，**新开的会话**都会拿到 12 个工具、3 个 skill 和一段策略提示词。让 DSH「给鸿蒙做个 XX 页面」，它会自动加载 `dwguard-hmos` skill。已经打开的旧会话如果没热加载到新工具，新开一个会话即可（工具表在会话开始时就固定了）。
+装好后，**新开的会话**都会拿到 13 个工具、3 个 skill 和一段策略提示词。让 DSH「给鸿蒙做个 XX 页面」，它会自动加载 `dwguard-hmos` skill。已经打开的旧会话如果没热加载到新工具，新开一个会话即可（工具表在会话开始时就固定了）。
 
 ### 可选：独立的 Agent 预设
 

@@ -61,7 +61,7 @@ dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
 
 Verify: `dsh --profile web --dump-config` should show `# == dwguard-dsh-hmos`.
 
-Every **new** session then gets 12 tools, 3 skills and a policy prompt. Sessions
+Every **new** session then gets 13 tools, 3 skills and a policy prompt. Sessions
 opened before the install keep their old tool table — open a new one.
 
 ## The `DshHoms` entry
