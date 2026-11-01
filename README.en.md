@@ -1,5 +1,8 @@
 # DwGuard-Dsh-Hmos
 
+[![CI](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml/badge.svg)](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 A DeepSeek Harness (DSH) plugin for HarmonyOS app delivery: DSH plans, pre-reviews
 and **audits**; DevEco Code implements. The two agents coordinate through a
 small file protocol under `.shared/`, and every verdict must be backed by

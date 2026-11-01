@@ -1,5 +1,8 @@
 # DwGuard-Dsh-Hmos
 
+[![CI](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml/badge.svg)](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
 **DSH 侧的鸿蒙双 Agent 编排与外部审计插件。** 它把「DSH 编排 + DevEco Code 执行」的协作方式，从一份提示词文档变成一组**有闸门的工程动作**：任务包冻结、派发前对抗预审、Goal 模式派发、四维外部审计、返工单、验收报告、知识沉淀。
 
 核心主张只有一句：**交付物必须自己证明自己，DSH 不采信执行者的自述结论。**
@@ -72,6 +75,9 @@ flowchart TD
 # 在仓库根目录执行（推荐；也可以把 . 换成仓库绝对路径）
 dsh plugin --profile desktop add .
 dsh plugin --profile web     add .
+
+# 或直接从 GitHub 安装（不用先 clone）
+dsh plugin --profile desktop add https://github.com/Dogwind221/dwguard-dsh-hmos
 
 # 2) 确认组合层已生效（应看到 # == dwguard-dsh-hmos）
 dsh --profile desktop --dump-config

@@ -78,5 +78,13 @@
   "devDependencies": {
     "@types/node": "^22.0.0",
     "typescript": "^5.6.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Dogwind221/dwguard-dsh-hmos.git"
+  },
+  "homepage": "https://github.com/Dogwind221/dwguard-dsh-hmos",
+  "bugs": {
+    "url": "https://github.com/Dogwind221/dwguard-dsh-hmos/issues"
   }
 }
