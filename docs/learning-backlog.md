@@ -29,16 +29,17 @@
 
 ## 本轮进展（0.3.0，不升版本）
 
-已从 backlog 落成规则（66 条 / 57 条带 citation）：
+已从 backlog 落成规则（75 条 / 66 条带 citation）：
 
 | 领域 | 已落 | 还差 |
 | --- | --- | --- |
 | 无障碍深水区 | `A11Y-09` 分组播报、`A11Y-10` 无障碍层级、`A11Y-11` 提示分离、`A11Y-12` 键盘可达、`A11Y-13` 2x 字体；`scripts/a11y-walkthrough.md`；`dwguard_deveco a11y` 快照（布局树 + accessibilityId + 静态扫描） | 完整无障碍树（`ui layout`/`uitest` 不含 accessibilityText/Level，列 research） |
 | ArkUI V2 | `STATE-02` @ObservedV2+@Trace、`STATE-03` V1/V2 混用、`STATE-04` @Local 边界、`STATE-05` @Param+@Event、`STATE-06` @Monitor、`STATE-07` @Computed、`STATE-08` @Provider/@Consumer、`STATE-09` V1→V2 迁移 | V1→V2 迁移案例文档（规则已覆盖，示例待补） |
-| 性能工具链 | `PERF-10` 冷启动五阶段、`PERF-11` 超长帧；playbook 补了 Trace 取证 | Profiler 截图模板、机型基线表 |
+| 性能工具链 | `PERF-10` 冷启动五阶段、`PERF-11` 超长帧；`docs/perf-baseline.md` 机型矩阵 + Profiler 模板 | 首个项目实测后回填基线 |
+| AGC + 隐私 | `AGC-01~09`（签名/不可调试、隐私政策、权限拒绝、敏感权限目的、应用信息、测试账号、双清单、热更新、广告法）；`docs/agc-publishing.md` | 特殊行业资质按项目补 |
 | Design 组件 | `AES-12` 按钮、`AES-13~21` 列表/文本框/弹出框/标题栏/底部页签/开关/进度条/Symbol 图标/卡片式列表 | 更细的组件状态与动效（0.4.x） |
 
-未开始：AGC 官方审核原文 + 签名上架、隐私/安全设计、API Reference（按需检索）、多设备、ArkTS 1.2（观察）。
+未开始：API Reference（按需检索）、多设备、ArkTS 1.2（观察）。
 
 ## 0.4 优先顺序
 

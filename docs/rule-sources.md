@@ -32,9 +32,9 @@ dwguard_rules search --query "点击热区"
 
 命令行等价物：`node scripts/search-docs.mjs "点击热区" --limit=5`。语料目录默认读 `DWG_DOCS_DIR`，其次 `~/harmony-docs`，最后 `<workspace>/harmony-docs`；也可在插件配置里设 `docsDir`。
 
-覆盖：**66 条规则中 57 条带 citation**（功能 21、审美 21、性能 11、无障碍 13）。没有官方出处的 9 条是 DwGuard 自定的验收口径（主路径、空态、幂等、状态恢复、图文比例、内存泄漏、定时器清理、非颜色编码、动效降级），保留 `source: 'DwGuard 验收规则'` 或扫描来源。
+覆盖：**75 条规则中 66 条带 citation**（功能 30、审美 21、性能 11、无障碍 13）。没有官方出处的 9 条是 DwGuard 自定的验收口径（主路径、空态、幂等、状态恢复、图文比例、内存泄漏、定时器清理、非颜色编码、动效降级），保留 `source: 'DwGuard 验收规则'` 或扫描来源。
 
-0.4 新增的官方引用：A11Y-09~13（无障碍分组/层级/提醒/焦点链/2x 字体）、STATE-02~09（V2 深度观测、V1/V2 混用、@Local 边界、@Param+@Event、@Monitor、@Computed、@Provider/@Consumer、V1→V2 迁移）、PERF-10~11（冷启动五阶段、超长帧）、AES-12~21（按钮/列表/文本框/弹出框/标题栏/底部页签/开关/进度条/Symbol 图标/卡片式列表）。
+0.4 新增的官方引用：A11Y-09~13（无障碍分组/层级/提醒/焦点链/2x 字体）、STATE-02~09（V2 深度观测、V1/V2 混用、@Local 边界、@Param+@Event、@Monitor、@Computed、@Provider/@Consumer、V1→V2 迁移）、PERF-10~11（冷启动五阶段、超长帧）、AES-12~21（按钮/列表/文本框/弹出框/标题栏/底部页签/开关/进度条/Symbol 图标/卡片式列表）、AGC-01~09（发布签名、隐私政策、权限、应用信息、测试账号、双清单、热更新、广告法）。
 
 抓取入口（实测可用）：
 

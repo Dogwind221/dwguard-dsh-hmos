@@ -926,6 +926,132 @@ export const RULES: readonly RuleEntry[] = [
       section: '组件规则',
       version: UX_FETCHED
     }
+  },
+  {
+    id: 'DW-AGC-01',
+    dimension: 'function',
+    title: '发布包为正式签名且不可调试',
+    verify: '发布构建关闭 debug；使用发布证书/Profile 签名；安装包 debuggable=false，不含调试证书或调试标记',
+    severity: 'must',
+    source: AGC,
+    citation: {
+      label: '应用审核指南 3.8 · 发布版本不得为可调试版本',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50104.md',
+      section: '3.8',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-02',
+    dimension: 'function',
+    title: '首次启动显著提示隐私政策，同意前不收集',
+    verify: '首次安装冷启动截图可见隐私政策弹窗/链接；同意前日志/抓包无个人信息请求；拒绝后不退出、仍可使用基本功能',
+    severity: 'must',
+    source: AGC,
+    citation: {
+      label: '应用审核 Checklist · 开发中/隐私合规',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50170.md',
+      section: '开发中 · 隐私合规',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-03',
+    dimension: 'function',
+    title: '拒绝权限不退出、不循环弹窗、可登录',
+    verify: '逐项拒绝敏感权限：应用不退出/不关闭；不循环弹窗；仍可完成注册登录与基本功能',
+    severity: 'must',
+    source: AGC,
+    citation: {
+      label: 'APP 常见个人信息保护问题 FAQ · 5.1–5.3 权限索取行为',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-05.md',
+      section: '5.1–5.3',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-04',
+    dimension: 'function',
+    title: '敏感权限同步告知目的且最小化',
+    verify: '权限弹窗同时显示用途（reason）；module.json5 声明的权限与功能一一对应，未使用的权限不声明，拒绝后不频繁重复申请',
+    severity: 'must',
+    source: AGC,
+    citation: {
+      label: 'APP 常见个人信息保护问题 FAQ · 5.4–5.7 权限索取行为',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/faq-05.md',
+      section: '5.4–5.7',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-05',
+    dimension: 'function',
+    title: '应用信息与安装后一致、截图合规',
+    verify: '名称/图标/版本与安装后一致；截图 ≥3 张、方向正确、无重复/模糊/拉伸/测试标记；名称 ≤15 汉字或 30 字符',
+    severity: 'warn',
+    source: AGC,
+    citation: {
+      label: '应用审核 Checklist · 上架提审/可本地化基础信息',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50170.md',
+      section: '上架提审 · 可本地化基础信息',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-06',
+    dimension: 'function',
+    title: '提审提供可用测试账号/演示材料',
+    verify: '需登录的应用提供可完成登录-浏览-操作-退出全流程的测试账号；需设备/特殊环境的提供演示视频',
+    severity: 'must',
+    source: AGC,
+    citation: {
+      label: '应用审核 Checklist · 上架提审/应用审核信息',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50170.md',
+      section: '上架提审 · 应用审核信息',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-07',
+    dimension: 'function',
+    title: '隐私双清单在二级菜单可查',
+    verify: '应用内二级菜单可打开“已收集个人信息清单”和“第三方共享个人信息清单”，含信息种类、目的、场景、共享方式',
+    severity: 'must',
+    source: AGC,
+    citation: {
+      label: '应用审核指南 7.18 · 个人信息保护“双清单”',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50104.md',
+      section: '7.18',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-08',
+    dimension: 'function',
+    title: '不绕过审核自动更新',
+    verify: '代码审查：无动态下发可执行代码/热更新替换应用逻辑；应用更新走华为应用市场组件',
+    severity: 'must',
+    source: AGC,
+    citation: {
+      label: '应用审核指南 3.13 · 不得绕过审核进行自动更新',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50104.md',
+      section: '3.13',
+      version: '2026-10-31'
+    }
+  },
+  {
+    id: 'DW-AGC-09',
+    dimension: 'function',
+    title: '应用信息不含广告法禁用词与测试标记',
+    verify: '应用名称/介绍/截图不含“国家级/最高级/最佳”等广告法禁用词，不含 test/demo/beta 等测试标记',
+    severity: 'warn',
+    source: AGC,
+    citation: {
+      label: '应用审核指南 1.14 · 应用信息不得含无法证实的宣传用语',
+      url: 'https://developer.huawei.com/consumer/cn/doc/doccenter-submission/50104.md',
+      section: '1.14',
+      version: '2026-10-31'
+    }
   }
 ] as const;
 
