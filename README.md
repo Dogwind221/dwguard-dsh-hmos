@@ -400,7 +400,7 @@ New-Item -ItemType Junction -Path node_modules\@deepseek-ai `
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish，打完包会打印 tag / publish 步骤。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.4.1 && git push origin v0.4.1`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 
