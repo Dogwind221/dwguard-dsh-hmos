@@ -24,9 +24,17 @@ can implement, and DevEco CLI becomes a first-class evidence source.
   Every run records the exact command, exit code, duration and output under
   `artifacts/deveco-<n>/` (`result.json` + `output.log`) and can be cited from
   `checks[].evidenceFiles`.
+- **Device evidence** — `screenshot` / `layout` / `verify` run the real
+  `devecocli ui screenshot|layout` and `devecocli verify --test-plan` commands;
+  screenshots land in `artifacts/devshots/`, layout JSON in
+  `artifacts/deveco-<n>/layout.json`. Verified against `devecocli 1.3.10` on
+  Windows (`env`, `device list`).
 - **Async jobs** — `background: true` on build/run/log starts `devecocli`
   detached, returns a job id immediately, and `jobs` / `stop` manage it — long
   builds no longer block the DSH conversation.
+- **Auto-detect binary** — `devecocli` is resolved from `devecocliPath`, the npm
+  global bin (`%LOCALAPPDATA%\Programs\nodejs\devecocli.cmd`,
+  `%APPDATA%\npm\devecocli.cmd`), then PATH.
 - **Evidence reuse** — `dwguard_deveco attach` registers an existing build/deploy
   log as evidence without rebuilding, avoiding duplicate builds.
 - **Watchdog** — `dwguard_status` flags a dispatched round with no ack/delivery
@@ -43,8 +51,8 @@ can implement, and DevEco CLI becomes a first-class evidence source.
 
 - README (zh + en) documents the hybrid mode and the new tool; config gains
   `executor` and `devecocliPath`.
-- Test suite 39 → 47 (CLI brief, deveco env/failure/missing binary, unsafe args,
-  IDE-first routing, attach reuse, background jobs, stall watchdog).
+- Test suite 39 → 48 (CLI brief, deveco env/failure/missing binary, unsafe args,
+  IDE-first routing, attach reuse, background jobs, device actions, stall watchdog).
 
 ## 0.2.0 — 2026-11-01
 

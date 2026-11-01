@@ -62,12 +62,13 @@ regression / CI / refactor flavoured; a pack can pin `executor: ide | cli`.
 In CLI mode, `tasks/cli-brief.md` gives an external CLI agent the
 `devecocli build / run / run --apply / log` contract. DSH gathers build/log/device
 evidence itself through **`dwguard_deveco`** (written to `artifacts/deveco-<n>/`);
-`attach` registers an existing build log without rebuilding, and
-`background: true` runs long builds detached (`jobs` / `stop` manage them). A
-watchdog flags a dispatch with no ack/delivery after `stallMinutes`, and
-`dwguard_status waitSeconds` long-polls for a delivery event. Screenshots and the
-UI tree are still captured by DSH — the executor's self-report never becomes a
-`pass`.
+`screenshot` / `layout` / `verify` call the real `devecocli ui` and
+`devecocli verify` commands, `attach` registers an existing build log without
+rebuilding, and `background: true` runs long builds detached (`jobs` / `stop`
+manage them). A watchdog flags a dispatch with no ack/delivery after
+`stallMinutes`, and `dwguard_status waitSeconds` long-polls for a delivery event.
+Screenshots and the UI tree are still captured by DSH — the executor's
+self-report never becomes a `pass`.
 
 ## Tools
 
@@ -77,7 +78,7 @@ UI tree are still captured by DSH — the executor's self-report never becomes a
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
-| `dwguard_deveco` | DevEco CLI evidence adapter: `env / build / run / log / lint / device / uiHelp / ui` |
+| `dwguard_deveco` | DevEco CLI evidence: `env / build / run / log / lint / device / uiHelp / ui / screenshot / layout / verify / attach / jobs / stop` |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
@@ -154,7 +155,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     shadowIntervalMinutes: 10
     stallMinutes: 30
     executor: auto         # auto = IDE-first | ide | cli
-    devecocliPath: ''      # empty = resolve from PATH
+    devecocliPath: ''      # empty = auto-detect (PATH / npm global)
 ```
 
 ## Boundaries
@@ -173,7 +174,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
 npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 npm run typecheck
 npm run build
-npm test          # 47 tests
+npm test          # 48 tests
 node scripts/release.mjs --bump=patch --dry-run
 ```
 
