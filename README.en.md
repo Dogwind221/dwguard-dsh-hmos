@@ -53,14 +53,21 @@ opens a live board in the **right sidebar** without replacing the conversation:
   phase, next action and history switch together;
 - `role="status"` announcements and reduced-motion support.
 
-## Hybrid executor (0.3+)
+## Hybrid executor (0.3+, IDE-first)
 
-`executor: ide` (default) hands the Goal brief to DevEco Code. `executor: cli`
-also writes `tasks/cli-brief.md` so an external CLI agent can implement with
-`devecocli build / run / run --apply / log`. DSH gathers build/log/device
-evidence itself through **`dwguard_deveco`** (written to
-`artifacts/deveco-<n>/`), and still captures screenshots and the UI tree on the
-device — the executor's self-report never becomes a `pass`.
+`executor: auto` (default) keeps DevEco Code first. CLI only takes over when the
+pack has **no visual `must` criterion** and the task is clearly batch /
+regression / CI / refactor flavoured; a pack can pin `executor: ide | cli`.
+
+In CLI mode, `tasks/cli-brief.md` gives an external CLI agent the
+`devecocli build / run / run --apply / log` contract. DSH gathers build/log/device
+evidence itself through **`dwguard_deveco`** (written to `artifacts/deveco-<n>/`);
+`attach` registers an existing build log without rebuilding, and
+`background: true` runs long builds detached (`jobs` / `stop` manage them). A
+watchdog flags a dispatch with no ack/delivery after `stallMinutes`, and
+`dwguard_status waitSeconds` long-polls for a delivery event. Screenshots and the
+UI tree are still captured by DSH — the executor's self-report never becomes a
+`pass`.
 
 ## Tools
 
@@ -145,7 +152,8 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     knowledgeMaxEntriesPerTopic: 200
     docsDir: ''
     shadowIntervalMinutes: 10
-    executor: ide          # ide | cli
+    stallMinutes: 30
+    executor: auto         # auto = IDE-first | ide | cli
     devecocliPath: ''      # empty = resolve from PATH
 ```
 
@@ -165,7 +173,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
 npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 npm run typecheck
 npm run build
-npm test          # 43 tests
+npm test          # 47 tests
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

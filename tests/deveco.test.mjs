@@ -1,6 +1,6 @@
 // CLI executor mode + devecocli evidence adapter.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -8,10 +8,12 @@ import { after, test } from 'node:test';
 process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dwguard-deveco-home-'));
 
 import { resolveOptions } from '../lib/config.js';
+import { chooseExecutor } from '../lib/dispatch.js';
 import { createDevecoTool } from '../lib/tools/deveco.js';
 import { createDispatchTool } from '../lib/tools/dispatch.js';
 import { createPrereviewTool } from '../lib/tools/prereview.js';
 import { createSpecTool } from '../lib/tools/spec.js';
+import { createStatusTool } from '../lib/tools/status.js';
 
 const dirs = [process.env.DSH_HOME];
 after(async () => {
@@ -116,3 +118,77 @@ test('deveco rejects unsafe ui args and path-like apply values', async () => {
   const escaped = await tool.execute({ action: 'run', apply: '../outside.txt' }, exec(cwd));
   assert.equal(escaped.ok, false);
 });
+
+test('executor routing is IDE-first; CLI only when the task has no visual must and is batch-flavoured', () => {
+  const base = {
+    requirement: '页面开发',
+    spec: '实现首页',
+    constraints: [],
+    criteria: [
+      { id: 'A-01', dimension: 'aesthetic', statement: '间距 12vp', verify: '布局树', weight: 'must' }
+    ]
+  };
+  assert.equal(chooseExecutor({ ...base, executor: undefined }, { executor: 'auto' }), 'ide');
+  assert.equal(
+    chooseExecutor(
+      { ...base, criteria: [{ id: 'A-01', dimension: 'aesthetic', statement: '间距 12vp', verify: '布局树', weight: 'should' }], constraints: ['批量回归任务'] },
+      { executor: 'auto' }
+    ),
+    'cli'
+  );
+  assert.equal(chooseExecutor({ ...base, executor: 'cli' }, { executor: 'ide' }), 'cli');
+  assert.equal(chooseExecutor({ ...base, executor: undefined }, { executor: 'ide' }), 'ide');
+});
+
+test('deveco attach reuses an existing log without rebuilding', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  await writeFile(join(cwd, 'build.log'), 'BUILD SUCCESSFUL in 42s\n');
+  const tool = createDevecoTool(options);
+  const result = await tool.execute({ action: 'attach', file: 'build.log' }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  const stored = await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'attached-build.log'), 'utf8');
+  assert.match(stored, /BUILD SUCCESSFUL/);
+  const record = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'result.json'), 'utf8'));
+  assert.equal(record.action, 'attach');
+});
+
+test('background jobs start, list and stop without blocking', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  const started = [];
+  const tool = createDevecoTool(
+    options,
+    undefined,
+    async () => {
+      throw new Error('sync runner must not run');
+    },
+    {
+      start: (_command, args, _cwd, logFile) => {
+        started.push({ args, logFile });
+        return 4242;
+      },
+      alive: (pid) => pid === 4242,
+      stop: (pid) => pid === 4242
+    }
+  );
+  const result = await tool.execute({ action: 'build', background: true }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  assert.deepEqual(started[0].args, ['build']);
+  const jobs = await tool.execute({ action: 'jobs' }, exec(cwd));
+  assert.match(jobs.detail, /running/);
+  const stopped = await tool.execute({ action: 'stop', job: '1' }, exec(cwd));
+  assert.equal(stopped.ok, true, stopped.detail);
+});
+
+test('status watchdog flags a dispatch that has been waiting too long', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({ stallMinutes: 1 });
+  assert.equal((await dispatched(cwd, options)).ok, true);
+  const outboxPath = join(cwd, '.shared', 'outbox-dsh.md');
+  const text = await readFile(outboxPath, 'utf8');
+  await writeFile(outboxPath, text.replace(/\[[^\]]+\]/, '[2020-01-01T00:00:00.000Z]'));
+  const status = await createStatusTool(options).execute({}, exec(cwd));
+  assert.match(status.next, /仍无回执\/交付/);
+});
+

@@ -19,6 +19,23 @@ import { pathsOf } from './common.js';
 
 const TOOL = 'dwguard_status';
 
+/** Wait until a new delivery appears or the timeout expires. */
+async function waitForDelivery(
+  paths: Parameters<typeof collectSnapshot>[0],
+  options: Options,
+  seconds: number,
+  initial: Awaited<ReturnType<typeof collectSnapshot>>
+): Promise<Awaited<ReturnType<typeof collectSnapshot>>> {
+  if (seconds <= 0 || initial.unread.length > 0) return initial;
+  const deadline = Date.now() + seconds * 1000;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const next = await collectSnapshot(paths, options, nowIso());
+    if (next.unread.length > 0) return next;
+  }
+  return initial;
+}
+
 /**
  * Create the `dwguard_status` tool.
  * @param options - resolved plugin options.
@@ -34,15 +51,23 @@ export function createStatusTool(options: Options, ctx?: PluginContext): ToolDef
       markInboxRead: {
         type: 'boolean',
         description: '把这些交付记录标记为已读（游标前移）。默认 false。'
+      },
+      waitSeconds: {
+        type: 'number',
+        description: '长轮询等待新交付的秒数（0–120，默认 0）。相当于订阅一次“交付事件”。'
       }
     },
     output: { schema: RESULT_SCHEMA, render: renderResult },
     async execute(rawArgs: unknown, exec: ToolRunContext): Promise<ToolResult> {
       const args = asRecord(rawArgs, TOOL);
       const markRead = optionalBoolean(args, 'markInboxRead', false);
+      const waitRaw = args['waitSeconds'];
+      const waitSeconds =
+        typeof waitRaw === 'number' && Number.isFinite(waitRaw) && waitRaw > 0 ? Math.min(120, Math.trunc(waitRaw)) : 0;
       const paths = await pathsOf(exec, { options, ctx }, TOOL);
       const now = nowIso();
-      const snapshot = await collectSnapshot(paths, options, now);
+      const initial = await collectSnapshot(paths, options, now);
+      const snapshot = await waitForDelivery(paths, options, waitSeconds, initial);
       if (markRead && snapshot.outboxEntries.length > snapshot.state.inboxCursor) {
         await updateState(paths, now, (current) => ({
           ...current,

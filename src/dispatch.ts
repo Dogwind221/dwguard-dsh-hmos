@@ -27,6 +27,27 @@ export type OutboxKind =
   | 'shadow-risk'
   | 'rework';
 
+/** Which agent implements a task pack. */
+export type ExecutorMode = 'ide' | 'cli';
+
+/**
+ * IDE-first routing: an explicit pack/option wins; `auto` only switches to CLI
+ * when the task has no visual must-criterion and is clearly batch/regression
+ * flavoured.
+ * @param pack - frozen task pack.
+ * @param options - resolved plugin options (`executor` policy).
+ */
+export function chooseExecutor(pack: TaskPack, options: { readonly executor: 'auto' | 'ide' | 'cli' }): ExecutorMode {
+  if (pack.executor === 'ide' || pack.executor === 'cli') return pack.executor;
+  if (options.executor === 'ide' || options.executor === 'cli') return options.executor;
+  const visualMust = pack.criteria.some(
+    (criterion) => criterion.dimension === 'aesthetic' && criterion.weight === 'must'
+  );
+  const text = [pack.requirement, pack.spec, ...pack.constraints].join('\n');
+  const cliHint = /(回归|批量|批处理|命令行|CLI|重构|脚本|CI\b|regression|batch|refactor|script)/i.test(text);
+  return cliHint && !visualMust ? 'cli' : 'ide';
+}
+
 /** Envelope attached to an outbox entry, v2 protocol. */
 export interface OutboxMeta {
   readonly kind: OutboxKind;

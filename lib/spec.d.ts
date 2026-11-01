@@ -27,6 +27,7 @@ export interface TaskPackInput {
     readonly spec: string;
     readonly constraints?: readonly string[];
     readonly criteria: readonly CriterionInput[];
+    readonly executor?: 'auto' | 'ide' | 'cli';
 }
 /** One validation message. */
 export interface Issue {

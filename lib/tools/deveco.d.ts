@@ -20,10 +20,17 @@ export interface DevecoRun {
     readonly durationMs: number;
 }
 export type DevecoRunner = (command: string, args: readonly string[], cwd: string) => Promise<DevecoRun>;
+/** Background job hooks (injectable so tests do not spawn real processes). */
+export interface BackgroundDeps {
+    start?: (command: string, args: readonly string[], cwd: string, logFile: string) => Promise<number> | number;
+    stop?: (pid: number) => Promise<boolean> | boolean;
+    alive?: (pid: number) => boolean;
+}
 /**
  * Create the DevEco CLI adapter tool.
  * @param options - resolved plugin options.
  * @param ctx - plugin context.
  * @param runner - injectable runner (tests pass a fake).
+ * @param background - injectable background start/stop/alive hooks.
  */
-export declare function createDevecoTool(options: Options, ctx?: PluginContext, runner?: DevecoRunner): ToolDefinition<unknown, ToolResult>;
+export declare function createDevecoTool(options: Options, ctx?: PluginContext, runner?: DevecoRunner, background?: BackgroundDeps): ToolDefinition<unknown, ToolResult>;
