@@ -30,8 +30,10 @@ export const Config = z.object({
   docsDir: z.string().default(''),
   /** Minutes between shadow-review nudges while DevEco is coding. */
   shadowIntervalMinutes: z.number().default(10),
-  /** Who implements the task pack: the IDE agent (`ide`) or a CLI agent (`cli`). */
-  executor: z.string().default('ide'),
+  /** Minutes without a delivery before `dwguard_status` reports a stalled round. */
+  stallMinutes: z.number().default(30),
+  /** Executor policy: `auto` = IDE-first, CLI only where it wins. */
+  executor: z.string().default('auto'),
   /** `devecocli` binary; empty means `devecocli` on PATH. */
   devecocliPath: z.string().default('')
 });
@@ -49,8 +51,10 @@ export interface Options {
   readonly docsDir: string;
   /** Shadow-review nudge interval in minutes. */
   readonly shadowIntervalMinutes: number;
-  /** Executor mode for dispatch: `ide` | `cli`. */
-  readonly executor: 'ide' | 'cli';
+  /** Minutes without a delivery before the round is reported as stalled. */
+  readonly stallMinutes: number;
+  /** Executor policy: `auto` = IDE-first; `ide` / `cli` force one. */
+  readonly executor: 'auto' | 'ide' | 'cli';
   /** `devecocli` binary; empty means resolve from PATH. */
   readonly devecocliPath: string;
 }
@@ -65,7 +69,8 @@ const DEFAULTS: Options = {
   knowledgeMaxEntriesPerTopic: 200,
   docsDir: '',
   shadowIntervalMinutes: 10,
-  executor: 'ide',
+  stallMinutes: 30,
+  executor: 'auto',
   devecocliPath: ''
 };
 
@@ -99,7 +104,8 @@ export function resolveOptions(raw: unknown): Options {
     knowledgeMaxEntriesPerTopic: positiveInt(input['knowledgeMaxEntriesPerTopic'], DEFAULTS.knowledgeMaxEntriesPerTopic, 1),
     docsDir: typeof input['docsDir'] === 'string' ? input['docsDir'].trim() : DEFAULTS.docsDir,
     shadowIntervalMinutes: positiveInt(input['shadowIntervalMinutes'], DEFAULTS.shadowIntervalMinutes, 1),
-    executor: input['executor'] === 'cli' ? 'cli' : 'ide',
+    stallMinutes: positiveInt(input['stallMinutes'], DEFAULTS.stallMinutes, 1),
+    executor: input['executor'] === 'ide' || input['executor'] === 'cli' ? input['executor'] : 'auto',
     devecocliPath: typeof input['devecocliPath'] === 'string' ? input['devecocliPath'].trim() : DEFAULTS.devecocliPath
   };
 }

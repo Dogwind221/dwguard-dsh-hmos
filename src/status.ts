@@ -166,6 +166,34 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
         ? ' Shadow review has not run yet: call `dwguard_shadow` for one read-only pass.'
         : ` Shadow review has not run for ${ageMinutes} min: call \`dwguard_shadow\` for one read-only pass.`;
     }
+
+    // Watchdog: a dispatched round with no acknowledgement or delivery is
+    // stalled, not "in progress".
+    const entryTime = (entry: OutboxEntry): number => {
+      const match = /^\[([^\]]+)\]/.exec(entry.header);
+      const parsed = match?.[1] === undefined ? NaN : Date.parse(match[1]);
+      return Number.isNaN(parsed) ? NaN : parsed;
+    };
+    const dispatchTimes = outboxSent
+      .filter((entry) => entry.kind === 'dispatch')
+      .map(entryTime)
+      .filter((time) => Number.isFinite(time));
+    const latestDispatchAt = dispatchTimes.length === 0 ? null : Math.max(...dispatchTimes);
+    if (latestDispatchAt !== null) {
+      const answered = outboxEntries.some((entry) => {
+        const time = entryTime(entry);
+        return (
+          Number.isFinite(time) &&
+          time >= latestDispatchAt &&
+          (entry.kind === 'deliver' || entry.kind === 'ack' || entry.kind === 'question')
+        );
+      });
+      const waitMinutes = Math.max(0, Math.floor((Date.parse(now) - latestDispatchAt) / 60_000));
+      if (!answered && waitMinutes >= options.stallMinutes) {
+        action += ` 本轮已派发 ${waitMinutes} 分钟仍无回执/交付（阈值 ${options.stallMinutes} 分钟）：确认执行器是否卡住，必要时停线或返工。`;
+        actionEn += ` Dispatched ${waitMinutes} min ago with no ack/delivery (threshold ${options.stallMinutes} min): check whether the executor is stuck.`;
+      }
+    }
   }
   return {
     paths,

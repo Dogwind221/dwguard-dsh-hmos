@@ -40,6 +40,7 @@ export interface TaskPackInput {
   readonly spec: string;
   readonly constraints?: readonly string[];
   readonly criteria: readonly CriterionInput[];
+  readonly executor?: 'auto' | 'ide' | 'cli';
 }
 
 /** One validation message. */
@@ -308,6 +309,7 @@ export function buildTaskPack(
   const constraints = dedupe((input.constraints ?? []).map((item) => inline(item)).filter((item) => item.length > 0));
   return {
     schemaVersion: 1,
+    ...(input.executor === undefined || input.executor === 'auto' ? {} : { executor: input.executor }),
     title: inline(input.title),
     requirement: input.requirement.trim(),
     spec: input.spec.trim(),
@@ -365,6 +367,7 @@ export function parseTaskPack(raw: string | null): TaskPack | null {
     Array.isArray(record[key]) ? (record[key] as unknown[]).filter((v): v is string => typeof v === 'string') : [];
   return {
     schemaVersion: 1,
+    ...(record['executor'] === 'ide' || record['executor'] === 'cli' ? { executor: record['executor'] } : {}),
     title: record['title'],
     requirement: typeof record['requirement'] === 'string' ? record['requirement'] : '',
     spec: typeof record['spec'] === 'string' ? record['spec'] : '',

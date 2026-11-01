@@ -9,7 +9,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
-import { appendOutboxDsh, renderCliSection, renderDispatchEntry, renderGoalBrief } from '../dispatch.js';
+import { appendOutboxDsh, chooseExecutor, renderCliSection, renderDispatchEntry, renderGoalBrief } from '../dispatch.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import type { PrereviewReport } from '../review.js';
@@ -62,7 +62,8 @@ export function createDispatchTool(options: Options, ctx?: PluginContext): ToolD
 
       const state = await readState(paths, now);
       const counter = state.dispatches + 1;
-      const cli = options.executor === 'cli';
+      const executor = chooseExecutor(pack, options);
+      const cli = executor === 'cli';
       const goalBrief = renderGoalBrief(pack, paths, counter);
       const brief = cli ? `${goalBrief}\n\n${renderCliSection(pack)}` : goalBrief;
       await ensureShared(paths);
@@ -71,7 +72,7 @@ export function createDispatchTool(options: Options, ctx?: PluginContext): ToolD
       await appendOutboxDsh(
         paths,
         `dispatch #${counter} · 第 ${pack.iteration} 轮 · 任务包 v${pack.specVersion}`,
-        `${renderDispatchEntry(pack, paths, counter, options.executor)}${note === undefined ? '' : `\n\n备注：${note}`}`,
+        `${renderDispatchEntry(pack, paths, counter, executor)}${note === undefined ? '' : `\n\n备注：${note}`}`,
         now,
         { kind: 'dispatch', id: `d-${counter}`, from: 'dsh', to: 'deveco' }
       );

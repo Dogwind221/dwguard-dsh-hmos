@@ -11,26 +11,40 @@ can implement, and DevEco CLI becomes a first-class evidence source.
 
 ### Added
 
+- **IDE-first executor routing** — `executor: auto` (default) keeps DevEco Code
+  first; CLI only takes over when the pack has no visual `must` criterion and the
+  requirement/spec/constraints clearly ask for batch / regression / CI work.
+  A pack can pin `executor: ide | cli`; explicit options still win.
 - **Executor modes** — `executor: ide | cli`. In `cli` mode `dwguard_dispatch`
   also writes `tasks/cli-brief.md` with the `devecocli` command contract
   (`build` / `run` / `run --apply` / `log` / `device`), while visual evidence
   stays on DSH's side.
-- **`dwguard_deveco`** — read-only evidence adapter over DevEco CLI:
-  `env / build / run / log / lint / device / uiHelp / ui`. Every run records the
-  exact command, exit code, duration and output under
+- **`dwguard_deveco`** — evidence adapter over DevEco CLI:
+  `env / build / run / log / lint / device / uiHelp / ui / attach / jobs / stop`.
+  Every run records the exact command, exit code, duration and output under
   `artifacts/deveco-<n>/` (`result.json` + `output.log`) and can be cited from
   `checks[].evidenceFiles`.
+- **Async jobs** — `background: true` on build/run/log starts `devecocli`
+  detached, returns a job id immediately, and `jobs` / `stop` manage it — long
+  builds no longer block the DSH conversation.
+- **Evidence reuse** — `dwguard_deveco attach` registers an existing build/deploy
+  log as evidence without rebuilding, avoiding duplicate builds.
+- **Watchdog** — `dwguard_status` flags a dispatched round with no ack/delivery
+  after `stallMinutes` (default 30), in both Chinese and English next actions.
+- **Event wait** — `dwguard_status waitSeconds` long-polls for a new delivery
+  (0–120s), a lightweight "delivery event" subscription.
 - **Panel language toggle** — `中 / EN` button before refresh, persisted in
   `localStorage`; phase, next action and history labels switch together
   (`board.nextEn`, `history[].labelEn`), with host-language default.
-- **Device UI probe** — `uiHelp` captures `devecocli ui --help` so the panel/agent
-  can learn the installed CLI's UI interface before calling `ui`.
+- **Device UI probe** — `uiHelp` captures `devecocli ui --help` so the agent can
+  learn the installed CLI's UI interface before calling `ui`.
 
 ### Changed
 
 - README (zh + en) documents the hybrid mode and the new tool; config gains
   `executor` and `devecocliPath`.
-- Test suite 39 → 43 (CLI brief, deveco env/failure/missing binary, unsafe args).
+- Test suite 39 → 47 (CLI brief, deveco env/failure/missing binary, unsafe args,
+  IDE-first routing, attach reuse, background jobs, stall watchdog).
 
 ## 0.2.0 — 2026-11-01
 

@@ -29,9 +29,11 @@ export interface Criterion {
     /** Catalog rule this criterion implements (`DW-A11Y-02`, `STATE-002`…). */
     readonly ruleId?: string;
 }
-/** The frozen task pack DSH hands to DevEco Code. */
+/** The frozen task pack DSH hands to the executor agent. */
 export interface TaskPack {
     readonly schemaVersion: 1;
+    /** Executor chosen for this pack; `auto` = IDE-first with CLI only where it wins. */
+    readonly executor?: 'auto' | 'ide' | 'cli';
     readonly title: string;
     readonly requirement: string;
     readonly spec: string;

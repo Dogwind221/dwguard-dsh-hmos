@@ -52,9 +52,11 @@ export interface Criterion {
   readonly ruleId?: string;
 }
 
-/** The frozen task pack DSH hands to DevEco Code. */
+/** The frozen task pack DSH hands to the executor agent. */
 export interface TaskPack {
   readonly schemaVersion: 1;
+  /** Executor chosen for this pack; `auto` = IDE-first with CLI only where it wins. */
+  readonly executor?: 'auto' | 'ide' | 'cli';
   readonly title: string;
   readonly requirement: string;
   readonly spec: string;

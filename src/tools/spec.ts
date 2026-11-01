@@ -101,6 +101,12 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
         items: { type: 'string' },
         description: '约束：API 版本、目录、不可改动文件、性能预算等。'
       },
+      executor: {
+        type: 'string',
+        enum: ['auto', 'ide', 'cli'],
+        description:
+          '执行器：`auto`（默认，IDE 优先，CLI 只在无视觉 must 判据或约束含回归/批量/CI 时介入）| `ide` | `cli`。'
+      },
       criteria: {
         type: 'array',
         items: {
@@ -143,13 +149,14 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
         const requirement = requiredString(args, 'requirement', TOOL, 8000);
         const spec = requiredString(args, 'spec', TOOL, 12000);
         const constraints = optionalStringArray(args, 'constraints', TOOL, 40);
+        const executor = optionalEnum(args, 'executor', ['auto', 'ide', 'cli'] as const, TOOL) ?? 'auto';
         const criteria = parseCriteria(args);
 
         const state = await readState(paths, now);
         const existing = parseTaskPack(await readTextOrNull(paths.specJson));
         const specVersion = state.specVersion + 1;
         const pack = buildTaskPack(
-          { title, requirement, spec, constraints, criteria },
+          { title, requirement, spec, constraints, criteria, executor },
           {
             iteration: state.iteration,
             specVersion,

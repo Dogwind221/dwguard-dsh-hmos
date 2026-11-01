@@ -283,14 +283,16 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
 
 简报里写死了角色、路径、逐条判据、约束、执行闭环、交付格式、提问协议与禁止事项——不需要在 DevEco 侧装任何东西。
 
-### 混合执行模式（`executor: cli`）
+### 混合执行模式（`executor: auto`，IDE 优先）
 
-0.3 起可以换执行器，协议不变：
+0.3 起可以换执行器，协议不变。默认 **IDE 优先**：
 
-- `ide`（默认）：简报粘进 DevEco Code Goal 模式，人工交接；
-- `cli`：派发时同时写 `tasks/cli-brief.md`，外部 CLI Agent 用 `devecocli build / run / run --apply / log` 实现与回归；
-- DSH 用 **`dwguard_deveco`** 独立取构建/运行/日志/设备证据（落 `artifacts/deveco-<n>/`），截图与 UI 树仍由 DSH 自己在设备上取；
-- `dwguard_deveco` **不替代审计**：它只提供命令与输出，是否达标仍由 `dwguard_audit` 判定。
+- `auto`（默认）：DevEco Code 先上；只有任务**没有视觉 must 判据**、且需求/规格/约束明确是批量、回归、CI、重构或脚本时，才让 CLI 介入；
+- 任务包可以钉死 `executor: ide` 或 `cli`（`dwguard_spec` 的 `executor` 参数）；显式配置仍然优先；
+- 进入 CLI 模式时，派发同时写 `tasks/cli-brief.md`，外部 CLI Agent 用 `devecocli build / run / run --apply / log` 实现与回归；
+- DSH 用 **`dwguard_deveco`** 独立取构建/运行/日志/设备证据（落 `artifacts/deveco-<n>/`）；`attach` 可以把已有的构建日志登记为证据，**不重复构建**；`background: true` 让长构建后台跑，`jobs` / `stop` 管理，不阻塞对话；
+- `dwguard_status` 带 **watchdog**：派发后超过 `stallMinutes` 仍无回执/交付会直接标"卡住"；`waitSeconds` 可以长轮询等一次交付事件；
+- 截图与 UI 树仍由 DSH 自己在设备上取；`dwguard_deveco` **不替代审计**。
 
 **视觉/设备取证仍归 DSH**——执行者自述永远不会直接变成 `pass`。
 
@@ -312,7 +314,8 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
     knowledgeMaxEntriesPerTopic: 200      # 单主题知识条目提示阈值
     docsDir: ''                           # 官方语料目录；空 = 自动探测（DWG_DOCS_DIR 等）
     shadowIntervalMinutes: 10             # 影子审查多久没跑就在 status 里提醒
-    executor: ide                         # ide | cli：谁来实现
+    stallMinutes: 30                      # 派发后多久无回执/交付算卡住
+    executor: auto                        # auto（IDE 优先）| ide | cli
     devecocliPath: ''                     # devecocli 路径；空 = 从 PATH 找
 ```
 
@@ -379,7 +382,7 @@ CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（43 个用例：闸门规则、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、发布脚本、注册）；
+2. `npm test` 全绿（47 个用例：闸门规则、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

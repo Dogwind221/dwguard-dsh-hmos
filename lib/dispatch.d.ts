@@ -11,6 +11,18 @@ import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Message kinds carried by the outbox protocol. */
 export type OutboxKind = 'dispatch' | 'ack' | 'deliver' | 'question' | 'answer' | 'blocked' | 'shadow-risk' | 'rework';
+/** Which agent implements a task pack. */
+export type ExecutorMode = 'ide' | 'cli';
+/**
+ * IDE-first routing: an explicit pack/option wins; `auto` only switches to CLI
+ * when the task has no visual must-criterion and is clearly batch/regression
+ * flavoured.
+ * @param pack - frozen task pack.
+ * @param options - resolved plugin options (`executor` policy).
+ */
+export declare function chooseExecutor(pack: TaskPack, options: {
+    readonly executor: 'auto' | 'ide' | 'cli';
+}): ExecutorMode;
 /** Envelope attached to an outbox entry, v2 protocol. */
 export interface OutboxMeta {
     readonly kind: OutboxKind;
