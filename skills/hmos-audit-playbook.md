@@ -52,6 +52,7 @@ hdc file recv /data/local/tmp/dwguard-layout.json .\artifacts\layout\home.json
 ```text
 dwguard_deveco(action="screenshot")   # → artifacts/devshots/shot-*.png
 dwguard_deveco(action="layout")       # → artifacts/deveco-<n>/layout.json（含 bounds）
+dwguard_deveco(action="a11y")         # → a11y.json + a11y-summary.json（布局树 + 静态扫描）
 dwguard_deveco(action="verify", plan="点击打卡，期望连续天数 +1", bundle="com.example.app")
 ```
 
@@ -115,6 +116,7 @@ hdc file recv /data/log/faultlog/faultlogger/<file> .\artifacts\logs\
 - **提示分离**：`accessibilityText` 只写"是什么"，操作引导放 `accessibilityDescription`。
 - **键盘可达**：外接键盘 Tab 能遍历全部交互元素，焦点激活态可见，顺序与视觉一致。
 - **字体放大**：系统字体调到 1.3x / 1.75x，重截同一页；文字截断/重叠即违规。
+- **2x 极端字体**：系统字体最大档（约 2x）再测一次，弹窗内容按 2x 封顶不溢出；完整流程见 `scripts/a11y-walkthrough.md`。
 - **非颜色编码**：错误/成功状态除颜色外还有图标或文案。
 - **减少动效**：系统开启后，非必要动效降级。
 
@@ -207,7 +209,7 @@ hdc file recv /data/log/faultlog/faultlogger/<file> .\artifacts\logs\
 ### 9.6 无障碍审计员
 
 ```text
-你是无障碍审计员。读 <布局树> + <截图>，按 DW-A11Y-01..07 检查对比度、触控尺寸、焦点可见与顺序、可访问名称、字体放大、非颜色编码。
+你是无障碍审计员。读 <布局树> + <截图> + <a11y-summary.json>，按 DW-A11Y-01..13 检查对比度、触控尺寸、焦点可见与顺序、可访问名称、字体放大、非颜色编码、分组/层级、提示分离、键盘可达、2x 字体。
 对比度必须给出计算值。每条违规附元素 bounds 与规则 ID。
 ```
 

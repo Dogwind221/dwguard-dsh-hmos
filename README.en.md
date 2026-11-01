@@ -78,7 +78,7 @@ self-report never becomes a `pass`.
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
-| `dwguard_deveco` | DevEco CLI evidence: `env / build / run / log / lint / device / uiHelp / ui / screenshot / layout / verify / attach / jobs / stop` |
+| `dwguard_deveco` | DevEco CLI evidence: `env / build / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / attach / jobs / stop` |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
@@ -174,7 +174,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
 npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 npm run typecheck
 npm run build
-npm test          # 48 tests
+npm test          # 49 tests
 node scripts/release.mjs --bump=patch --dry-run
 ```
 
