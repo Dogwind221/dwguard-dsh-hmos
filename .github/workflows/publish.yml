@@ -1,5 +1,11 @@
 name: Publish npm
 
+# Publishes with npm trusted publishing (OIDC) — no long-lived NPM_TOKEN secret.
+# The npm trusted publisher for this package allows `npm publish` (direct) from
+#   repo: Dogwind221/dwguard-dsh-hmos
+#   workflow: publish.yml
+# Configure it with: npm trust github dwguard-dsh-hmos --file publish.yml \
+#   --repo Dogwind221/dwguard-dsh-hmos --allow-publish
 on:
   workflow_dispatch:
   push:
@@ -10,19 +16,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    env:
-      NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      id-token: write # required for OIDC trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24 # npm >= 11.5.1 is required for trusted publishing
           registry-url: https://registry.npmjs.org
       - name: Publish
-        if: env.NODE_AUTH_TOKEN != ''
-        run: npm publish --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-      - name: Skipped (no NPM_TOKEN)
-        if: env.NODE_AUTH_TOKEN == ''
-        run: echo "NPM_TOKEN secret is not configured; skipping npm publish."
+        run: npm publish --provenance --access public

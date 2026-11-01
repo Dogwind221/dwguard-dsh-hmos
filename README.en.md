@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml/badge.svg)](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/dwguard-dsh-hmos.svg)](https://www.npmjs.com/package/dwguard-dsh-hmos)
 
 A DeepSeek Harness (DSH) plugin for HarmonyOS app delivery: DSH plans, pre-reviews
 and **audits**; DevEco Code implements. The two agents coordinate through a
@@ -30,14 +31,38 @@ This plugin makes the hand-off explicit:
 
 ## Install
 
-```bash
-# from the repository root (or pass the absolute path instead of `.`)
-dsh plugin --profile desktop add .   # desktop app
-dsh plugin --profile web add .       # `dsh web`
+Published on npm: [`dwgward-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.4.1).
+
+The `desktop` profile is managed **exclusively by the desktop app** — the CLI
+refuses `dsh plugin --profile desktop …`. Pick the path that matches how you run
+DSH:
+
+**Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
+the package name `dwgward-dsh-hmos` (pin a version with `dwgward-dsh-hmos@0.4.1`)
+→ install and choose the layer. *Install third-party plugin* in the same dialog
+also takes a Git URL or a local directory. Restart DSH afterwards.
+
+**CLI profiles** (`web` / `tui` / `headless` / custom) — `dsh plugin` forwards to
+pnpm, so pnpm must be on `PATH`:
+
+```powershell
+dsh plugin --profile web add dwguard-dsh-hmos
+dsh plugin --profile web add dwguard-dsh-hmos@0.4.1   # pin a version
+# without a global dsh CLI:
+npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
 
-The profile must be the one the app actually boots (`desktop` for the desktop
-app). Restart DSH after installing.
+From GitHub or a local checkout (CLI profiles only):
+
+```powershell
+dsh plugin --profile web add .                                         # repo root
+dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
+```
+
+Verify: `dsh --profile web --dump-config` should show `# == dwguard-dsh-hmos`.
+
+Every **new** session then gets 12 tools, 3 skills and a policy prompt. Sessions
+opened before the install keep their old tool table — open a new one.
 
 ## The `DshHoms` entry
 

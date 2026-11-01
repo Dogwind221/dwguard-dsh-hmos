@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml/badge.svg)](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/dwguard-dsh-hmos.svg)](https://www.npmjs.com/package/dwguard-dsh-hmos)
 
 **DSH 侧的鸿蒙双 Agent 编排与外部审计插件。** 它把「DSH 编排 + DevEco Code 执行」的协作方式，从一份提示词文档变成一组**有闸门的工程动作**：任务包冻结、派发前对抗预审、Goal 模式派发、四维外部审计、返工单、验收报告、知识沉淀。
 
@@ -64,35 +65,57 @@ flowchart TD
 
 要求：DSH `0.2.1-rc.x`（`engines.dsh: >=0.2.1-rc.0 <0.3.0`）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-**先确认你跑的是哪个 profile**——装错 profile 是"装了但看不到"最常见的原因：
+已发布到 npm：[`dwgward-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.4.1）。
 
-| 启动方式 | profile |
-| --- | --- |
-| 桌面应用（`DeepSeek Harness.exe`，本文档的默认场景） | `desktop` |
-| 命令行 `dsh web` | `web` |
+先确认你跑的是哪种入口——**`desktop` profile 由桌面应用独占管理，命令行改不了它**（`dsh plugin --profile desktop …` 会被明确拒绝），所以两种入口的安装方式不同：
+
+| 启动方式 | profile | 安装入口 |
+| --- | --- | --- |
+| 桌面应用（`DeepSeek Harness.exe`，默认场景） | `desktop` | 侧栏 **插件 → 添加插件**（应用内） |
+| 命令行 `dsh web` / `dsh tui` / `dsh headless` | `web` / `tui` / … | `dsh plugin --profile <name> add …` |
+
+### 桌面版：应用内安装
+
+1. 左侧栏打开 **插件** → 右上 **添加插件**；
+2. 包名填 `dwgward-dsh-hmos`（固定版本就填 `dwgward-dsh-hmos@0.4.1`）→ 安装、选配置层、确认；
+3. 装完按提示重启应用（托盘里也要退出）。
+
+同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
+
+### 命令行 profile：CLI 安装
 
 ```powershell
-# 在仓库根目录执行（推荐；也可以把 . 换成仓库绝对路径）
-dsh plugin --profile desktop add .
-dsh plugin --profile web     add .
+# 需要在 PATH 上有 pnpm —— dsh plugin 会把参数转发给 pnpm
+dsh plugin --profile web add dwguard-dsh-hmos
 
-# 或直接从 GitHub 安装（不用先 clone）
-dsh plugin --profile desktop add https://github.com/Dogwind221/dwguard-dsh-hmos
+# 固定版本
+dsh plugin --profile web add dwguard-dsh-hmos@0.4.1
 
-# 2) 确认组合层已生效（应看到 # == dwguard-dsh-hmos）
-dsh --profile desktop --dump-config
-
-# 3) 桌面版通常会被 HMR 热加载；没有的话重启应用（托盘里也要退出）
+# 机器上没有 dsh 命令时，用 npm 上的 CLI 包
+npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
 
-装好后，**任意会话**都会拿到 12 个工具、3 个 skill 和一段策略提示词。让 DSH「给鸿蒙做个 XX 页面」，它会自动加载 `dwguard-hmos` skill。已经打开的旧会话如果没热加载到新工具，新开一个会话即可（工具表在会话开始时就固定了）。
+也可以从 GitHub 或本地目录装（同样只适用于命令行 profile）：
+
+```powershell
+# 在仓库根目录执行；把 . 换成绝对路径也可以
+dsh plugin --profile web add .
+dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
+```
+
+### 确认装好了
+
+- 桌面版：**插件** 页出现 `DwGuard-Dsh-Hmos`；
+- 命令行：`dsh --profile web --dump-config` 里能看到 `# == dwguard-dsh-hmos`。
+
+装好后，**新开的会话**都会拿到 12 个工具、3 个 skill 和一段策略提示词。让 DSH「给鸿蒙做个 XX 页面」，它会自动加载 `dwguard-hmos` skill。已经打开的旧会话如果没热加载到新工具，新开一个会话即可（工具表在会话开始时就固定了）。
 
 ### 可选：独立的 Agent 预设
 
 Bundle 已经全局注册，预设只是让新会话选择器里多一个「DwGuard 鸿蒙双代理」入口（工具集偏向编排与取证，不含实现类工具）：
 
 ```powershell
-# 方式一：作为叠加层启动一次（桌面版把 web 换成 desktop；在仓库根目录执行）
+# 方式一：作为叠加层启动一次（命令行 profile；桌面版用方式二；在仓库根目录执行）
 dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 
 # 方式二：把 preset/dwguard-hmos.cordis.yml 里 - insert: 的整段粘贴进
@@ -103,10 +126,8 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 
 ### 卸载
 
-```powershell
-dsh plugin --profile desktop remove dwguard-dsh-hmos
-dsh plugin --profile web     remove dwguard-dsh-hmos
-```
+- 桌面版：**插件** → 已安装插件 → `DwGuard-Dsh-Hmos` → 移除；
+- 命令行 profile：`dsh plugin --profile web remove dwguard-dsh-hmos`（`tui` 等换成对应 profile 名）。
 
 ---
 

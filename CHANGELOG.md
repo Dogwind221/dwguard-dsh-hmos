@@ -4,6 +4,29 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.1 — 2026-11-01
+
+The install-path release: the plugin ships on npm, and the install docs now match
+how DSH actually manages profiles.
+
+### Added
+
+- npm publication (`dwgward-dsh-hmos` on the public registry; installed with
+  `dsh plugin add dwguard-dsh-hmos` in CLI profiles or the **Plugins → Add
+  plugin** dialog in the desktop app) plus an npm badge in both READMEs.
+- Trusted publishing (OIDC) for the tag-triggered publish workflow: no
+  long-lived `NPM_TOKEN` secret, and provenance is attached to every publish.
+
+### Fixed
+
+- Install/uninstall docs: `desktop` is managed exclusively by the Desktop app and
+  `dsh plugin --profile desktop …` is rejected by the CLI. Desktop users install
+  from the sidebar **Plugins → Add plugin** dialog; CLI profiles (`web` / `tui` /
+  `headless`) keep using `dsh plugin --profile <name> add …`. Verified end-to-end
+  against DSH `0.2.1-rc.5`: registry install, profile bundle reconciliation
+  (`dsh.profile.bundles` gains the package), no `--allow-version` exemption
+  needed (`engines.dsh` matches).
+
 ## 0.4.0 — 2026-11-01
 
 The "learn the docs" release: backlog items become cited rules or explicit
