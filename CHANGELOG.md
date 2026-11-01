@@ -4,6 +4,25 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.4.2 — 2026-11-01
+
+Documentation sync release — no code changes. Brings the npm README up to date
+with the actual tool count.
+
+### Fixed
+
+- README (zh/en) and the preset comment now say **13 tools**: `dwguard_audit_dimension`
+  was missing from the count (`dwguard_spec`, `prereview`, `dispatch`, `shadow`,
+  `scan`, `rules`, `deveco`, `audit_dimension`, `audit`, `calibration`, `confirm`,
+  `knowledge`, `status`).
+- README version pins and npm links point at 0.4.2.
+
+### Changed
+
+- `publish.yml` now checks the registry first and **skips publishing when the
+  version already exists**, so re-tagging / force-moving an already published
+  release no longer produces a failed workflow (and a failure email).
+
 ## 0.4.1 — 2026-11-01
 
 The install-path release: the plugin ships on npm, and the install docs now match

@@ -23,5 +23,18 @@ jobs:
         with:
           node-version: 24 # npm >= 11.5.1 is required for trusted publishing
           registry-url: https://registry.npmjs.org
+      - name: Check whether the version is already published
+        id: check
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VERSION is already published — skipping publish."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "$NAME@$VERSION is not published yet — publishing."
+          fi
       - name: Publish
+        if: steps.check.outputs.published != 'true'
         run: npm publish --provenance --access public

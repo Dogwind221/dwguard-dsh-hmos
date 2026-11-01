@@ -31,14 +31,14 @@ This plugin makes the hand-off explicit:
 
 ## Install
 
-Published on npm: [`dwgward-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.4.1).
+Published on npm: [`dwgward-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.4.2).
 
 The `desktop` profile is managed **exclusively by the desktop app** — the CLI
 refuses `dsh plugin --profile desktop …`. Pick the path that matches how you run
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwgward-dsh-hmos` (pin a version with `dwgward-dsh-hmos@0.4.1`)
+the package name `dwgward-dsh-hmos` (pin a version with `dwgward-dsh-hmos@0.4.2`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
