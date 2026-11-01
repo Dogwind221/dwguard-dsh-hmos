@@ -88,6 +88,7 @@
 | DW-A11Y-10 | 无障碍层级 | 纯装饰元素 `accessibilityLevel('no')`；不可用整块用 `no-hide-descendants` |
 | DW-A11Y-11 | 提示分离 | `accessibilityText` 只讲“是什么”，操作方式放 `accessibilityDescription` |
 | DW-A11Y-12 | 键盘可达 | 外接键盘 Tab / 遥控器能遍历全部交互元素，焦点激活态可见 |
+| DW-A11Y-13 | 2x 字体 | 系统字体 2x：文字不截断、不重叠、不出容器；弹窗内容按 2x 封顶不溢出 |
 
 对比度速算：相对亮度 `L = 0.2126R + 0.7152G + 0.0722B`（R/G/B 先做 sRGB 线性化），对比度 `(L1+0.05)/(L2+0.05)`。正文 #1A1A1A 配 #FFFFFF ≈ 17.4:1。
 

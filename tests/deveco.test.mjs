@@ -1,6 +1,6 @@
 // CLI executor mode + devecocli evidence adapter.
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -212,6 +212,39 @@ test('device evidence actions use the real devecocli subcommands', async () => {
   assert.equal(seen[2][0], 'verify');
   assert.ok(seen[2].includes('--test-plan'));
   assert.ok(seen[2].includes('--bundle-name'));
+});
+
+test('a11y snapshot combines layout tree and static scan', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  await mkdir(join(cwd, 'entry', 'src', 'main', 'ets'), { recursive: true });
+  await writeFile(
+    join(cwd, 'entry', 'src', 'main', 'ets', 'Page.ets'),
+    ['@Entry', '@Component', 'struct Page {', '  build() {', "    Button('OK').onClick(() => {})", '  }', '}'].join('\n')
+  );
+  const tree = JSON.stringify([
+    {
+      type: 'Root',
+      children: [
+        { type: 'Button', text: 'OK', clickable: true, bounds: [0, 0, 100, 48] },
+        { type: 'Button', clickable: true, bounds: [0, 60, 100, 108] }
+      ]
+    }
+  ]);
+  const tool = createDevecoTool(options, undefined, async () => ({ code: 0, stdout: tree, stderr: '', durationMs: 2 }));
+  const result = await tool.execute({ action: 'a11y' }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  assert.match(result.summary, /节点 3/);
+  assert.match(result.summary, /可点击 2/);
+  assert.match(result.summary, /无文本 1/);
+  const summary = JSON.parse(
+    await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'a11y-summary.json'), 'utf8')
+  );
+  assert.equal(summary.nodes, 3);
+  assert.equal(summary.clickable, 2);
+  assert.equal(summary.clickableWithoutText, 1);
+  assert.ok(summary.staticHits.length >= 1);
+  assert.ok((await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'a11y.json'), 'utf8')).length > 10);
 });
 
 test('status watchdog flags a dispatch that has been waiting too long', async () => {
