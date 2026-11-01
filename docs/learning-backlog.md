@@ -34,7 +34,7 @@
 | 领域 | 已落 | 还差 |
 | --- | --- | --- |
 | 无障碍深水区 | `A11Y-09` 分组播报、`A11Y-10` 无障碍层级、`A11Y-11` 提示分离、`A11Y-12` 键盘可达 | 读屏手动脚本、动态字体 2x 极端档、无障碍树自动化快照 |
-| ArkUI V2 | `STATE-02` @ObservedV2+@Trace、`STATE-03` V1/V2 混用、`STATE-04` @Local 边界、`STATE-05` @Param+@Event | @Monitor/@Computed/@Provider、V1→V2 迁移案例 |
+| ArkUI V2 | `STATE-02` @ObservedV2+@Trace、`STATE-03` V1/V2 混用、`STATE-04` @Local 边界、`STATE-05` @Param+@Event、`STATE-06` @Monitor、`STATE-07` @Computed、`STATE-08` @Provider/@Consumer、`STATE-09` V1→V2 迁移 | V1→V2 迁移案例文档（规则已覆盖，示例待补） |
 | 性能工具链 | `PERF-10` 冷启动五阶段、`PERF-11` 超长帧；playbook 补了 Trace 取证 | Profiler 截图模板、机型基线表 |
 | Design 组件 | `AES-12` 按钮 448vp/12vp | 其余 9 个高频组件（列表、输入框、弹窗、导航、标签页、卡片、开关、进度、图标） |
 
