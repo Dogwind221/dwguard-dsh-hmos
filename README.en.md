@@ -207,6 +207,10 @@ node scripts/release.mjs --bump=patch --dry-run
 build. Rebuild it before committing source changes, and never keep `node_modules`
 inside a linked install (it would shadow the host's `@deepseek-ai/dsh-tools`).
 
+Releases publish from CI: `git tag vX.Y.Z && git push origin vX.Y.Z` runs
+`publish.yml`, which authenticates with **npm trusted publishing (OIDC)** and
+attaches a provenance statement — no `NPM_TOKEN` secret involved.
+
 ## License
 
 MIT
