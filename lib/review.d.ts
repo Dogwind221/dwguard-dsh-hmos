@@ -1,0 +1,114 @@
+/**
+ * The gate engine: pre-review and delivery audit rules, plus the markdown the
+ * workflow leaves behind (pre-review record, audit record, rework order,
+ * acceptance report).
+ *
+ * The rules are deliberately mechanical. The one thing this plugin must never
+ * do is accept "the executor says it is done": every `must` criterion needs a
+ * check with its own evidence, or the gate stays closed.
+ *
+ * @module dwguard-dsh-hmos/review
+ */
+import type { Options } from './config.js';
+import type { Check, CheckResult, Criterion, Dimension, Finding, ReviewDimension, Severity, TaskPack } from './model.js';
+import type { SharedPaths } from './paths.js';
+/** Model-supplied finding. */
+export interface FindingInput {
+    readonly id?: string;
+    readonly dimension: ReviewDimension;
+    readonly severity: Severity;
+    readonly title: string;
+    readonly evidence: string;
+    readonly ruleId?: string;
+    readonly criterionId?: string;
+    readonly suggestion?: string;
+    readonly rebuttal?: string;
+    readonly status?: 'open' | 'dismissed' | 'fixed';
+}
+/** Model-supplied check. */
+export interface CheckInput {
+    readonly criterionId: string;
+    readonly result: CheckResult;
+    readonly evidence: string;
+    readonly note?: string;
+    readonly evidenceFiles?: readonly string[];
+}
+/** Gate outcome. */
+export interface Gate {
+    readonly pass: boolean;
+    readonly errors: readonly string[];
+    readonly warnings: readonly string[];
+}
+/** Coverage summary of one delivery audit. */
+export interface Coverage {
+    readonly total: number;
+    readonly passed: number;
+    readonly failed: number;
+    readonly unverified: number;
+    readonly missing: readonly string[];
+}
+/** One dimension's row in the audit table. */
+export interface DimensionSummary {
+    readonly dimension: Dimension;
+    readonly criteria: number;
+    readonly assessed: number;
+    readonly passed: number;
+}
+/** A persisted pre-review record. */
+export interface PrereviewReport {
+    readonly id: number;
+    readonly stage: 'prereview';
+    readonly createdAt: string;
+    readonly specVersion: number;
+    readonly note: string;
+    readonly findings: readonly Finding[];
+    readonly gate: Gate;
+}
+/** A persisted delivery audit. */
+export interface AuditReport {
+    readonly id: number;
+    readonly stage: 'delivery';
+    readonly createdAt: string;
+    readonly specVersion: number;
+    readonly note: string;
+    readonly checks: readonly Check[];
+    readonly findings: readonly Finding[];
+    readonly gate: Gate;
+    readonly coverage: Coverage;
+    readonly dimensions: readonly DimensionSummary[];
+}
+/** Rebuild canonical findings from model input, numbering untitled ids. */
+export declare function normalizeFindings(input: readonly FindingInput[]): Finding[];
+/** Rebuild canonical checks from model input. */
+export declare function normalizeChecks(input: readonly CheckInput[]): Check[];
+/**
+ * Pre-review gate: a finding only survives if its author tried to refute it,
+ * and any surviving blocker stops the dispatch.
+ * @param findings - normalized findings.
+ * @param note - the reviewed surface (required when there are no findings).
+ * @param options - resolved options.
+ */
+export declare function gatePrereview(findings: readonly Finding[], note: string, options: Options): Gate;
+/**
+ * Delivery gate: all `must` criteria checked with their own evidence, every
+ * dimension assessed, and no open blocker/major finding.
+ * @param pack - the frozen task pack.
+ * @param checks - criterion verification records.
+ * @param findings - additional findings.
+ * @param options - resolved options.
+ */
+export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[]): Gate;
+/** Summarize coverage of a delivery audit. */
+export declare function summarizeCoverage(pack: TaskPack, checks: readonly Check[]): Coverage;
+/** Per-dimension coverage rows for the audit table. */
+export declare function summarizeDimensions(pack: TaskPack, checks: readonly Check[]): DimensionSummary[];
+/** Render `artifacts/prereview-<n>.md`. */
+export declare function renderPrereviewMarkdown(report: PrereviewReport, pack: TaskPack, paths: SharedPaths): string;
+/** Render `artifacts/audit-<n>.md`. */
+export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
+/** Render `tasks/rework-<n>.md` from a failed audit. */
+export declare function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
+/** Render `artifacts/acceptance-report.md` from a passing audit. */
+export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
+/** One criterion as a bullet line, used by briefs and gap reports. */
+export declare function criterionLine(criterion: Criterion): string;

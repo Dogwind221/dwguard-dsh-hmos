@@ -1,0 +1,594 @@
+/**
+ * The gate engine: pre-review and delivery audit rules, plus the markdown the
+ * workflow leaves behind (pre-review record, audit record, rework order,
+ * acceptance report).
+ *
+ * The rules are deliberately mechanical. The one thing this plugin must never
+ * do is accept "the executor says it is done": every `must` criterion needs a
+ * check with its own evidence, or the gate stays closed.
+ *
+ * @module dwguard-dsh-hmos/review
+ */
+
+import type { Options } from './config.js';
+import type {
+  Check,
+  CheckResult,
+  Criterion,
+  Dimension,
+  Finding,
+  ReviewDimension,
+  Severity,
+  TaskPack
+} from './model.js';
+import {
+  DIMENSIONS,
+  DIMENSION_LABELS
+} from './model.js';
+import type { SharedPaths } from './paths.js';
+import { displayPath } from './paths.js';
+import { isKnownRuleId } from './rules.js';
+import { bullets, inline, table, truncate } from './util/md.js';
+
+/** Model-supplied finding. */
+export interface FindingInput {
+  readonly id?: string;
+  readonly dimension: ReviewDimension;
+  readonly severity: Severity;
+  readonly title: string;
+  readonly evidence: string;
+  readonly ruleId?: string;
+  readonly criterionId?: string;
+  readonly suggestion?: string;
+  readonly rebuttal?: string;
+  readonly status?: 'open' | 'dismissed' | 'fixed';
+}
+
+/** Model-supplied check. */
+export interface CheckInput {
+  readonly criterionId: string;
+  readonly result: CheckResult;
+  readonly evidence: string;
+  readonly note?: string;
+  readonly evidenceFiles?: readonly string[];
+}
+
+/** Gate outcome. */
+export interface Gate {
+  readonly pass: boolean;
+  readonly errors: readonly string[];
+  readonly warnings: readonly string[];
+}
+
+/** Coverage summary of one delivery audit. */
+export interface Coverage {
+  readonly total: number;
+  readonly passed: number;
+  readonly failed: number;
+  readonly unverified: number;
+  readonly missing: readonly string[];
+}
+
+/** One dimension's row in the audit table. */
+export interface DimensionSummary {
+  readonly dimension: Dimension;
+  readonly criteria: number;
+  readonly assessed: number;
+  readonly passed: number;
+}
+
+/** A persisted pre-review record. */
+export interface PrereviewReport {
+  readonly id: number;
+  readonly stage: 'prereview';
+  readonly createdAt: string;
+  readonly specVersion: number;
+  readonly note: string;
+  readonly findings: readonly Finding[];
+  readonly gate: Gate;
+}
+
+/** A persisted delivery audit. */
+export interface AuditReport {
+  readonly id: number;
+  readonly stage: 'delivery';
+  readonly createdAt: string;
+  readonly specVersion: number;
+  readonly note: string;
+  readonly checks: readonly Check[];
+  readonly findings: readonly Finding[];
+  readonly gate: Gate;
+  readonly coverage: Coverage;
+  readonly dimensions: readonly DimensionSummary[];
+}
+
+const SELF_REPORT_MARKERS = ['自测通过', '自认为', '开发者确认', 'deveco 已确认', '应该没问题', '目测没问题', '看起来正常'];
+
+const SEVERITY_LABELS: Record<Severity, string> = {
+  blocker: '阻断',
+  major: '严重',
+  minor: '轻微'
+};
+
+const RESULT_LABELS: Record<CheckResult, string> = {
+  pass: '通过',
+  fail: '未通过',
+  unverified: '未验证'
+};
+
+/** Rebuild canonical findings from model input, numbering untitled ids. */
+export function normalizeFindings(input: readonly FindingInput[]): Finding[] {
+  return input.map((item, index) => {
+    const finding: Finding = {
+      id: inline(item.id ?? '') || `R-${String(index + 1).padStart(2, '0')}`,
+      dimension: item.dimension,
+      severity: item.severity,
+      title: inline(item.title),
+      evidence: inline(item.evidence),
+      status: item.status ?? 'open',
+      ...(item.ruleId === undefined ? {} : { ruleId: inline(item.ruleId) }),
+      ...(item.criterionId === undefined ? {} : { criterionId: inline(item.criterionId) }),
+      ...(item.suggestion === undefined ? {} : { suggestion: inline(item.suggestion) }),
+      ...(item.rebuttal === undefined ? {} : { rebuttal: inline(item.rebuttal) })
+    };
+    if (finding.ruleId !== undefined && !isKnownRuleId(finding.ruleId)) {
+      throw new Error(
+        `发现 ${finding.id} 引用了未知规则「${finding.ruleId}」；请改用规则目录里的 ID（DW-* / STATE-002 / AGC-RJ-* 等）。`
+      );
+    }
+    return finding;
+  });
+}
+
+/** Rebuild canonical checks from model input. */
+export function normalizeChecks(input: readonly CheckInput[]): Check[] {
+  return input.map((item) => ({
+    criterionId: inline(item.criterionId),
+    result: item.result,
+    evidence: inline(item.evidence),
+    ...(item.note === undefined ? {} : { note: inline(item.note) }),
+    ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
+      ? {}
+      : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
+  }));
+}
+
+function looksSelfReported(evidence: string): boolean {
+  const lower = evidence.toLowerCase();
+  return SELF_REPORT_MARKERS.some((marker) => lower.includes(marker));
+}
+
+function openFindings(findings: readonly Finding[]): Finding[] {
+  return findings.filter((finding) => (finding.status ?? 'open') === 'open');
+}
+
+/**
+ * Pre-review gate: a finding only survives if its author tried to refute it,
+ * and any surviving blocker stops the dispatch.
+ * @param findings - normalized findings.
+ * @param note - the reviewed surface (required when there are no findings).
+ * @param options - resolved options.
+ */
+export function gatePrereview(
+  findings: readonly Finding[],
+  note: string,
+  options: Options
+): Gate {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+
+  if (findings.length === 0 && inline(note).length < 12) {
+    errors.push('零发现的预审必须在 `note` 里写明审阅范围（读了哪些文件、覆盖哪些视角），否则视为未审。');
+  }
+
+  for (const finding of findings) {
+    const label = `\`${finding.id}\` ${finding.title}`;
+    if (finding.evidence.length < 8) {
+      errors.push(`${label} 缺少证据（至少写明具体失败场景/日志/截图路径）。`);
+    }
+    if (finding.severity === 'blocker' && options.requireRebuttalOnBlocker) {
+      if (finding.rebuttal === undefined || finding.rebuttal.length < 8) {
+        errors.push(`${label} 是阻断项，但没有记录反驳尝试（\`rebuttal\`）；未经历自我反驳的阻断项不得上报。`);
+      }
+    }
+    if (finding.severity !== 'minor' && finding.suggestion === undefined) {
+      warnings.push(`${label} 没有给出修改建议，返工时执行者需要自行猜方向。`);
+    }
+  }
+
+  const openBlockers = openFindings(findings).filter((finding) => finding.severity === 'blocker');
+  if (openBlockers.length > 0) {
+    errors.push(`仍有 ${openBlockers.length} 条未关闭的阻断项，不能派发。`);
+  }
+  if (findings.length === 0) {
+    warnings.push('预审没有任何发现：确认这确实是因为规格足够扎实，而不是审阅范围过窄。');
+  }
+  if (!findings.some((finding) => finding.dimension === 'architecture')) {
+    warnings.push('预审没有覆盖「架构」视角（性能 / 生命周期 / 并发 / API 兼容），建议至少交叉质询一次。');
+  }
+
+  return { pass: errors.length === 0, errors, warnings };
+}
+
+/**
+ * Delivery gate: all `must` criteria checked with their own evidence, every
+ * dimension assessed, and no open blocker/major finding.
+ * @param pack - the frozen task pack.
+ * @param checks - criterion verification records.
+ * @param findings - additional findings.
+ * @param options - resolved options.
+ */
+export function gateDelivery(
+  pack: TaskPack,
+  checks: readonly Check[],
+  findings: readonly Finding[]
+): Gate {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const known = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
+  const seen = new Set<string>();
+
+  for (const check of checks) {
+    const label = `\`${check.criterionId}\``;
+    const criterion = known.get(check.criterionId);
+    if (criterion === undefined) {
+      errors.push(`${label} 不是任务包里的判据 ID，检查记录无法归档。`);
+      continue;
+    }
+    if (seen.has(check.criterionId)) {
+      errors.push(`${label} 出现了多次检查记录，一条判据只允许一个结论。`);
+    }
+    seen.add(check.criterionId);
+    if (check.result !== 'unverified' && check.evidence.length < 4) {
+      errors.push(`${label} 判为「${RESULT_LABELS[check.result]}」但没有证据。`);
+    }
+    if (check.result === 'fail') {
+      if (criterion.weight === 'must') {
+        errors.push(`${label} 的结论是「未通过」，must 判据未通过就不能宣告验收。`);
+      } else {
+        warnings.push(`${label} 的结论是「未通过」（should 判据），可以带风险通过但需写进遗留风险。`);
+      }
+    }
+    if (looksSelfReported(check.evidence)) {
+      warnings.push(`${label} 的证据像执行者自述（「${truncate(check.evidence, 24)}」），DSH 需要独立取证。`);
+    }
+  }
+
+  const missing: string[] = [];
+  for (const criterion of pack.criteria) {
+    if (criterion.weight !== 'must') continue;
+    const check = checks.find((item) => item.criterionId === criterion.id);
+    if (check === undefined) {
+      missing.push(criterion.id);
+      continue;
+    }
+    if (check.result === 'unverified') {
+      errors.push(`\`${criterion.id}\` 是 must 判据，但结论是「未验证」。`);
+    }
+  }
+  if (missing.length > 0) {
+    errors.push(`以下 must 判据没有检查记录：${missing.map((id) => `\`${id}\``).join('、')}。`);
+  }
+
+  for (const dimension of DIMENSIONS) {
+    const ids = pack.criteria.filter((criterion) => criterion.dimension === dimension).map((criterion) => criterion.id);
+    if (ids.length === 0) {
+      errors.push(`「${DIMENSION_LABELS[dimension]}」维度没有判据，无法宣告四维验收。`);
+      continue;
+    }
+    const assessed = checks.filter(
+      (check) => ids.includes(check.criterionId) && check.result !== 'unverified'
+    ).length;
+    if (assessed === 0) {
+      errors.push(`「${DIMENSION_LABELS[dimension]}」维度没有任何已取证的检查项。`);
+    }
+  }
+
+  const open = openFindings(findings);
+  for (const finding of open) {
+    const label = `\`${finding.id}\` ${finding.title}`;
+    if (finding.severity === 'blocker' || finding.severity === 'major') {
+      errors.push(`${label}（${SEVERITY_LABELS[finding.severity]}）仍未关闭。`);
+    } else {
+      warnings.push(`${label} 仍是开放状态（轻微），可带风险通过但需在验收报告里列明。`);
+    }
+    if (finding.evidence.length < 8) {
+      errors.push(`${label} 缺少可复核证据。`);
+    }
+  }
+
+  if (checks.length === 0) {
+    errors.push('没有任何检查记录；DSH 尚未做外部审计。');
+  }
+  return { pass: errors.length === 0, errors, warnings };
+}
+
+/** Summarize coverage of a delivery audit. */
+export function summarizeCoverage(pack: TaskPack, checks: readonly Check[]): Coverage {
+  const must = pack.criteria.filter((criterion) => criterion.weight === 'must');
+  const byId = new Map(checks.map((check) => [check.criterionId, check]));
+  let passed = 0;
+  let failed = 0;
+  let unverified = 0;
+  const missing: string[] = [];
+  for (const criterion of must) {
+    const check = byId.get(criterion.id);
+    if (check === undefined) {
+      missing.push(criterion.id);
+      continue;
+    }
+    if (check.result === 'pass') passed += 1;
+    else if (check.result === 'fail') failed += 1;
+    else unverified += 1;
+  }
+  return { total: must.length, passed, failed, unverified, missing };
+}
+
+/** Per-dimension coverage rows for the audit table. */
+export function summarizeDimensions(pack: TaskPack, checks: readonly Check[]): DimensionSummary[] {
+  const byId = new Map(checks.map((check) => [check.criterionId, check]));
+  return DIMENSIONS.map((dimension) => {
+    const criteria = pack.criteria.filter((criterion) => criterion.dimension === dimension);
+    const assessed = criteria.filter((criterion) => {
+      const check = byId.get(criterion.id);
+      return check !== undefined && check.result !== 'unverified';
+    });
+    return {
+      dimension,
+      criteria: criteria.length,
+      assessed: assessed.length,
+      passed: assessed.filter((criterion) => byId.get(criterion.id)?.result === 'pass').length
+    };
+  });
+}
+
+function findingRow(finding: Finding): string[] {
+  return [
+    `\`${finding.id}\``,
+    finding.dimension === 'architecture' ? '架构' : DIMENSION_LABELS[finding.dimension],
+    SEVERITY_LABELS[finding.severity],
+    finding.title,
+    finding.evidence,
+    finding.ruleId ?? '—',
+    finding.status ?? 'open'
+  ];
+}
+
+function issueBlock(gate: Gate): string {
+  const parts: string[] = [];
+  if (gate.errors.length > 0) {
+    parts.push('**未通过原因**', '', bullets(gate.errors), '');
+  }
+  if (gate.warnings.length > 0) {
+    parts.push('**提醒**', '', bullets(gate.warnings), '');
+  }
+  return parts.join('\n').trimEnd();
+}
+
+/** Render `artifacts/prereview-<n>.md`. */
+export function renderPrereviewMarkdown(report: PrereviewReport, pack: TaskPack, paths: SharedPaths): string {
+  const counts = {
+    blocker: report.findings.filter((finding) => finding.severity === 'blocker').length,
+    major: report.findings.filter((finding) => finding.severity === 'major').length,
+    minor: report.findings.filter((finding) => finding.severity === 'minor').length
+  };
+  return [
+    `# 派发前架构预审 · #${report.id}`,
+    '',
+    `> 任务包 \`${displayPath(paths, paths.specMd)}\` v${pack.specVersion} · ${report.createdAt}`,
+    `> 结论：${report.gate.pass ? '通过，可以派发' : '未通过，先修任务包'} · 发现 ${report.findings.length} 条（阻断 ${counts.blocker} / 严重 ${counts.major} / 轻微 ${counts.minor}）`,
+    '',
+    '## 审阅范围',
+    '',
+    report.note.length > 0 ? report.note : '（未填写）',
+    '',
+    '## 发现',
+    '',
+    report.findings.length === 0
+      ? '（本轮零发现）'
+      : table(['ID', '视角', '严重度', '问题', '证据', '规则', '状态'], report.findings.map(findingRow)),
+    '',
+    '## 闸门',
+    '',
+    issueBlock(report.gate).length > 0 ? issueBlock(report.gate) : '通过：没有未关闭的阻断项。',
+    '',
+    '## 反驳记录',
+    '',
+    report.findings
+      .filter((finding) => finding.rebuttal !== undefined)
+      .map((finding) => `- \`${finding.id}\` 的反驳尝试：${finding.rebuttal}`)
+      .join('\n') || '（无）',
+    ''
+  ].join('\n');
+}
+
+/** Render `artifacts/audit-<n>.md`. */
+export function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string {
+  const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
+  const checkRows = report.checks.map((check) => {
+    const criterion = criteria.get(check.criterionId);
+    const files = check.evidenceFiles ?? [];
+    return [
+      `\`${check.criterionId}\``,
+      criterion === undefined ? '—' : DIMENSION_LABELS[criterion.dimension],
+      RESULT_LABELS[check.result],
+      check.evidence,
+      files.length === 0 ? '—' : files.map((file) => `\`${file}\``).join('<br>'),
+      check.note ?? '—'
+    ];
+  });
+  return [
+    `# 外部审计 · #${report.id}`,
+    '',
+    `> 任务包 \`${displayPath(paths, paths.specMd)}\` v${pack.specVersion} · ${report.createdAt}`,
+    `> 证据包 \`${displayPath(paths, `${paths.artifactsDir}/audit-${report.id}/manifest.json`)}\`（内含每个文件的 sha256）`,
+    `> 结论：${report.gate.pass ? '通过' : '未通过'} · must 判据 ${report.coverage.passed}/${report.coverage.total} 通过` +
+      `${report.coverage.failed > 0 ? ` · ${report.coverage.failed} 未通过` : ''}` +
+      `${report.coverage.unverified > 0 ? ` · ${report.coverage.unverified} 未验证` : ''}` +
+      `${report.coverage.missing.length > 0 ? ` · ${report.coverage.missing.length} 未覆盖` : ''}`,
+    '',
+    '## 维度结论',
+    '',
+    table(
+      ['维度', '判据数', '已取证', '通过'],
+      report.dimensions.map((row) => [
+        DIMENSION_LABELS[row.dimension],
+        String(row.criteria),
+        String(row.assessed),
+        String(row.passed)
+      ])
+    ),
+    '',
+    '## 逐条检查（独立取证）',
+    '',
+    report.checks.length === 0 ? '（无）' : table(['判据', '维度', '结论', '证据', '证据文件', '备注'], checkRows),
+    '',
+    '## 发现',
+    '',
+    report.findings.length === 0
+      ? '（无）'
+      : table(['ID', '维度', '严重度', '问题', '证据', '规则', '状态'], report.findings.map(findingRow)),
+    '',
+    '## 闸门',
+    '',
+    issueBlock(report.gate).length > 0 ? issueBlock(report.gate) : '通过：四维均已取证，且没有未关闭的阻断/严重问题。',
+    '',
+    '## 备注',
+    '',
+    report.note.length > 0 ? report.note : '（未填写）',
+    ''
+  ].join('\n');
+}
+
+/** Render `tasks/rework-<n>.md` from a failed audit. */
+export function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string {
+  const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
+  const failed = report.checks.filter((check) => check.result === 'fail');
+  const unverified = report.checks.filter((check) => check.result === 'unverified');
+  const open = openFindings(report.findings).filter(
+    (finding) => finding.severity === 'blocker' || finding.severity === 'major'
+  );
+  const rows: string[][] = [];
+  for (const check of failed) {
+    const criterion = criteria.get(check.criterionId);
+    rows.push([
+      `\`${check.criterionId}\``,
+      criterion?.statement ?? '—',
+      RESULT_LABELS[check.result],
+      check.evidence
+    ]);
+  }
+  for (const id of report.coverage.missing) {
+    const criterion = criteria.get(id);
+    rows.push([`\`${id}\``, criterion?.statement ?? '—', '未覆盖', '没有任何检查记录']);
+  }
+  for (const check of unverified) {
+    const criterion = criteria.get(check.criterionId);
+    rows.push([`\`${check.criterionId}\``, criterion?.statement ?? '—', '未验证', check.evidence || '—']);
+  }
+  return [
+    `# 返工单 · 审计 #${report.id} 未通过`,
+    '',
+    `> 任务包 \`${displayPath(paths, paths.specMd)}\` v${pack.specVersion}`,
+    `> 审计报告 \`${displayPath(paths, paths.artifactsDir)}/audit-${report.id}.md\``,
+    `> 生成时间 ${report.createdAt} · 返工范围以本单为准，不得扩大或缩小`,
+    '',
+    '## 1. 失败的验收标准',
+    '',
+    table(['判据', '原始判据', '结论', '证据'], rows),
+    '',
+    '## 2. 阻断/严重问题',
+    '',
+    open.length === 0
+      ? '（无）'
+      : open
+          .map(
+            (finding) =>
+              `### [${SEVERITY_LABELS[finding.severity]}] \`${finding.id}\` ${finding.title}\n\n` +
+              `- 证据：${finding.evidence}\n` +
+              `- 规则：${finding.ruleId ?? '—'}\n` +
+              `- 修复建议：${finding.suggestion ?? '（未给出）'}`
+          )
+          .join('\n\n'),
+    '',
+    '## 3. 返工要求',
+    '',
+    bullets([
+      '只修复上面列出的条目，不顺手改无关代码；',
+      '每条修复后补充新的证据（命令输出 / 截图路径 / 测量值），写回 `outbox-deveco.md`；',
+      '不得修改 `tasks/spec.md` 或降低验收标准；判据确实不可达时，写入 `tasks/question.md` 说明原因；',
+      '重新跑一遍四维自检后再交付，DSH 会再次独立取证。'
+    ]),
+    '',
+    '## 4. 交付记录格式',
+    '',
+    '```markdown',
+    `## [<ISO 时间>] rework-${report.id} · 第 ${pack.iteration} 轮`,
+    '- 状态: 完成 / 部分完成',
+    '- 修复条目: F-01, X-02',
+    '- 变更文件: entry/src/main/ets/pages/Index.ets',
+    '- 新证据: <命令输出 / 截图路径>',
+    '- 未解决: <如有>',
+    '```',
+    ''
+  ].join('\n');
+}
+
+/** Render `artifacts/acceptance-report.md` from a passing audit. */
+export function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string {
+  const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
+  const passed = report.checks.filter((check) => check.result === 'pass');
+  const minor = report.findings.filter((finding) => finding.severity === 'minor');
+  const rows = passed.map((check) => {
+    const criterion = criteria.get(check.criterionId);
+    return [
+      `\`${check.criterionId}\``,
+      criterion === undefined ? '—' : DIMENSION_LABELS[criterion.dimension],
+      criterion?.statement ?? '—',
+      check.evidence
+    ];
+  });
+  return [
+    `# 验收报告 · ${pack.title}`,
+    '',
+    `> 结论：**通过**（四维齐全，must 判据 ${report.coverage.passed}/${report.coverage.total} 全部通过）`,
+    `> 任务包 v${pack.specVersion} · 审计 #${report.id} · ${report.createdAt}`,
+    `> 任务包：\`${displayPath(paths, paths.specMd)}\` · 审计记录：\`${displayPath(paths, paths.artifactsDir)}/audit-${report.id}.md\``,
+    '',
+    '## 1. 维度结论',
+    '',
+    table(
+      ['维度', '判据数', '已取证', '通过'],
+      report.dimensions.map((row) => [
+        DIMENSION_LABELS[row.dimension],
+        String(row.criteria),
+        String(row.assessed),
+        String(row.passed)
+      ])
+    ),
+    '',
+    '## 2. 证据索引',
+    '',
+    table(['判据', '维度', '判据原文', '独立证据'], rows),
+    '',
+    '## 3. 遗留风险',
+    '',
+    minor.length === 0
+      ? '无开放发现。'
+      : bullets(minor.map((finding) => `\`${finding.id}\` ${finding.title} — ${finding.evidence}`)),
+    '',
+    '## 4. 下一步',
+    '',
+    bullets([
+      '请用户确认验收结论；如需继续迭代，新增需求会开启下一轮任务包。',
+      '已通过的结论与返工模式可沉淀到 `.shared/knowledge/`（`dwguard_knowledge`）。',
+      'DevEco Code 侧的交付记录保留在 `outbox-deveco.md`，作为本轮追溯材料。'
+    ]),
+    ''
+  ].join('\n');
+}
+
+/** One criterion as a bullet line, used by briefs and gap reports. */
+export function criterionLine(criterion: Criterion): string {
+  return `\`${criterion.id}\`（${criterion.weight}）${criterion.statement} — 验证：${criterion.verify}`;
+}

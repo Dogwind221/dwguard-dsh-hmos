@@ -1,0 +1,28 @@
+# DwGuard-Dsh-Hmos · bundle layer
+#
+# This layer is applied when a profile lists `dwguard-dsh-hmos` in
+# `dsh.profile.bundles` (see README「安装」). It inserts one host row: the
+# plugin registers its tools, its three skills and one team-policy prompt
+# section into the calling scope's layers, so every session of that profile
+# can see them.
+#
+# Want the dedicated agent preset instead (or in addition)? Apply
+# `preset/dwguard-hmos.cordis.yml` as an extra `--patch` overlay, or paste its
+# rows into `~/.dsh/profiles/<profile>/cordis.patch.yml`.
+#
+# Every field below is optional; the row works with no config at all. Delete
+# the whole `config:` block to use the defaults.
+- insert:
+    - id: dwguard-hmos
+      name: dwguard-dsh-hmos
+      config:
+        sharedDir: .shared
+        promptSection: true
+        installSkills: true
+        requirePrereviewBeforeDispatch: true
+        requireRebuttalOnBlocker: true
+        # Local official-docs corpus for `dwguard_rules search`; empty = auto-detect
+        # (DWG_DOCS_DIR, ~/harmony-docs, <workspace>/harmony-docs).
+        docsDir: ''
+        # Nudge `dwguard_status` when shadow review has not run for this many minutes.
+        shadowIntervalMinutes: 10

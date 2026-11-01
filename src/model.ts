@@ -1,0 +1,158 @@
+/**
+ * Vocabulary shared by every stage: the four acceptance dimensions, the task
+ * pack, review findings, checks, and the persisted protocol state.
+ *
+ * @module dwguard-dsh-hmos/model
+ */
+
+/** The four acceptance dimensions the workflow gates on. */
+export const DIMENSIONS = ['function', 'aesthetic', 'performance', 'accessibility'] as const;
+
+/** One acceptance dimension. */
+export type Dimension = (typeof DIMENSIONS)[number];
+
+/** Chinese labels used by every generated document. */
+export const DIMENSION_LABELS: Record<Dimension, string> = {
+  function: '功能',
+  aesthetic: '审美',
+  performance: '性能',
+  accessibility: '无障碍'
+};
+
+/** Recommended criterion-id prefix per dimension (`F-01`, `A-01`, ...). */
+export const DIMENSION_PREFIX: Record<Dimension, string> = {
+  function: 'F',
+  aesthetic: 'A',
+  performance: 'P',
+  accessibility: 'X'
+};
+
+/** What a criterion in each dimension must be able to name. */
+export const DIMENSION_EVIDENCE: Record<Dimension, string> = {
+  function: '可复现的操作步骤 + 截图 / UI 布局树 / 日志',
+  aesthetic: '截图 + 规则 ID + 可度量的间距/字号/对比度数值',
+  performance: '启动/帧率/耗时数据 + 设备日志或构建产物',
+  accessibility: '对比度数值 / 目标尺寸 / 焦点截图 / 可访问名称'
+};
+
+/** Whether a criterion must be verified before acceptance. */
+export type CriterionWeight = 'must' | 'should';
+
+/** One falsifiable acceptance criterion. */
+export interface Criterion {
+  /** Stable id, unique inside the pack (e.g. `F-01`). */
+  readonly id: string;
+  readonly dimension: Dimension;
+  /** Observable statement that can fail. */
+  readonly statement: string;
+  /** How an independent auditor verifies it. */
+  readonly verify: string;
+  readonly weight: CriterionWeight;
+  /** Catalog rule this criterion implements (`DW-A11Y-02`, `STATE-002`…). */
+  readonly ruleId?: string;
+}
+
+/** The frozen task pack DSH hands to DevEco Code. */
+export interface TaskPack {
+  readonly schemaVersion: 1;
+  readonly title: string;
+  readonly requirement: string;
+  readonly spec: string;
+  readonly constraints: readonly string[];
+  readonly criteria: readonly Criterion[];
+  readonly iteration: number;
+  readonly specVersion: number;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** Severity of a review finding. */
+export type Severity = 'blocker' | 'major' | 'minor';
+
+/** Review dimension: the four acceptance dimensions plus architecture. */
+export type ReviewDimension = Dimension | 'architecture';
+
+/** One review finding. */
+export interface Finding {
+  readonly id: string;
+  readonly dimension: ReviewDimension;
+  readonly severity: Severity;
+  readonly title: string;
+  /** Independent evidence: screenshot path, log excerpt, measurement. */
+  readonly evidence: string;
+  readonly ruleId?: string;
+  readonly criterionId?: string;
+  readonly suggestion?: string;
+  /** Pre-review only: the author's own attempt to refute the finding. */
+  readonly rebuttal?: string;
+  readonly status?: 'open' | 'dismissed' | 'fixed';
+}
+
+/** Result of verifying one criterion. */
+export type CheckResult = 'pass' | 'fail' | 'unverified';
+
+/** One criterion verification with independent evidence. */
+export interface Check {
+  readonly criterionId: string;
+  readonly result: CheckResult;
+  readonly evidence: string;
+  readonly note?: string;
+  /** Files backing this check, relative to `.shared/`; copied into the audit bundle. */
+  readonly evidenceFiles?: readonly string[];
+}
+
+/** Persisted workflow counters and cursor. */
+export interface SharedState {
+  readonly schemaVersion: 1;
+  readonly iteration: number;
+  readonly specVersion: number;
+  readonly prereviews: number;
+  readonly dispatches: number;
+  readonly audits: number;
+  /** Dispatches that belong to the current task-pack version. */
+  readonly roundDispatches?: number;
+  /** Audits that belong to the current task-pack version. */
+  readonly roundAudits?: number;
+  /** Number of DevEco outbox entries already consumed by `dwguard_status`. */
+  readonly inboxCursor: number;
+  /** Shadow-review rounds recorded during execution. */
+  readonly shadowRuns?: number;
+  /** ISO time of the last shadow review (staleness nudge in status). */
+  readonly lastShadowAt?: string;
+  /** How many times the user confirmed an acceptance report. */
+  readonly confirmations?: number;
+  /** ISO time of the latest user confirmation. */
+  readonly confirmedAt?: string;
+  /** Pack version the latest confirmation belongs to. */
+  readonly confirmedSpecVersion?: number;
+  /** Last phase written by a tool; `dwguard_status` re-derives it from artifacts. */
+  readonly phase: string;
+  readonly updatedAt: string;
+}
+
+/** Whether a string is one of the four dimensions. */
+export function isDimension(value: unknown): value is Dimension {
+  return typeof value === 'string' && (DIMENSIONS as readonly string[]).includes(value);
+}
+
+/** Whether a string is a review dimension. */
+export function isReviewDimension(value: unknown): value is ReviewDimension {
+  return isDimension(value) || value === 'architecture';
+}
+
+/** A fresh state document. */
+export function emptyState(now: string): SharedState {
+  return {
+    schemaVersion: 1,
+    iteration: 1,
+    specVersion: 0,
+    prereviews: 0,
+    dispatches: 0,
+    audits: 0,
+    inboxCursor: 0,
+    shadowRuns: 0,
+    confirmations: 0,
+    phase: 'intake',
+    updatedAt: now
+  };
+}
