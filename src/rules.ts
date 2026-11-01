@@ -576,6 +576,160 @@ export const RULES: readonly RuleEntry[] = [
       section: 'accessibilityText',
       version: OH_SHA.slice(0, 7)
     }
+  },
+  {
+    id: 'DW-A11Y-09',
+    dimension: 'accessibility',
+    title: '信息型组合按组播报',
+    verify: '读屏检查：卡片/整行只聚焦一次并合并播报（accessibilityGroup(true)），内部文字不被逐个聚焦',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: 'ArkUI 无障碍 · 设置无障碍分组（accessibilityGroup）',
+      url: `${OH_BASE}/ui/arkts-universal-attributes-accessibility.md`,
+      section: '设置无障碍分组',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-A11Y-10',
+    dimension: 'accessibility',
+    title: '装饰元素移出无障碍树',
+    verify: '读屏遍历：纯装饰图标/分割线不聚焦（accessibilityLevel("no")），不可用整块用 no-hide-descendants',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: 'ArkUI 无障碍 · 设置无障碍重要性（accessibilityLevel）',
+      url: `${OH_BASE}/ui/arkts-universal-attributes-accessibility.md`,
+      section: '设置无障碍重要性',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-A11Y-11',
+    dimension: 'accessibility',
+    title: '操作提示与功能描述分离',
+    verify: '读屏：accessibilityText 只描述“是什么”，操作方式写在 accessibilityDescription，不混在一起',
+    severity: 'warn',
+    source: OH,
+    citation: {
+      label: 'ArkUI 无障碍 · 设置无障碍提醒（accessibilityDescription）',
+      url: `${OH_BASE}/ui/arkts-universal-attributes-accessibility.md`,
+      section: '设置无障碍提醒',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-A11Y-12',
+    dimension: 'accessibility',
+    title: '外接键盘/遥控器可遍历全部交互元素',
+    verify: '键盘 Tab 或遥控器：所有可交互元素可达、焦点激活态可见、顺序与视觉一致、首焦点在预期位置',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: 'ArkUI 焦点处理 · 基础概念与走焦规范',
+      url: `${OH_BASE}/ui/arkts-common-events-focus-event.md`,
+      section: '基础概念与规范',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-STATE-02',
+    dimension: 'function',
+    title: '@ObservedV2 + @Trace 才可深度观测',
+    verify: '代码检查：@ObservedV2 只装饰 class；UI 用到的字段都有 @Trace，未 @Trace 的字段不参与刷新',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: 'ArkUI 状态管理 V2 · @ObservedV2/@Trace 使用限制',
+      url: `${OH_BASE}/ui/state-management/arkts-new-observedV2-and-trace.md`,
+      section: '使用限制',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-STATE-03',
+    dimension: 'function',
+    title: 'V1 装饰器不与 @ObservedV2 混用',
+    verify: '编译通过；V1 组件不接收 @ObservedV2 实例，V1 装饰器不修饰 @ObservedV2 类',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: 'ArkUI 状态管理 V1/V2 混用指导 · 限制条件',
+      url: `${OH_BASE}/ui/state-management/arkts-v1-v2-mixusage.md`,
+      section: '限制条件',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-STATE-04',
+    dimension: 'function',
+    title: '@Local 只用于 @ComponentV2 且不外部初始化',
+    verify: '代码检查：@Local 只出现在 @ComponentV2；父组件不向 @Local 传值（编译应报错）',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: 'ArkUI 状态管理 V2 · @Local 限制条件',
+      url: `${OH_BASE}/ui/state-management/arkts-new-local.md`,
+      section: '限制条件',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-STATE-05',
+    dimension: 'function',
+    title: 'V2 父子通信用 @Param + @Event',
+    verify: '代码检查：@ComponentV2 子组件输入用 @Param、回调用 @Event；不再用 @Link 做 V2 双向同步',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: 'ArkUI 状态管理 V2 · @Param / @Event 装饰器说明',
+      url: `${OH_BASE}/ui/state-management/arkts-new-param.md`,
+      section: '装饰器说明',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-PERF-10',
+    dimension: 'performance',
+    title: '冷启动按五阶段取证',
+    verify: 'SmartPerf/Profiler 冷启动 Trace：给出进程创建→Ability 生命周期→首帧的分段耗时，首帧 ≤ 800ms（中端机）',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: '提升应用冷启动速度 · 分析应用冷启动耗时（五阶段）',
+      url: `${OH_BASE}/performance/improve-application-cold-start-speed.md`,
+      section: '分析应用冷启动耗时',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-PERF-11',
+    dimension: 'performance',
+    title: '滑动场景无超长帧',
+    verify: 'Trace/Frame 抓 5s 滑动：无 > 33.3ms 超长帧，记录丢帧率、设备型号与刷新率',
+    severity: 'must',
+    source: OH,
+    citation: {
+      label: '应用滑动场景帧率问题分析 · 流畅评测指标',
+      url: `${OH_BASE}/performance/long-frame-optimization.md`,
+      section: '流畅评测指标',
+      version: OH_SHA.slice(0, 7)
+    }
+  },
+  {
+    id: 'DW-AES-12',
+    dimension: 'aesthetic',
+    title: '按钮宽度上限与多按钮间距',
+    verify: '布局树 bounds：单按钮 ≤ 448vp；多按钮等宽、间距 12vp；容器两侧留 16vp',
+    severity: 'warn',
+    source: DESIGN,
+    citation: {
+      label: '按钮 · 响应式布局（最大 448vp、间距 12vp、两侧 16vp）',
+      url: `${UX_BASE}/button-0000001929683228.md`,
+      section: '响应式布局',
+      version: UX_FETCHED
+    }
   }
 ] as const;
 

@@ -32,7 +32,9 @@ dwguard_rules search --query "点击热区"
 
 命令行等价物：`node scripts/search-docs.mjs "点击热区" --limit=5`。语料目录默认读 `DWG_DOCS_DIR`，其次 `~/harmony-docs`，最后 `<workspace>/harmony-docs`；也可在插件配置里设 `docsDir`。
 
-覆盖：**41 条规则中 32 条带 citation**（功能 13、审美 11、性能 9、无障碍 8）。没有官方出处的 9 条是 DwGuard 自定的验收口径（主路径、空态、幂等、状态恢复、图文比例、内存泄漏、定时器清理、非颜色编码、动效降级），保留 `source: 'DwGuard 验收规则'` 或扫描来源。
+覆盖：**52 条规则中 43 条带 citation**（功能 17、审美 12、性能 11、无障碍 12）。没有官方出处的 9 条是 DwGuard 自定的验收口径（主路径、空态、幂等、状态恢复、图文比例、内存泄漏、定时器清理、非颜色编码、动效降级），保留 `source: 'DwGuard 验收规则'` 或扫描来源。
+
+0.4 新增的官方引用：A11Y-09~12（无障碍分组/层级/提醒/焦点链）、STATE-02~05（V2 深度观测、V1/V2 混用、@Local 边界、@Param+@Event）、PERF-10~11（冷启动五阶段、超长帧）、AES-12（按钮 448vp/12vp）。
 
 抓取入口（实测可用）：
 

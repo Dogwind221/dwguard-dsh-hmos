@@ -45,6 +45,34 @@ hdc file recv /data/local/tmp/dwguard-layout.json .\artifacts\layout\home.json
 - `accessibilityText` / `accessibilityLevel`：纯图标按钮是否有名称；
 - 层级与顺序：与视觉/阅读顺序是否一致。
 
+### 3.1 设备 UI 证据（装了 DevEco CLI 时优先）
+
+`dwguard_deveco` 直接调真实工具链，产物自动落 `.shared/artifacts/`，可直接写进审计 `evidenceFiles`：
+
+```text
+dwguard_deveco(action="screenshot")   # → artifacts/devshots/shot-*.png
+dwguard_deveco(action="layout")       # → artifacts/deveco-<n>/layout.json（含 bounds）
+dwguard_deveco(action="verify", plan="点击打卡，期望连续天数 +1", bundle="com.example.app")
+```
+
+- 截图 1MB 级、布局树 40KB 级，远低于 20MB/100MB 证据上限；
+- 多设备时必须传 `device`（名称或序列号）；
+- `verify` 第一次用前先 `devecocli verify init` 配视觉模型。
+
+> Windows 中文用户名下模拟器可能打不开 `system.img`；把镜像/实例放到 ASCII 路径（junction 或 `-imageRoot`/`-instancePath`）再启动。
+
+### 3.2 状态管理 V2 代码审查
+
+| 检查 | 违规示例 | 规则 |
+| --- | --- | --- |
+| `@ObservedV2` 只装饰 class | `@ObservedV2 struct X` / 装饰组件 | DW-STATE-02 |
+| UI 用到的字段都有 `@Trace` | 类里字段无 `@Trace` 却在 `build()` 里读 | DW-STATE-02 |
+| V1/V2 不混用 | `@ObservedV2` 类上再挂 `@State`；V1 组件接 V2 实例 | DW-STATE-03 |
+| `@Local` 只在 `@ComponentV2`、不能外部初始化 | 父组件 `Child({ message: ... })` 给 `@Local` 传值 | DW-STATE-04 |
+| V2 父子通信 | 子组件用 `@Link` 而不是 `@Param` + `@Event` | DW-STATE-05 |
+
+命令行无法判定的，按代码位置 + 编译错误截图取证，不要"读一遍觉得对"就写 pass。
+
 ## 4. 日志与崩溃
 
 ```powershell
@@ -66,12 +94,22 @@ hdc file recv /data/log/faultlog/faultlogger/<file> .\artifacts\logs\
 | 包体 | `build/default/outputs/default/*.hap` 体积；`resources/rawfile` 图片体积 | 文件大小列表 |
 | 主线程重活 | 代码审查 `aboutToAppear` / `build()`；Profiler 火焰图 | 代码位置 + 火焰图 |
 
+### 5.1 冷启动五阶段与超长帧
+
+- 冷启动按官方五阶段拆：进程创建 → Application/Ability 初始化 → Ability 生命周期 → 首帧加载绘制 → 网络二次刷新；每段给出耗时，别只报一个总数；
+- 滑动用 Trace/Frame 抓 5s：**> 33.3ms 即超长帧**，记录设备型号与刷新率；
+- 证据：Trace 截图 + 分段耗时表 + 丢帧率；采样 ≥ 3 次取中位数。
+
 ## 6. 无障碍核对清单
 
 - **对比度**：从截图取样文字色与背景色，按 WCAG 公式计算；正文 ≥ 4.5:1，大字号 ≥ 3:1。
 - **触控目标**：布局树 `bounds` 换算 vp，≥ 48vp × 48vp，相邻 ≥ 8vp。
 - **焦点**：外接键盘或用遥控器 Tab 走查，截图焦点框；检查顺序与不丢失。
 - **可访问名称**：布局树里 `clickable=true` 但 `accessibilityText` 为空的节点 = 违规。
+- **分组播报**：卡片/整行应只聚焦一次（`accessibilityGroup(true)`），内部文字不逐个聚焦。
+- **层级**：纯装饰图标/分割线应 `accessibilityLevel('no')`；不可用整块用 `no-hide-descendants`，否则读屏噪音。
+- **提示分离**：`accessibilityText` 只写"是什么"，操作引导放 `accessibilityDescription`。
+- **键盘可达**：外接键盘 Tab 能遍历全部交互元素，焦点激活态可见，顺序与视觉一致。
 - **字体放大**：系统字体调到 1.3x / 1.75x，重截同一页；文字截断/重叠即违规。
 - **非颜色编码**：错误/成功状态除颜色外还有图标或文案。
 - **减少动效**：系统开启后，非必要动效降级。
