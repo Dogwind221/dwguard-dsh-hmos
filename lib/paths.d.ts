@@ -1,0 +1,38 @@
+/**
+ * The `.shared/` protocol layout, resolved once per tool call.
+ *
+ * @module dwguard-dsh-hmos/paths
+ */
+/** Every path the workflow touches inside one workspace. */
+export interface SharedPaths {
+    /** Agent session working directory. */
+    readonly workspace: string;
+    /** `<workspace>/.shared` (or the configured directory). */
+    readonly shared: string;
+    readonly tasksDir: string;
+    readonly artifactsDir: string;
+    readonly knowledgeDir: string;
+    readonly outboxDsh: string;
+    readonly outboxDeveco: string;
+    readonly stateFile: string;
+    readonly specJson: string;
+    readonly specMd: string;
+    readonly briefMd: string;
+    readonly questionMd: string;
+    readonly knowledgeIndex: string;
+    /** Per-dimension audit progress, written as each audit sub-agent returns. */
+    readonly auditProgress: string;
+    /** Append-only gate calibration ledger (`knowledge/calibration.jsonl`). */
+    readonly calibration: string;
+}
+/**
+ * Resolve the protocol layout for a workspace.
+ * @param workspace - the agent session's cwd.
+ * @param sharedDir - configured directory, relative (to the workspace) or absolute.
+ */
+export declare function resolvePaths(workspace: string, sharedDir: string): SharedPaths;
+/**
+ * Render a path for model-facing output: workspace-relative POSIX when inside
+ * the workspace, absolute otherwise.
+ */
+export declare function displayPath(paths: SharedPaths, file: string): string;
