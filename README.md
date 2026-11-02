@@ -226,7 +226,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 
 | 工具 | 阶段 | 作用 | 关键闸门 |
 | --- | --- | --- | --- |
-| `dwguard_spec` | 立项 → 任务包 | 写入 / 复检 / 查看任务包，首次调用会脚手架 `.shared/` | 四维至少各 1 条；拒绝纯形容词、缺验证方式、依赖自述的判据；`ruleId` 必须在规则目录内；至少 1 条 must |
+| `dwguard_spec` | 立项 → 任务包 | 写入 / 复检 / 查看任务包，首次调用会脚手架 `.shared/` | 四维至少各 1 条；拒绝纯形容词、缺验证方式、依赖自述的判据；`ruleId` 必须在规则目录内；至少 1 条 must；判据可带 `assertion`（matcher + 期望值），非法断言写入前直接拒绝 |
 | `dwguard_prereview` | 派发前预审 | 记录对抗审查发现 | 阻断项必须有 `rebuttal`；未关闭的阻断项不许派发；零发现必须写审阅范围 |
 | `dwguard_dispatch` | 派发 | 生成 `tasks/goal-brief.md` 并写 `outbox-dsh.md`；`executor: cli` 时另写 `tasks/cli-brief.md` | 任务包合法 + 最近一次预审通过（可配置关闭） |
 | `dwguard_deveco` | 执行期 / 取证 | 调 DevEco CLI 取证：`env / build / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / attach / jobs / stop`，命令、退出码与输出落到 `artifacts/deveco-<n>/`；截图落 `artifacts/devshots/`，布局树落 `layout.json` | 只跑固定子命令；超时/找不到 `devecocli` 明确失败；`ui` 参数按白名单校验；自动探测 npm 全局安装的 `devecocli` |
@@ -234,7 +234,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_shadow` | 执行期 | 影子审查：**增量扫描**（只看上次之后改过的文件），自动尝试调用宿主的 `harmony_ui_tree`（失败则需手动传 `uiTree`），写 `artifacts/shadow-<n>.json`；**只把新增**的 must 级风险写 `shadow-risk` 出站 | 只在 dispatched / rework 阶段可跑；`status` 超过 `shadowIntervalMinutes` 会提醒；同一问题不会重复刷屏 |
 | `dwguard_rules` | 全程 | 查规则目录（`list` / `get`，支持别名）与本地官方语料（`search`，返回 file:line + 出处 URL） | 语料目录由 `docsDir` / `DWG_DOCS_DIR` 指定；`get` 未知 ID 直接报错 |
 | `dwguard_audit_dimension` | 审计取证 | 单个维度子代理返回后立刻记录（`passed` / `failed` / `note`） | 写 `artifacts/audit-progress.json`；面板据此让四张卡**逐张落地**，而不是同时亮 |
-| `dwguard_audit` | 外部审计 | 汇总逐条检查与发现，自动出返工单或验收报告 | must 全覆盖、四维全评估、无未关闭 blocker/major、失败项不许记成 unverified；证据文件缺失或**超过 20MB/份、100MB/包**整次拒绝；完成后清空进度文件；每次审计自动记账 |
+| `dwguard_audit` | 外部审计 | 汇总逐条检查与发现，自动出返工单或验收报告 | must 全覆盖、四维全评估、无未关闭 blocker/major、失败项不许记成 unverified；带 `assertion` 的判据必须给 `actual` 实测值，闸门重算断言并拒绝矛盾结论；证据文件缺失或**超过 20MB/份、100MB/包**整次拒绝；完成后清空进度文件；每次审计自动记账 |
 | `dwguard_calibration` | 收尾 | 闸门准确率账本：`report` 算四维漏检率，`miss` 记录"审计通过但用户后来发现问题" | `miss` 必须针对已通过的审计；账本 `knowledge/calibration.jsonl` 只追加 |
 | `dwguard_confirm` | 收尾 | 记录用户对验收报告的决定：`accept` 结束本轮，`new_round` 迭代号 +1 | 必须有通过的审计与 acceptance-report；写 `artifacts/confirmation-<n>.json` 并更新 state |
 | `dwguard_knowledge` | 沉淀 | 追加到 `knowledge/<topic>.md` | 索引按 kind+结论去重 |
@@ -405,7 +405,7 @@ CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（49 个用例：闸门规则、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本、注册）；
+2. `npm test` 全绿（55 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

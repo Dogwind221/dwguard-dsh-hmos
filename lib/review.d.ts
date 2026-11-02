@@ -10,7 +10,7 @@
  * @module dwguard-dsh-hmos/review
  */
 import type { Options } from './config.js';
-import type { Check, CheckResult, Criterion, Dimension, Finding, ReviewDimension, Severity, TaskPack } from './model.js';
+import type { Check, CheckResult, Criterion, CriterionAssertion, Dimension, Finding, ReviewDimension, Severity, TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Model-supplied finding. */
 export interface FindingInput {
@@ -32,6 +32,8 @@ export interface CheckInput {
     readonly evidence: string;
     readonly note?: string;
     readonly evidenceFiles?: readonly string[];
+    /** Measured value for a criterion that carries an `assertion`. */
+    readonly actual?: string;
 }
 /** Gate outcome. */
 export interface Gate {
@@ -81,6 +83,24 @@ export interface AuditReport {
 export declare function normalizeFindings(input: readonly FindingInput[]): Finding[];
 /** Rebuild canonical checks from model input. */
 export declare function normalizeChecks(input: readonly CheckInput[]): Check[];
+/** Machine verdict of one criterion assertion against the measured value. */
+export interface AssertionEvaluation {
+    readonly verdict: 'pass' | 'fail';
+    readonly reason: string;
+}
+/**
+ * Recompute a criterion assertion from the measured `actual` value.
+ *
+ * Numeric matchers read the first number in `actual` (`"12vp"` → 12,
+ * `"720ms"` → 720), so measurements can keep their unit in the evidence text.
+ *
+ * @param assertion - the frozen expectation from the task pack.
+ * @param actual - the measured value the auditor supplied.
+ * @returns the recomputed verdict and the comparison that produced it.
+ */
+export declare function evaluateAssertion(assertion: CriterionAssertion, actual: string): AssertionEvaluation;
+/** Fill `assertionVerdict` on checks whose criterion carries an assertion. */
+export declare function applyAssertionVerdicts(pack: TaskPack, checks: readonly Check[]): Check[];
 /**
  * Pre-review gate: a finding only survives if its author tried to refute it,
  * and any surviving blocker stops the dispatch.

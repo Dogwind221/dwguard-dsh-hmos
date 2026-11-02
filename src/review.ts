@@ -15,6 +15,7 @@ import type {
   Check,
   CheckResult,
   Criterion,
+  CriterionAssertion,
   Dimension,
   Finding,
   ReviewDimension,
@@ -28,6 +29,7 @@ import {
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { isKnownRuleId } from './rules.js';
+import { assertionLabel } from './spec.js';
 import { bullets, inline, table, truncate } from './util/md.js';
 
 /** Model-supplied finding. */
@@ -51,6 +53,8 @@ export interface CheckInput {
   readonly evidence: string;
   readonly note?: string;
   readonly evidenceFiles?: readonly string[];
+  /** Measured value for a criterion that carries an `assertion`. */
+  readonly actual?: string;
 }
 
 /** Gate outcome. */
@@ -147,6 +151,7 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
     result: item.result,
     evidence: inline(item.evidence),
     ...(item.note === undefined ? {} : { note: inline(item.note) }),
+    ...(item.actual === undefined || item.actual.trim().length === 0 ? {} : { actual: item.actual.trim() }),
     ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
       ? {}
       : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
@@ -156,6 +161,110 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
 function looksSelfReported(evidence: string): boolean {
   const lower = evidence.toLowerCase();
   return SELF_REPORT_MARKERS.some((marker) => lower.includes(marker));
+}
+
+/** Machine verdict of one criterion assertion against the measured value. */
+export interface AssertionEvaluation {
+  readonly verdict: 'pass' | 'fail';
+  readonly reason: string;
+}
+
+function firstNumber(value: string): number | undefined {
+  const match = /-?\d+(?:\.\d+)?/.exec(value);
+  return match === null ? undefined : Number(match[0]);
+}
+
+/**
+ * Recompute a criterion assertion from the measured `actual` value.
+ *
+ * Numeric matchers read the first number in `actual` (`"12vp"` → 12,
+ * `"720ms"` → 720), so measurements can keep their unit in the evidence text.
+ *
+ * @param assertion - the frozen expectation from the task pack.
+ * @param actual - the measured value the auditor supplied.
+ * @returns the recomputed verdict and the comparison that produced it.
+ */
+export function evaluateAssertion(assertion: CriterionAssertion, actual: string): AssertionEvaluation {
+  const measured = actual.trim();
+  const expected = Array.isArray(assertion.expected)
+    ? assertion.expected.map((item) => String(item))
+    : assertion.expected === undefined
+      ? undefined
+      : [String(assertion.expected)];
+  const numeric = firstNumber(measured);
+  const pass = (reason: string): AssertionEvaluation => ({ verdict: 'pass', reason });
+  const fail = (reason: string): AssertionEvaluation => ({ verdict: 'fail', reason });
+  const wanted = expected === undefined ? '' : (expected[0] ?? '');
+
+  switch (assertion.matcher) {
+    case 'present':
+      return measured.length === 0
+        ? fail('actual 为空，不满足 present')
+        : pass(`actual「${truncate(measured, 40)}」非空`);
+    case 'equals': {
+      if (numeric !== undefined) {
+        const expectedNumber = firstNumber(wanted);
+        if (expectedNumber !== undefined && expectedNumber === numeric) {
+          return pass(`actual ${numeric} = expected ${expectedNumber}`);
+        }
+      }
+      return measured === wanted.trim()
+        ? pass(`actual「${measured}」= expected「${wanted}」`)
+        : fail(`actual「${measured}」≠ expected「${wanted}」`);
+    }
+    case 'contains':
+      return measured.toLowerCase().includes(wanted.trim().toLowerCase())
+        ? pass(`actual「${truncate(measured, 40)}」包含「${truncate(wanted, 40)}」`)
+        : fail(`actual「${truncate(measured, 40)}」不包含「${truncate(wanted, 40)}」`);
+    case 'regex': {
+      try {
+        return new RegExp(wanted).test(measured)
+          ? pass(`actual 命中正则 /${wanted}/`)
+          : fail(`actual 未命中正则 /${wanted}/`);
+      } catch (error) {
+        return fail(`正则非法：${(error as Error).message}`);
+      }
+    }
+    case 'oneOf': {
+      const list = expected ?? [];
+      return list.some((item) => item.trim() === measured)
+        ? pass(`actual「${truncate(measured, 40)}」∈ {${list.join(', ')}}`)
+        : fail(`actual「${truncate(measured, 40)}」不在 {${list.join(', ')}} 中`);
+    }
+    case 'range': {
+      if (numeric === undefined) return fail('actual 不是数值，无法与 range 比较');
+      const { min, max } = assertion;
+      if (min !== undefined && numeric < min) return fail(`actual ${numeric} < min ${min}`);
+      if (max !== undefined && numeric > max) return fail(`actual ${numeric} > max ${max}`);
+      return pass(`actual ${numeric} ∈ [${min ?? '−∞'}, ${max ?? '∞'}]`);
+    }
+    case 'gte': {
+      if (numeric === undefined) return fail('actual 不是数值，无法与 gte 比较');
+      const bound = Number(wanted);
+      return Number.isFinite(bound) && numeric >= bound
+        ? pass(`actual ${numeric} ≥ ${bound}`)
+        : fail(`actual ${numeric} < ${bound}`);
+    }
+    case 'lte': {
+      if (numeric === undefined) return fail('actual 不是数值，无法与 lte 比较');
+      const bound = Number(wanted);
+      return Number.isFinite(bound) && numeric <= bound
+        ? pass(`actual ${numeric} ≤ ${bound}`)
+        : fail(`actual ${numeric} > ${bound}`);
+    }
+  }
+}
+
+/** Fill `assertionVerdict` on checks whose criterion carries an assertion. */
+export function applyAssertionVerdicts(pack: TaskPack, checks: readonly Check[]): Check[] {
+  const known = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
+  return checks.map((check) => {
+    const criterion = known.get(check.criterionId);
+    if (criterion?.assertion === undefined || check.actual === undefined || check.actual.length === 0) {
+      return check;
+    }
+    return { ...check, assertionVerdict: evaluateAssertion(criterion.assertion, check.actual).verdict };
+  });
 }
 
 function openFindings(findings: readonly Finding[]): Finding[] {
@@ -251,6 +360,23 @@ export function gateDelivery(
     }
     if (looksSelfReported(check.evidence)) {
       warnings.push(`${label} 的证据像执行者自述（「${truncate(check.evidence, 24)}」），DSH 需要独立取证。`);
+    }
+    if (criterion.assertion !== undefined) {
+      const described = assertionLabel(criterion.assertion);
+      if (check.actual === undefined || check.actual.length === 0) {
+        if (check.result === 'pass') {
+          errors.push(`${label} 带可执行断言（${described}），但检查记录缺少 \`actual\` 实测值；断言未执行不得判 pass。`);
+        } else {
+          warnings.push(`${label} 带可执行断言（${described}），但缺少 \`actual\` 实测值，无法自动复核。`);
+        }
+      } else {
+        const evaluation = evaluateAssertion(criterion.assertion, check.actual);
+        if (evaluation.verdict === 'fail' && check.result === 'pass') {
+          errors.push(`${label} 的断言判定不通过（${evaluation.reason}），但检查结论是「通过」；两者矛盾，请复核 actual 或证据。`);
+        } else if (evaluation.verdict === 'pass' && check.result === 'fail') {
+          warnings.push(`${label} 的断言实测值看起来通过（${evaluation.reason}），但结论是「未通过」；确认是否有其它证据导致失败。`);
+        }
+      }
     }
   }
 
@@ -412,6 +538,13 @@ export function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: 
       `\`${check.criterionId}\``,
       criterion === undefined ? '—' : DIMENSION_LABELS[criterion.dimension],
       RESULT_LABELS[check.result],
+      criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
+      check.actual === undefined ? '—' : check.actual,
+      check.assertionVerdict === undefined
+        ? '—'
+        : check.assertionVerdict === 'pass'
+          ? '✓ 通过'
+          : '✗ 不通过',
       check.evidence,
       files.length === 0 ? '—' : files.map((file) => `\`${file}\``).join('<br>'),
       check.note ?? '—'
@@ -441,7 +574,12 @@ export function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: 
     '',
     '## 逐条检查（独立取证）',
     '',
-    report.checks.length === 0 ? '（无）' : table(['判据', '维度', '结论', '证据', '证据文件', '备注'], checkRows),
+    report.checks.length === 0
+      ? '（无）'
+      : table(
+          ['判据', '维度', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
+          checkRows
+        ),
     '',
     '## 发现',
     '',
@@ -475,16 +613,17 @@ export function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths:
       `\`${check.criterionId}\``,
       criterion?.statement ?? '—',
       RESULT_LABELS[check.result],
+      check.actual ?? '—',
       check.evidence
     ]);
   }
   for (const id of report.coverage.missing) {
     const criterion = criteria.get(id);
-    rows.push([`\`${id}\``, criterion?.statement ?? '—', '未覆盖', '没有任何检查记录']);
+    rows.push([`\`${id}\``, criterion?.statement ?? '—', '未覆盖', '—', '没有任何检查记录']);
   }
   for (const check of unverified) {
     const criterion = criteria.get(check.criterionId);
-    rows.push([`\`${check.criterionId}\``, criterion?.statement ?? '—', '未验证', check.evidence || '—']);
+    rows.push([`\`${check.criterionId}\``, criterion?.statement ?? '—', '未验证', check.actual ?? '—', check.evidence || '—']);
   }
   return [
     `# 返工单 · 审计 #${report.id} 未通过`,
@@ -495,7 +634,11 @@ export function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths:
     '',
     '## 1. 失败的验收标准',
     '',
-    table(['判据', '原始判据', '结论', '证据'], rows),
+    table(['判据', '原始判据', '结论', '实测值', '证据'], rows),
+    '',
+    '### 闸门问题',
+    '',
+    bullets(report.gate.errors),
     '',
     '## 2. 阻断/严重问题',
     '',
@@ -545,6 +688,8 @@ export function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, pa
       `\`${check.criterionId}\``,
       criterion === undefined ? '—' : DIMENSION_LABELS[criterion.dimension],
       criterion?.statement ?? '—',
+      criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
+      check.actual ?? '—',
       check.evidence
     ];
   });
@@ -569,7 +714,7 @@ export function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, pa
     '',
     '## 2. 证据索引',
     '',
-    table(['判据', '维度', '判据原文', '独立证据'], rows),
+    table(['判据', '维度', '判据原文', '断言', '实测值', '独立证据'], rows),
     '',
     '## 3. 遗留风险',
     '',

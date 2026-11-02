@@ -14,7 +14,7 @@ import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { appendText, readTextOrNull } from './util/fs.js';
 import { bullets, table } from './util/md.js';
-import { criteriaByDimension } from './spec.js';
+import { assertionLabel, criteriaByDimension } from './spec.js';
 
 /** Message kinds carried by the outbox protocol. */
 export type OutboxKind =
@@ -182,12 +182,13 @@ function criteriaTable(pack: TaskPack): string {
         `\`${criterion.id}\``,
         DIMENSION_LABELS[dimension],
         criterion.weight,
+        criterion.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
         criterion.statement,
         criterion.verify
       ]);
     }
   }
-  return table(['判据', '维度', '权重', '判据原文', '验证方式'], rows);
+  return table(['判据', '维度', '权重', '断言', '判据原文', '验证方式'], rows);
 }
 
 /**

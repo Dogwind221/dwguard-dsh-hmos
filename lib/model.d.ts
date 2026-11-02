@@ -16,6 +16,30 @@ export declare const DIMENSION_PREFIX: Record<Dimension, string>;
 export declare const DIMENSION_EVIDENCE: Record<Dimension, string>;
 /** Whether a criterion must be verified before acceptance. */
 export type CriterionWeight = 'must' | 'should';
+/** Matchers a criterion assertion can use. */
+export declare const ASSERTION_MATCHERS: readonly ["equals", "contains", "regex", "range", "gte", "lte", "oneOf", "present"];
+/** How a criterion assertion compares the measured value. */
+export type AssertionMatcher = (typeof ASSERTION_MATCHERS)[number];
+/**
+ * Optional machine-checkable expectation on a criterion.
+ *
+ * A criterion without an assertion is judged by the auditor's evidence alone;
+ * one with an assertion must also carry the measured `actual` value in the
+ * delivery audit, and the gate recomputes pass/fail from it.
+ */
+export interface CriterionAssertion {
+    readonly matcher: AssertionMatcher;
+    /** Expected scalar, or the list for `oneOf` (absent for `present`/`range`). */
+    readonly expected?: string | number | readonly (string | number)[];
+    /** Inclusive lower bound (`range`). */
+    readonly min?: number;
+    /** Inclusive upper bound (`range`). */
+    readonly max?: number;
+    /** Unit of the measured value (`ms`, `vp`, `ratio`…); documentation only. */
+    readonly unit?: string;
+    /** Where the auditor should measure the value from. */
+    readonly source?: string;
+}
 /** One falsifiable acceptance criterion. */
 export interface Criterion {
     /** Stable id, unique inside the pack (e.g. `F-01`). */
@@ -28,6 +52,8 @@ export interface Criterion {
     readonly weight: CriterionWeight;
     /** Catalog rule this criterion implements (`DW-A11Y-02`, `STATE-002`…). */
     readonly ruleId?: string;
+    /** Optional declarative expectation the audit gate can recompute. */
+    readonly assertion?: CriterionAssertion;
 }
 /** The frozen task pack DSH hands to the executor agent. */
 export interface TaskPack {
@@ -73,6 +99,10 @@ export interface Check {
     readonly note?: string;
     /** Files backing this check, relative to `.shared/`; copied into the audit bundle. */
     readonly evidenceFiles?: readonly string[];
+    /** Measured value for a criterion that carries an `assertion`. */
+    readonly actual?: string;
+    /** Machine verdict recomputed from `assertion` + `actual` by the audit gate. */
+    readonly assertionVerdict?: 'pass' | 'fail';
 }
 /** Persisted workflow counters and cursor. */
 export interface SharedState {

@@ -99,7 +99,7 @@ self-report never becomes a `pass`.
 
 | Tool | Purpose |
 | --- | --- |
-| `dwguard_spec` | Write / validate / read the task pack; scaffolds `.shared/` |
+| `dwguard_spec` | Write / validate / read the task pack; criteria may carry a machine-checkable `assertion` (matcher + expected); scaffolds `.shared/` |
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
@@ -107,7 +107,7 @@ self-report never becomes a `pass`.
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
-| `dwguard_audit` | Four-dimension audit; evidence bundle; acceptance report or rework order |
+| `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and the gate recomputes the verdict; evidence bundle; acceptance report or rework order |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
@@ -199,7 +199,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
 npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 npm run typecheck
 npm run build
-npm test          # 49 tests
+npm test          # 55 tests
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

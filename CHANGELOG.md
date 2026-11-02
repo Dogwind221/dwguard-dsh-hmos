@@ -4,6 +4,39 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.5.0 — unreleased
+
+The "assertions" release: a criterion that states a number can now be judged by
+the audit gate itself instead of by an auditor's prose.
+
+### Added
+
+- `dwguard_spec` criteria accept an optional `assertion`: `matcher` (`equals` /
+  `contains` / `regex` / `range` / `gte` / `lte` / `oneOf` / `present`) plus
+  `expected` / `min` / `max` / `unit` / `source`. Invalid assertions (unknown
+  matcher, `range` without bounds, bad regex…) are rejected before the pack is
+  frozen.
+- `dwguard_audit` checks accept `actual` (the measured value). For a criterion
+  with an assertion the gate recomputes the verdict, stores it in
+  `assertionVerdict`, refuses a `pass` that contradicts the assertion or omits
+  `actual`, and warns when a `fail` contradicts a passing assertion.
+- `tasks/spec.md` and the Goal brief render an「断言」column; audit, acceptance
+  and rework documents render 断言 / 实测值 / 断言判定 columns.
+- Proposal + migration notes: `docs/0.5.0-assertion-plan.md`; guidance added to
+  the `hmos-acceptance-rubric` and `hmos-audit-playbook` skills.
+
+### Changed
+
+- Rework orders now include a「闸门问题」section so gate errors (not only failed
+  criteria) reach the executor.
+- `W_CRITERION_NO_ASSERTION` nudges `must` criteria that state a number but carry
+  no assertion.
+
+### Compatibility
+
+- `assertion` / `actual` are optional: packs written by 0.4.x keep working
+  unchanged, and older readers simply ignore the new fields.
+
 ## 0.4.2 — 2026-11-01
 
 Documentation sync release — no code changes. Brings the npm README up to date

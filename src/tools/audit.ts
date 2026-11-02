@@ -22,6 +22,7 @@ import { clearAuditProgress } from '../progress.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import type { AuditReport, CheckInput, FindingInput } from '../review.js';
 import {
+  applyAssertionVerdicts,
   gateDelivery,
   normalizeChecks,
   normalizeFindings,
@@ -64,7 +65,8 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
       result: requiredEnum(item, 'result', RESULTS, label),
       evidence: optionalString(item, 'evidence', label, 2000) ?? '',
       note: optionalString(item, 'note', label, 600),
-      evidenceFiles: optionalStringArray(item, 'evidenceFiles', label, 8)
+      evidenceFiles: optionalStringArray(item, 'evidenceFiles', label, 8),
+      actual: optionalString(item, 'actual', label, 500)
     };
   });
 }
@@ -129,6 +131,11 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               required: true,
               description: '你独立取得的证据：命令输出、截图路径、布局树片段、测量数值。'
             },
+            actual: {
+              type: 'string',
+              description:
+                '实测值（可选但带 assertion 的判据必须给）：如 "12vp"、"720ms"、"4.9:1"。闸门用任务包里的 assertion 重算结论，断言不通过却标 pass 会被拒绝。'
+            },
             evidenceFiles: {
               type: 'array',
               items: { type: 'string' },
@@ -170,7 +177,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       const args = asRecord(rawArgs, TOOL);
       const paths = await pathsOf(exec, { options, ctx }, TOOL);
       const pack = await requireSpec(paths, options, TOOL);
-      const checks = normalizeChecks(parseChecks(args));
+      const checks = applyAssertionVerdicts(pack, normalizeChecks(parseChecks(args)));
       const findings = normalizeFindings(parseFindings(args));
       const note = optionalString(args, 'note', TOOL, 2000) ?? '';
       const now = nowIso();

@@ -224,3 +224,12 @@ hdc file recv /data/log/faultlog/faultlogger/<file> .\artifacts\logs\
 - [ ] 空态、错误态、权限拒绝路径没走
 - [ ] must 判据记成 `unverified` 却宣告通过
 - [ ] 返工后没有重新取证，直接复用了上一轮的证据
+
+## 11. 断言判据的实测值（`actual`，0.5.0 起）
+
+任务包里的判据带 `assertion` 时，`dwguard_audit` 的检查必须给出 `actual`（实测值），闸门会按 matcher 重算，断言不通过却标 `pass` 会被直接拒绝。取证时：
+
+1. **先量再写**：布局树 bounds、Profiler 数值、对比度计算值、截图取样结果——原样写进 `actual`，单位保留（`12vp` / `720ms` / `4.9:1`）；
+2. **数值取第一个数字**：`actual` 里第一个数字参与比较，长文本请只写关键数值；
+3. **actual 与 evidence 分开**：`actual` 是机器比较用的值，`evidence` 是人复核用的说明/路径，两者不能互相替代；
+4. 量不出来时不要编 `actual`——把判据判 `unverified`（must 会被闸门拦下），回到 `tasks/question.md` 说明为什么量不到。
