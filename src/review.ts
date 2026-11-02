@@ -16,16 +16,21 @@ import type {
   CheckResult,
   Criterion,
   CriterionAssertion,
+  DeviceEvidence,
   Dimension,
   Finding,
   ReviewDimension,
+  ScreenFamily,
   Severity,
   TaskPack
 } from './model.js';
 import {
   DIMENSIONS,
-  DIMENSION_LABELS
+  DIMENSION_LABELS,
+  SCREEN_FAMILY_LABELS
 } from './model.js';
+import type { DeviceConfig } from './device.js';
+import { matrixFamilies } from './device.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { isKnownRuleId } from './rules.js';
@@ -55,6 +60,10 @@ export interface CheckInput {
   readonly evidenceFiles?: readonly string[];
   /** Measured value for a criterion that carries an `assertion`. */
   readonly actual?: string;
+  /** Device serial the evidence was taken on. */
+  readonly device?: string;
+  /** Screen family the device belongs to. */
+  readonly family?: ScreenFamily;
 }
 
 /** Gate outcome. */
@@ -104,9 +113,16 @@ export interface AuditReport {
   readonly gate: Gate;
   readonly coverage: Coverage;
   readonly dimensions: readonly DimensionSummary[];
+  /** Devices referenced by this audit (matrix mode), in first-seen order. */
+  readonly devices?: readonly DeviceEvidence[];
 }
 
 const SELF_REPORT_MARKERS = ['自测通过', '自认为', '开发者确认', 'deveco 已确认', '应该没问题', '目测没问题', '看起来正常'];
+
+/** Duplicate-detection key: one verdict per criterion (single) or per criterion+family (matrix). */
+function checkKey(check: Check, policy?: DeviceConfig): string {
+  return policy?.mode === 'matrix' ? `${check.criterionId}::${check.family ?? '?'}` : check.criterionId;
+}
 
 const SEVERITY_LABELS: Record<Severity, string> = {
   blocker: '阻断',
@@ -152,6 +168,8 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
     evidence: inline(item.evidence),
     ...(item.note === undefined ? {} : { note: inline(item.note) }),
     ...(item.actual === undefined || item.actual.trim().length === 0 ? {} : { actual: item.actual.trim() }),
+    ...(item.device === undefined || item.device.trim().length === 0 ? {} : { device: item.device.trim() }),
+    ...(item.family === undefined ? {} : { family: item.family }),
     ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
       ? {}
       : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
@@ -330,7 +348,8 @@ export function gatePrereview(
 export function gateDelivery(
   pack: TaskPack,
   checks: readonly Check[],
-  findings: readonly Finding[]
+  findings: readonly Finding[],
+  policy?: DeviceConfig
 ): Gate {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -344,10 +363,14 @@ export function gateDelivery(
       errors.push(`${label} 不是任务包里的判据 ID，检查记录无法归档。`);
       continue;
     }
-    if (seen.has(check.criterionId)) {
-      errors.push(`${label} 出现了多次检查记录，一条判据只允许一个结论。`);
+    if (seen.has(checkKey(check, policy))) {
+      errors.push(
+        policy?.mode === 'matrix'
+          ? `${label} 在屏幕族「${check.family === undefined ? '?' : SCREEN_FAMILY_LABELS[check.family]}」上出现了多次检查记录，同一判据同一族只允许一个结论。`
+          : `${label} 出现了多次检查记录，一条判据只允许一个结论。`
+      );
     }
-    seen.add(check.criterionId);
+    seen.add(checkKey(check, policy));
     if (check.result !== 'unverified' && check.evidence.length < 4) {
       errors.push(`${label} 判为「${RESULT_LABELS[check.result]}」但没有证据。`);
     }
@@ -383,12 +406,12 @@ export function gateDelivery(
   const missing: string[] = [];
   for (const criterion of pack.criteria) {
     if (criterion.weight !== 'must') continue;
-    const check = checks.find((item) => item.criterionId === criterion.id);
-    if (check === undefined) {
+    const own = checks.filter((item) => item.criterionId === criterion.id);
+    if (own.length === 0) {
       missing.push(criterion.id);
       continue;
     }
-    if (check.result === 'unverified') {
+    if (own.some((item) => item.result === 'unverified')) {
       errors.push(`\`${criterion.id}\` 是 must 判据，但结论是「未验证」。`);
     }
   }
@@ -407,6 +430,31 @@ export function gateDelivery(
     ).length;
     if (assessed === 0) {
       errors.push(`「${DIMENSION_LABELS[dimension]}」维度没有任何已取证的检查项。`);
+    }
+  }
+
+  if (policy !== undefined && policy.mode === 'matrix') {
+    for (const check of checks) {
+      if (check.device === undefined || check.family === undefined) {
+        errors.push(
+          `\`${check.criterionId}\` 在 matrix 模式（主机内存 ${policy.hostMemoryGb}GB）下缺少 \`device\` / \`family\`；矩阵取证必须标明设备与屏幕族。`
+        );
+      }
+    }
+    for (const criterion of pack.criteria) {
+      for (const family of matrixFamilies(policy, criterion.dimension)) {
+        const found = checks.find((check) => check.criterionId === criterion.id && check.family === family);
+        if (found === undefined) {
+          const message = `matrix 模式：「${DIMENSION_LABELS[criterion.dimension]}」判据 \`${criterion.id}\` 缺少屏幕族「${SCREEN_FAMILY_LABELS[family]}」（\`${family}\`）的检查记录。`;
+          if (policy.allowMissing) {
+            warnings.push(`${message}（allowMissingMatrixFamilies=true，降级为警告）`);
+          } else {
+            errors.push(message);
+          }
+        } else if (found.result === 'unverified' && criterion.weight === 'must') {
+          errors.push(`\`${criterion.id}\` 在「${SCREEN_FAMILY_LABELS[family]}」族上的结论是「未验证」（must 判据）。`);
+        }
+      }
     }
   }
 
@@ -430,22 +478,28 @@ export function gateDelivery(
 }
 
 /** Summarize coverage of a delivery audit. */
-export function summarizeCoverage(pack: TaskPack, checks: readonly Check[]): Coverage {
+export function summarizeCoverage(pack: TaskPack, checks: readonly Check[], policy?: DeviceConfig): Coverage {
   const must = pack.criteria.filter((criterion) => criterion.weight === 'must');
-  const byId = new Map(checks.map((check) => [check.criterionId, check]));
   let passed = 0;
   let failed = 0;
   let unverified = 0;
   const missing: string[] = [];
   for (const criterion of must) {
-    const check = byId.get(criterion.id);
-    if (check === undefined) {
+    const own = checks.filter((check) => check.criterionId === criterion.id);
+    if (own.length === 0) {
       missing.push(criterion.id);
       continue;
     }
-    if (check.result === 'pass') passed += 1;
-    else if (check.result === 'fail') failed += 1;
-    else unverified += 1;
+    if (policy !== undefined && policy.mode === 'matrix') {
+      const required = matrixFamilies(policy, criterion.dimension);
+      if (required.some((family) => !own.some((check) => check.family === family))) {
+        missing.push(criterion.id);
+        continue;
+      }
+    }
+    if (own.some((check) => check.result === 'unverified')) unverified += 1;
+    else if (own.some((check) => check.result === 'fail')) failed += 1;
+    else passed += 1;
   }
   return { total: must.length, passed, failed, unverified, missing };
 }
@@ -528,8 +582,28 @@ export function renderPrereviewMarkdown(report: PrereviewReport, pack: TaskPack,
   ].join('\n');
 }
 
+/** Render the「判据 × 屏幕族」matrix; empty string in single-device mode. */
+export function renderDeviceMatrix(pack: TaskPack, checks: readonly Check[], policy: DeviceConfig): string {
+  if (policy.mode !== 'matrix') return '';
+  const families = policy.matrix;
+  const rows = pack.criteria.map((criterion) => {
+    const row = [`\`${criterion.id}\``, DIMENSION_LABELS[criterion.dimension]];
+    for (const family of families) {
+      const check = checks.find((item) => item.criterionId === criterion.id && item.family === family);
+      row.push(check === undefined ? '—' : check.result === 'pass' ? '✓' : check.result === 'fail' ? '✗' : '·');
+    }
+    return row;
+  });
+  return table(['判据', '维度', ...families.map((family) => SCREEN_FAMILY_LABELS[family])], rows);
+}
+
 /** Render `artifacts/audit-<n>.md`. */
-export function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string {
+export function renderAuditMarkdown(
+  report: AuditReport,
+  pack: TaskPack,
+  paths: SharedPaths,
+  policy?: DeviceConfig
+): string {
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const checkRows = report.checks.map((check) => {
     const criterion = criteria.get(check.criterionId);
@@ -537,6 +611,8 @@ export function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: 
     return [
       `\`${check.criterionId}\``,
       criterion === undefined ? '—' : DIMENSION_LABELS[criterion.dimension],
+      check.device ?? '—',
+      check.family === undefined ? '—' : SCREEN_FAMILY_LABELS[check.family],
       RESULT_LABELS[check.result],
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual === undefined ? '—' : check.actual,
@@ -572,12 +648,32 @@ export function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: 
       ])
     ),
     '',
+    '## 设备矩阵',
+    '',
+    policy === undefined || policy.mode !== 'matrix'
+      ? `单机验证（主机内存 ${policy?.hostMemoryGb ?? '?'}GB，未启用矩阵）。`
+      : renderDeviceMatrix(pack, report.checks, policy),
+    '',
+    '### 设备清单',
+    '',
+    report.devices === undefined || report.devices.length === 0
+      ? '（无设备记录）'
+      : table(
+          ['设备', '屏幕族', 'API', '类型'],
+          report.devices.map((device) => [
+            device.sn,
+            SCREEN_FAMILY_LABELS[device.family],
+            device.apiLevel === undefined ? '—' : String(device.apiLevel),
+            device.kind ?? '—'
+          ])
+        ),
+    '',
     '## 逐条检查（独立取证）',
     '',
     report.checks.length === 0
       ? '（无）'
       : table(
-          ['判据', '维度', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
+          ['判据', '维度', '设备', '屏幕族', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
           checkRows
         ),
     '',
@@ -678,7 +774,12 @@ export function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths:
 }
 
 /** Render `artifacts/acceptance-report.md` from a passing audit. */
-export function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string {
+export function renderAcceptanceMarkdown(
+  report: AuditReport,
+  pack: TaskPack,
+  paths: SharedPaths,
+  policy?: DeviceConfig
+): string {
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const passed = report.checks.filter((check) => check.result === 'pass');
   const minor = report.findings.filter((finding) => finding.severity === 'minor');
@@ -690,6 +791,7 @@ export function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, pa
       criterion?.statement ?? '—',
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual ?? '—',
+      check.family === undefined ? check.device ?? '—' : `${check.device ?? '—'} · ${SCREEN_FAMILY_LABELS[check.family]}`,
       check.evidence
     ];
   });
@@ -714,7 +816,25 @@ export function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, pa
     '',
     '## 2. 证据索引',
     '',
-    table(['判据', '维度', '判据原文', '断言', '实测值', '独立证据'], rows),
+    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '独立证据'], rows),
+    '',
+    '### 2.1 屏幕族矩阵',
+    '',
+    policy === undefined || policy.mode !== 'matrix'
+      ? `单机验证（主机内存 ${policy?.hostMemoryGb ?? '?'}GB）。`
+      : renderDeviceMatrix(pack, report.checks, policy),
+    '',
+    report.devices === undefined || report.devices.length === 0
+      ? ''
+      : table(
+          ['设备', '屏幕族', 'API', '类型'],
+          report.devices.map((device) => [
+            device.sn,
+            SCREEN_FAMILY_LABELS[device.family],
+            device.apiLevel === undefined ? '—' : String(device.apiLevel),
+            device.kind ?? '—'
+          ])
+        ),
     '',
     '## 3. 遗留风险',
     '',

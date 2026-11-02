@@ -10,7 +10,8 @@
  * @module dwguard-dsh-hmos/review
  */
 import type { Options } from './config.js';
-import type { Check, CheckResult, Criterion, CriterionAssertion, Dimension, Finding, ReviewDimension, Severity, TaskPack } from './model.js';
+import type { Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence, Dimension, Finding, ReviewDimension, ScreenFamily, Severity, TaskPack } from './model.js';
+import type { DeviceConfig } from './device.js';
 import type { SharedPaths } from './paths.js';
 /** Model-supplied finding. */
 export interface FindingInput {
@@ -34,6 +35,10 @@ export interface CheckInput {
     readonly evidenceFiles?: readonly string[];
     /** Measured value for a criterion that carries an `assertion`. */
     readonly actual?: string;
+    /** Device serial the evidence was taken on. */
+    readonly device?: string;
+    /** Screen family the device belongs to. */
+    readonly family?: ScreenFamily;
 }
 /** Gate outcome. */
 export interface Gate {
@@ -78,6 +83,8 @@ export interface AuditReport {
     readonly gate: Gate;
     readonly coverage: Coverage;
     readonly dimensions: readonly DimensionSummary[];
+    /** Devices referenced by this audit (matrix mode), in first-seen order. */
+    readonly devices?: readonly DeviceEvidence[];
 }
 /** Rebuild canonical findings from model input, numbering untitled ids. */
 export declare function normalizeFindings(input: readonly FindingInput[]): Finding[];
@@ -117,18 +124,20 @@ export declare function gatePrereview(findings: readonly Finding[], note: string
  * @param findings - additional findings.
  * @param options - resolved options.
  */
-export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[]): Gate;
+export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig): Gate;
 /** Summarize coverage of a delivery audit. */
-export declare function summarizeCoverage(pack: TaskPack, checks: readonly Check[]): Coverage;
+export declare function summarizeCoverage(pack: TaskPack, checks: readonly Check[], policy?: DeviceConfig): Coverage;
 /** Per-dimension coverage rows for the audit table. */
 export declare function summarizeDimensions(pack: TaskPack, checks: readonly Check[]): DimensionSummary[];
 /** Render `artifacts/prereview-<n>.md`. */
 export declare function renderPrereviewMarkdown(report: PrereviewReport, pack: TaskPack, paths: SharedPaths): string;
+/** Render the「判据 × 屏幕族」matrix; empty string in single-device mode. */
+export declare function renderDeviceMatrix(pack: TaskPack, checks: readonly Check[], policy: DeviceConfig): string;
 /** Render `artifacts/audit-<n>.md`. */
-export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
+export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig): string;
 /** Render `tasks/rework-<n>.md` from a failed audit. */
 export declare function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
 /** Render `artifacts/acceptance-report.md` from a passing audit. */
-export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
+export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig): string;
 /** One criterion as a bullet line, used by briefs and gap reports. */
 export declare function criterionLine(criterion: Criterion): string;

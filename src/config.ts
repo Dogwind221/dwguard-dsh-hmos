@@ -10,6 +10,10 @@
 
 import z from '@deepseek-ai/schemastery';
 
+import type { DeviceConfig } from './device.js';
+import { resolveDevicePolicy } from './device.js';
+import { SCREEN_FAMILIES } from './model.js';
+
 /** Loader-facing schema of the `dsh` row's `config` block. */
 export const Config = z.object({
   /** Directory (relative to the workspace, or absolute) holding the shared protocol. */
@@ -35,7 +39,25 @@ export const Config = z.object({
   /** Executor policy: `auto` = IDE-first, CLI only where it wins. */
   executor: z.string().default('auto'),
   /** `devecocli` binary; empty means `devecocli` on PATH. */
-  devecocliPath: z.string().default('')
+  devecocliPath: z.string().default(''),
+  /** Host memory in GB; 0 means auto-detect (`os.totalmem()`), >0 overrides (CI/containers). */
+  hostMemoryGb: z.number().default(0),
+  /** Device mode: `auto` (by host memory) / `single` / `matrix`. */
+  deviceMode: z.string().default('auto'),
+  /** Below this host-memory threshold the policy forces single-device verification. */
+  matrixMinMemoryGb: z.number().default(32),
+  /** Screen families the matrix covers (phone / widefold / foldable / triplefold). */
+  deviceMatrix: z.array(z.string()).default([...SCREEN_FAMILIES]),
+  /** Per-dimension required families; empty/invalid entries fall back to the defaults. */
+  matrixScope: z.any().default({}),
+  /** Downgrade missing matrix families from gate error to warning. */
+  allowMissingMatrixFamilies: z.boolean().default(false),
+  /** Device pool entries `{ sn, family, apiLevel?, kind? }`. */
+  devicePool: z.array(z.any()).default([]),
+  /** Max concurrent devices; 0 = auto from host memory. */
+  maxConcurrency: z.number().default(0),
+  /** A lock older than this is treated as stale and stolen. */
+  deviceLockTimeoutMs: z.number().default(600000)
 });
 
 /** Fully resolved options used by every tool. */
@@ -57,6 +79,8 @@ export interface Options {
   readonly executor: 'auto' | 'ide' | 'cli';
   /** `devecocli` binary; empty means resolve from PATH. */
   readonly devecocliPath: string;
+  /** Effective device policy (host memory, mode, matrix scope, pool, lock timeout). */
+  readonly device: DeviceConfig;
 }
 
 const DEFAULTS: Options = {
@@ -71,7 +95,8 @@ const DEFAULTS: Options = {
   shadowIntervalMinutes: 10,
   stallMinutes: 30,
   executor: 'auto',
-  devecocliPath: ''
+  devecocliPath: '',
+  device: resolveDevicePolicy({})
 };
 
 function bool(value: unknown, fallback: boolean): boolean {
@@ -106,6 +131,17 @@ export function resolveOptions(raw: unknown): Options {
     shadowIntervalMinutes: positiveInt(input['shadowIntervalMinutes'], DEFAULTS.shadowIntervalMinutes, 1),
     stallMinutes: positiveInt(input['stallMinutes'], DEFAULTS.stallMinutes, 1),
     executor: input['executor'] === 'ide' || input['executor'] === 'cli' ? input['executor'] : 'auto',
-    devecocliPath: typeof input['devecocliPath'] === 'string' ? input['devecocliPath'].trim() : DEFAULTS.devecocliPath
+    devecocliPath: typeof input['devecocliPath'] === 'string' ? input['devecocliPath'].trim() : DEFAULTS.devecocliPath,
+    device: resolveDevicePolicy({
+      hostMemoryGb: input['hostMemoryGb'],
+      deviceMode: input['deviceMode'],
+      matrixMinMemoryGb: input['matrixMinMemoryGb'],
+      deviceMatrix: input['deviceMatrix'],
+      matrixScope: input['matrixScope'],
+      allowMissingMatrixFamilies: input['allowMissingMatrixFamilies'],
+      devicePool: input['devicePool'],
+      maxConcurrency: input['maxConcurrency'],
+      deviceLockTimeoutMs: input['deviceLockTimeoutMs']
+    })
   };
 }

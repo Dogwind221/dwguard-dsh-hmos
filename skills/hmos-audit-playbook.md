@@ -304,3 +304,35 @@ hdc file recv /data/log/faultlog/faultlogger/<file> .\artifacts\logs\
   "note": "attempt=1/3"
 }
 ```
+
+## 13. 设备矩阵取证（0.6.0 起）
+
+矩阵模式由**主机内存**决定：`< 32GB`（如 16GB 机器）只做单机验证，`>= 32GB` 才允许按屏幕族多机取证。先跑 `dwguard_status` 看当前模式与屏幕族缺口；`dwguard_deveco`（action: device）返回 `{hostMemoryGb, deviceMode, pool[]}`。
+
+四类屏幕族与默认覆盖：
+
+| 屏幕族 | 中文 | 默认覆盖的维度 |
+| --- | --- | --- |
+| `phone` | 直板机 | 功能 / 性能 / 审美 / 无障碍 |
+| `widefold` | 阔折叠 | 审美 / 无障碍 |
+| `foldable` | 双折叠 | 审美 / 无障碍 |
+| `triplefold` | 三折叠 | 审美 / 无障碍 |
+
+矩阵模式下的取证约定：
+
+1. **每条 check 必带 `device` + `family`**：`device` 写设备序列号（`hdc list targets`），`family` 写屏幕族；缺一条，审计闸门直接拒绝；
+2. **审美/无障碍要在每个屏幕族各取一次**：同一判据 × 不同族 = 多条 check（`device`/`family` 不同，不视为重复结论）；
+3. **性能只跑直板机且设备独占**：矩阵轮转不并发；取证期间 `dwguard_deveco` 用 `.shared/.device-lock.json` 串行；
+4. **缺族要么补齐，要么显式豁免**：`allowMissingMatrixFamilies: true` 会把缺族降级为警告并写进报告；没有豁免就别宣告矩阵通过；
+5. **16GB 机器别硬上矩阵**：`hostMemoryGb < 32` 时矩阵配置会被忽略并警告；单机结论照样有效，只是不覆盖折叠屏适配。
+
+```json
+{
+  "criterionId": "A-01",
+  "result": "pass",
+  "device": "em-widefold",
+  "family": "widefold",
+  "actual": "卡片间距 12vp（布局树 bounds）",
+  "evidence": "阔折叠展开态截图 + bounds"
+}
+```

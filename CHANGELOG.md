@@ -4,6 +4,43 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.0 — 2026-11-02
+
+Device-matrix release: every verdict now records **which device and screen family**
+it came from, and adaptation criteria cannot be certified on a single screen.
+
+### Added
+
+- **Host-memory-aware device policy**: `hostMemoryGb` (0 = auto-detect via
+  `os.totalmem()`), `deviceMode` (`auto` / `single` / `matrix`),
+  `matrixMinMemoryGb` (default 32). `< 32GB` forces single-device verification
+  (16GB machines get a warning if a matrix is configured); `>= 32GB` enables the
+  matrix. Auto concurrency is memory-scaled (32GB → 2, 64GB → 4).
+- **Huawei screen-family matrix**: `phone` / `widefold` / `foldable` /
+  `triplefold`. `matrixScope` defaults to function/performance on the bar phone
+  and aesthetic/accessibility across all four families.
+- **Audit evidence carries the device**: `dwguard_audit` checks accept `device`
+  and `family`; in matrix mode both are required, and the gate refuses a missing
+  family (`allowMissingMatrixFamilies: true` downgrades it to a warning written
+  into the report).
+- **Reports**: `audit.json` records `devices[]`; audit and acceptance reports
+  render a 判据 × 屏幕族 matrix and a device list.
+- **Serial device access**: `dwguard_deveco` defaults to the pool's bar phone and
+  serialises device actions through `.shared/.device-lock.json`; a lock older
+  than `deviceLockTimeoutMs` is reclaimed.
+- **Status**: `dwguard_status` shows host memory, effective mode, matrix gaps and
+  the current device lock.
+
+### Changed
+
+- Coverage rolls up one verdict per criterion (single mode) or one per
+  criterion × screen family (matrix mode).
+
+### Compatibility
+
+- Empty `devicePool` + `single` mode behaves like 0.5.0; packs written earlier
+  need no migration. `checks[].device/family` are optional outside matrix mode.
+
 ## 0.5.0 — 2026-11-02
 
 The "assertions" release: a criterion that states a number can now be judged by

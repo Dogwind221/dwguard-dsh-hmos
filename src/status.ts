@@ -6,10 +6,12 @@
  */
 
 import type { Options } from './config.js';
+import type { DeviceConfig } from './device.js';
+import { coverageGaps, readDeviceLock } from './device.js';
 import type { OutboxEntry } from './dispatch.js';
 import { parseOutbox, unackedDispatches } from './dispatch.js';
 import type { SharedState, TaskPack } from './model.js';
-import { DIMENSIONS, DIMENSION_LABELS } from './model.js';
+import { DIMENSIONS, DIMENSION_LABELS, SCREEN_FAMILY_LABELS } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import type { AuditReport, PrereviewReport } from './review.js';
@@ -80,6 +82,10 @@ export interface Snapshot {
   readonly unacked: readonly OutboxEntry[];
   readonly unread: readonly OutboxEntry[];
   readonly question: string | null;
+  /** Effective device policy (host memory, mode, matrix scope, pool). */
+  readonly device: DeviceConfig;
+  /** Current device lock, when one is held. */
+  readonly deviceLock: { readonly sn: string; readonly holder: string; readonly acquiredAt: string } | null;
   readonly phase: Phase;
   readonly nextAction: string;
   /** English rendering of `nextAction` for the panel's language toggle. */
@@ -143,6 +149,8 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
   const unread = outboxEntries.slice(cursor);
   const questionRaw = await readTextOrNull(paths.questionMd);
   const question = questionRaw !== null && questionRaw.trim().length > 0 ? questionRaw.trim() : null;
+  const device = options.device;
+  const deviceLock = await readDeviceLock(paths);
   const phase = derivePhase(spec, validation, prereview?.value ?? null, audit?.value ?? null, state);
   let action = NEXT_ACTION[phase];
   let actionEn = NEXT_ACTION_EN[phase];
@@ -210,6 +218,8 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
     unacked,
     unread,
     question,
+    device,
+    deviceLock,
     phase,
     nextAction: action,
     nextActionEn: actionEn
@@ -242,6 +252,19 @@ export function renderStatusMarkdown(snapshot: Snapshot): string {
     `- 共享目录：\`${displayPath(paths, paths.shared)}/\``,
     `- 任务包：${spec === null ? '（尚未写入）' : `v${spec.specVersion} · ${spec.criteria.length} 条判据（must ${spec.criteria.filter((criterion) => criterion.weight === 'must').length} / should ${spec.criteria.filter((criterion) => criterion.weight === 'should').length}）`}`,
     `- 校验：${validation === null ? '—' : validation.errors.length === 0 ? `通过（${validation.warnings.length} 条提醒）` : `${validation.errors.length} 个错误`}`,
+    `- 设备：${
+      snapshot.device.mode === 'matrix'
+        ? `矩阵（${snapshot.device.matrix.map((family) => SCREEN_FAMILY_LABELS[family]).join(' / ')}）· 并发≤${snapshot.device.maxConcurrency}`
+        : `单机（主机内存 ${snapshot.device.hostMemoryGb}GB < ${snapshot.device.matrixMinMemoryGb}GB）`
+    }`,
+    ...(coverageGaps(snapshot.device).length === 0
+      ? []
+      : [
+          `- 屏幕族缺口：${coverageGaps(snapshot.device)
+            .map((gap) => `${DIMENSION_LABELS[gap.dimension]}·${SCREEN_FAMILY_LABELS[gap.family]}`)
+            .join(' / ')}`
+        ]),
+    ...(snapshot.deviceLock === null ? [] : [`- 设备锁：${snapshot.deviceLock.sn}（${snapshot.deviceLock.holder}）`]),
     `- 预审：${prereviewText}`,
     `- 派发：${state.roundDispatches ?? state.dispatches} 次（本轮）· 共 ${state.dispatches} 次`,
     `- 审计：${auditText}`,

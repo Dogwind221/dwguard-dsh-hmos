@@ -103,15 +103,15 @@ self-report never becomes a `pass`.
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
-| `dwguard_deveco` | DevEco CLI evidence: `env / build / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / attach / jobs / stop` |
+| `dwguard_deveco` | DevEco CLI evidence: `env / build / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / attach / jobs / stop`; defaults to the pool's bar phone and serialises device actions via `.shared/.device-lock.json` |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
-| `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and the gate recomputes the verdict; evidence bundle; acceptance report or rework order |
+| `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; evidence bundle; acceptance report or rework order |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
-| `dwguard_status` | Derive the phase, unread deliveries, un-acked dispatches, next action |
+| `dwguard_status` | Derive the phase, unread deliveries, un-acked dispatches, next action; shows host memory, device mode, matrix gaps and the device lock |
 
 ## Protocol (`.shared/`)
 
@@ -181,7 +181,23 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     stallMinutes: 30
     executor: auto         # auto = IDE-first | ide | cli
     devecocliPath: ''      # empty = auto-detect (PATH / npm global)
+    hostMemoryGb: 0        # 0 = auto-detect; >0 = override (CI/containers)
+    deviceMode: auto       # auto (by host memory) | single | matrix
+    matrixMinMemoryGb: 32  # < 32GB forces single-device; >= 32GB allows the matrix
+    deviceMatrix: [phone, widefold, foldable, triplefold]
+    matrixScope: {}        # families per dimension; empty = defaults (function/perf phone, aesthetic/a11y all)
+    allowMissingMatrixFamilies: false
+    devicePool: []         # { sn, family, apiLevel, kind: emulator|real }
+    maxConcurrency: 0      # 0 = auto by host memory (32GB -> 2, 64GB -> 4)
+    deviceLockTimeoutMs: 600000
 ```
+
+**Device matrix (0.6.0)**: memory is auto-detected; `< 32GB` stays single-device
+(16GB machines never start a matrix and get a warning if one is configured);
+`>= 32GB` enables the Huawei screen-family matrix (phone / widefold / foldable /
+triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
+`family`, and the gate refuses a missing family unless
+`allowMissingMatrixFamilies: true` explicitly waives it.
 
 ## Boundaries
 
@@ -199,7 +215,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
 npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 npm run typecheck
 npm run build
-npm test          # 55 tests
+npm test          # 61 tests
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

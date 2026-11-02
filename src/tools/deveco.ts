@@ -19,6 +19,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
+import { acquireDeviceLock, defaultDevice, releaseDeviceLock } from '../device.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { scanWorkspace } from '../scan.js';
@@ -239,7 +240,7 @@ export function createDevecoTool(
     parameters: {
       action: { type: 'string', required: true, enum: [...ACTIONS], description: '要执行的 devecocli 动作。' },
       module: { type: 'string', description: 'build/run 的模块名（可选）。' },
-      device: { type: 'string', description: 'run/log 的设备序列号或名称（可选）。' },
+      device: { type: 'string', description: '设备序列号（可选；缺省取设备池里的直板机）。' },
       level: { type: 'string', description: 'log 的级别 D/I/W/E/F（可选）。' },
       crash: { type: 'boolean', description: 'log 是否只看崩溃日志（可选）。' },
       apply: { type: 'string', description: 'run 的增量部署清单文件名（放在工程 .hvigor/ 下，可选）。' },
@@ -256,7 +257,7 @@ export function createDevecoTool(
       const paths = await pathsOf(exec, { options, ctx }, TOOL);
       const action = requiredEnum(args, 'action', ACTIONS, TOOL);
       const module = optionalString(args, 'module', TOOL, 120);
-      const device = optionalString(args, 'device', TOOL, 200);
+      let device = optionalString(args, 'device', TOOL, 200);
       const level = optionalString(args, 'level', TOOL, 1);
       const crash = args['crash'] === true;
       const applyFile = optionalString(args, 'apply', TOOL, 200);
@@ -273,6 +274,12 @@ export function createDevecoTool(
           extra.push(token);
         }
       }
+
+      const policy = options.device;
+      const DEVICE_ACTIONS = new Set(['run', 'log', 'ui', 'screenshot', 'layout', 'a11y', 'verify']);
+      const deviceAction = DEVICE_ACTIONS.has(action);
+      const resolvedDevice = device ?? defaultDevice(policy)?.sn;
+      if (device === undefined && deviceAction && resolvedDevice !== undefined) device = resolvedDevice;
 
       // Job control: list or stop background devecocli runs.
       if (action === 'jobs') {
@@ -469,6 +476,21 @@ export function createDevecoTool(
         });
       }
 
+      let lockHolder: string | null = null;
+      let lockNote = '';
+      if (deviceAction && policy.pool.length > 0 && device !== undefined && !useBackground) {
+        const lock = await acquireDeviceLock(paths, device, `${TOOL}:${action}`, policy.lockTimeoutMs, {
+          staleAfterMs: policy.lockTimeoutMs
+        });
+        if (!lock.ok) {
+          return fail(lock.reason, {
+            next: '等占用设备的一轮取证结束，或用 `dwguard_deveco`（action: device）查看设备池与模式。'
+          });
+        }
+        lockHolder = device;
+        lockNote = lock.staleStolen ? '（回收了过期锁）' : lock.waitedMs > 0 ? `（排队 ${lock.waitedMs}ms）` : '';
+      }
+
       let result: DevecoRun;
       try {
         result = await runner(binary, command, paths.workspace);
@@ -481,6 +503,8 @@ export function createDevecoTool(
             : `devecocli 执行失败：${message}`,
           { next: '确认 Command Line Tool 已安装、`devecocli --version` 可运行；或改用 hdc/DevEco Studio 取证。' }
         );
+      } finally {
+        if (lockHolder !== null) await releaseDeviceLock(paths, lockHolder);
       }
 
       await ensureShared(paths);
@@ -569,6 +593,11 @@ export function createDevecoTool(
       const detail = [
         `命令：\`${record.command}\``,
         `退出码：${result.code} · 耗时：${result.durationMs}ms`,
+        `设备策略：${policy.mode === 'matrix' ? `矩阵 ${policy.matrix.length} 族 · 并发≤${policy.maxConcurrency}` : `单机（主机内存 ${policy.hostMemoryGb}GB）`}${lockNote}`,
+        action === 'device'
+          ? `设备池：${policy.pool.length === 0 ? '（未配置）' : policy.pool.map((entry) => `${entry.sn}（${entry.family}/${entry.kind}）`).join(' · ')}`
+          : '',
+        ...policy.warnings.map((warning) => `提醒：${warning}`),
         '',
         result.stdout.trim().length === 0 ? '（无 stdout）' : '```text\n' + tail(result.stdout) + '\n```',
         result.stderr.trim().length === 0 ? '' : '\nstderr:\n```text\n' + tail(result.stderr, 20) + '\n```',

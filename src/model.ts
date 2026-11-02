@@ -38,6 +38,33 @@ export const DIMENSION_EVIDENCE: Record<Dimension, string> = {
 /** Whether a criterion must be verified before acceptance. */
 export type CriterionWeight = 'must' | 'should';
 
+/** Huawei screen families the multi-device matrix verifies against. */
+export const SCREEN_FAMILIES = ['phone', 'widefold', 'foldable', 'triplefold'] as const;
+
+/** One screen family (bar phone / wide fold / dual fold / triple fold). */
+export type ScreenFamily = (typeof SCREEN_FAMILIES)[number];
+
+/** Chinese labels used by generated documents. */
+export const SCREEN_FAMILY_LABELS: Record<ScreenFamily, string> = {
+  phone: '直板机',
+  widefold: '阔折叠',
+  foldable: '双折叠',
+  triplefold: '三折叠'
+};
+
+/** One device in the configured pool. */
+export interface DeviceEntry {
+  readonly sn: string;
+  readonly family: ScreenFamily;
+  readonly apiLevel?: number;
+  readonly kind: 'emulator' | 'real';
+}
+
+/** Whether a string is one of the screen families. */
+export function isScreenFamily(value: unknown): value is ScreenFamily {
+  return typeof value === 'string' && (SCREEN_FAMILIES as readonly string[]).includes(value);
+}
+
 /** Matchers a criterion assertion can use. */
 export const ASSERTION_MATCHERS = ['equals', 'contains', 'regex', 'range', 'gte', 'lte', 'oneOf', 'present'] as const;
 
@@ -134,6 +161,20 @@ export interface Check {
   readonly actual?: string;
   /** Machine verdict recomputed from `assertion` + `actual` by the audit gate. */
   readonly assertionVerdict?: 'pass' | 'fail';
+  /** Device serial the evidence was taken on (matrix mode requires it). */
+  readonly device?: string;
+  /** Screen family the device belongs to (matrix mode requires it). */
+  readonly family?: ScreenFamily;
+}
+
+/** One device recorded in an audit report. */
+export interface DeviceEvidence {
+  readonly sn: string;
+  readonly family: ScreenFamily;
+  readonly apiLevel?: number;
+  readonly kind?: 'emulator' | 'real';
+  readonly fontScale?: number;
+  readonly theme?: string;
 }
 
 /** Persisted workflow counters and cursor. */

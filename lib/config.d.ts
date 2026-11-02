@@ -7,6 +7,7 @@
  *
  * @module dwguard-dsh-hmos/config
  */
+import type { DeviceConfig } from './device.js';
 /** Loader-facing schema of the `dsh` row's `config` block. */
 export declare const Config: any;
 /** Fully resolved options used by every tool. */
@@ -28,6 +29,8 @@ export interface Options {
     readonly executor: 'auto' | 'ide' | 'cli';
     /** `devecocli` binary; empty means resolve from PATH. */
     readonly devecocliPath: string;
+    /** Effective device policy (host memory, mode, matrix scope, pool, lock timeout). */
+    readonly device: DeviceConfig;
 }
 /**
  * Normalize whatever the loader passed into complete options.

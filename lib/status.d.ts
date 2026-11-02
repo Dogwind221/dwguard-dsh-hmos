@@ -5,6 +5,7 @@
  * @module dwguard-dsh-hmos/status
  */
 import type { Options } from './config.js';
+import type { DeviceConfig } from './device.js';
 import type { OutboxEntry } from './dispatch.js';
 import type { SharedState, TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
@@ -35,6 +36,14 @@ export interface Snapshot {
     readonly unacked: readonly OutboxEntry[];
     readonly unread: readonly OutboxEntry[];
     readonly question: string | null;
+    /** Effective device policy (host memory, mode, matrix scope, pool). */
+    readonly device: DeviceConfig;
+    /** Current device lock, when one is held. */
+    readonly deviceLock: {
+        readonly sn: string;
+        readonly holder: string;
+        readonly acquiredAt: string;
+    } | null;
     readonly phase: Phase;
     readonly nextAction: string;
     /** English rendering of `nextAction` for the panel's language toggle. */
