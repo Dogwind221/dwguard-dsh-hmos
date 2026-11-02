@@ -233,3 +233,74 @@ hdc file recv /data/log/faultlog/faultlogger/<file> .\artifacts\logs\
 2. **数值取第一个数字**：`actual` 里第一个数字参与比较，长文本请只写关键数值；
 3. **actual 与 evidence 分开**：`actual` 是机器比较用的值，`evidence` 是人复核用的说明/路径，两者不能互相替代；
 4. 量不出来时不要编 `actual`——把判据判 `unverified`（must 会被闸门拦下），回到 `tasks/question.md` 说明为什么量不到。
+
+## 12. 取证剧本模板（0.5.0 起）
+
+一次审计 = 一份**可复现的剧本**。把下面模板复制到本轮审计记录里，按 beforeAll → 步骤 → afterAll 执行；每条判据的 `actual` 都从剧本里取，而不是事后回忆。
+
+### 12.1 模板
+
+```markdown
+### 剧本：<需求标题>（spec v<n> · audit #<n>）
+- 设备：<SN / 模拟器名> · <机型> · HarmonyOS <版本> (API <n>)
+- 环境：字体档 <默认 / 1.75x> · <浅色 / 深色> · 分辨率 <...>
+- 被测包：<bundleName>@<version> · HAP sha256 <...>
+
+#### beforeAll（整轮一次）
+1. 设备在线：`hdc list targets`
+2. 安装/确认包：`hdc install <hap>` 或 `hdc shell bm dump -n <bundle>`
+3. 清数据（冷状态）：`hdc shell bm clean -n <bundle> -d`
+4. 固定环境：字体档 / 深浅色 / 屏幕方向（记录设置路径与当前值）
+5. 基线截图 + 布局树：`hdc shell snapshot_display ...`、`hdc shell uitest dumpLayout ...`
+6. 清性能计数：`hdc shell "hidumper -s RenderService -a 'clearFpsCount'"`
+
+#### 步骤（每条判据一段）
+| 判据 | 动作（可脚本化） | 等待 | 取证 |
+| --- | --- | --- | --- |
+| `<F-01>` | `devecocli ui click --device <sn> <x> <y>` | `devecocli ui wait element "text=..."` | 截图 + `actual` |
+
+#### afterAll（整轮一次）
+1. 收尾日志：`hdc shell hilog -x` 取尾部并落盘；
+2. 恢复环境（字体 / 主题 / 方向 / 卸载测试包），记录恢复结果；
+3. 把所有证据文件写进 `checks[].evidenceFiles`。
+```
+
+### 12.2 等待（waitForIdle）
+
+- 动效/页面切换后**等 UI 稳定再取证**：先 `devecocli ui wait 500`（毫秒），再连续两次 `devecocli ui layout`，两次布局树一致才算 idle；不一致再等最多 1s；
+- 目标控件用 `devecocli ui wait element "text=确认"`（或 `id=` / `type=`）显式等待，**禁止固定 sleep 后盲截**；
+- 冷启动首帧不要用固定 sleep 代等待——首帧耗时走 `docs/perf-baseline.md` 第 4 节的外部 trace 采集。
+
+### 12.3 重试（retry）
+
+- 每个取证动作最多 **2 次重试**（共 3 次）；只重试"环境不稳定"类失败（控件未出现、设备忙、截图黑屏）；
+- 结果取**稳定那一次**；数值类判据取 3 次测量中位数（`actual` 写中位数，`note` 写 3 次原始值）；
+- 重试次数写进 `checks[].note`（如 `attempt=2/3`）；3 次仍失败 → 记 `unverified` / `fail`，不许无限重试。
+
+### 12.4 弹窗规则（popup rules）
+
+首启/权限/升级弹窗会挡住取证，按「识别 → 处理 → 记录」三步做：
+
+| 弹窗 | 识别特征（UI 树 text） | 处理 | 备注 |
+| --- | --- | --- | --- |
+| 隐私协议 | `隐私政策`、`同意`、`继续` | 点「同意 / 同意并继续」 | 首次启动必须截图留证 |
+| 权限申请 | `允许`、`仅使用期间允许`、`禁止` | 按判据意图选择（测拒绝路径时点「禁止」） | 拒绝路径必须单独取证 |
+| 升级 / 公告 | `立即更新`、`稍后`、`以后再说` | 点「稍后」或关闭 | 关闭后截图确认 |
+| 锁屏 / 系统弹层 | 锁屏界面、系统级弹层 | 先解锁屏幕（模拟器手动滑动）再测 | 解锁状态写进环境 |
+
+- 弹窗**关不掉**：截图 + `hdc shell hilog` 片段，记 `blocker`，不要绕过；
+- 新发现的弹窗规则追加到 `knowledge/popup-rules.md`，下一轮直接复用。
+
+### 12.5 与断言的关系
+
+剧本里的每个「动作 + 等待 + 测量」产出一条 `checks[].actual`，格式对齐任务包里的 `assertion`（见第 11 节）：
+
+```json
+{
+  "criterionId": "P-02",
+  "result": "pass",
+  "actual": "点击→列表出现 96ms（3 次中位数）",
+  "evidence": "截图 + hitchs 增量 0（>16.67ms）",
+  "note": "attempt=1/3"
+}
+```

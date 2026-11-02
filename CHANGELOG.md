@@ -4,10 +4,11 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.5.0 — unreleased
+## 0.5.0 — 2026-11-02
 
 The "assertions" release: a criterion that states a number can now be judged by
-the audit gate itself instead of by an auditor's prose.
+the audit gate itself instead of by an auditor's prose, and evidence gathering
+gets a repeatable script template plus external interaction-trace recipes.
 
 ### Added
 
@@ -24,6 +25,14 @@ the audit gate itself instead of by an auditor's prose.
   and rework documents render 断言 / 实测值 / 断言判定 columns.
 - Proposal + migration notes: `docs/0.5.0-assertion-plan.md`; guidance added to
   the `hmos-acceptance-rubric` and `hmos-audit-playbook` skills.
+- **P1** — evidence-gathering script template in `skills/hmos-audit-playbook.md`
+  §12: beforeAll / afterAll, `waitForIdle` (layout-stability check), retry budget
+  (`attempt=n/3`), and a popup rule table (privacy / permission / upgrade / lock
+  screen).
+- **P2** — interaction-trace recipe in `docs/perf-baseline.md` §4: external fps
+  and jank buckets (`hidumper -s RenderService -a 'fps|hitchs <bundle>'`),
+  `hitrace` capture as review material, and click→usable-layout timing as
+  `actual` (app-side `hiTraceMeter` marks are auxiliary only).
 
 ### Changed
 
