@@ -33,6 +33,20 @@ This plugin makes the hand-off explicit:
 
 Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.6).
 
+### Install from npm
+
+> **Installing the plugin is not `npm install`.** `npm install` only puts the
+> package in `node_modules`; it does not register a DSH profile entry. Use DSH's
+> plugin installer so the package is pulled from npm and registered:
+
+| Entry | Command / action |
+| --- | --- |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.6.6`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.6.6` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.6.6` |
+
+Omit `@0.6.6` to follow the latest release.
+
 The `desktop` profile is managed **exclusively by the desktop app** — the CLI
 refuses `dsh plugin --profile desktop …`. Pick the path that matches how you run
 DSH:
@@ -283,7 +297,10 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
   (screenshots, UI tree) is captured by DSH itself.
 - State is derived from artifacts, not from tool claims.
 
-## Development
+## Development (source build & tests)
+
+> `npm install` here is only for **source development/testing**, not for
+> installing the plugin; see [Install](#install).
 
 ```bash
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery

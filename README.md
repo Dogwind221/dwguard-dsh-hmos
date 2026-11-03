@@ -67,6 +67,18 @@ flowchart TD
 
 已发布到 npm：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.6.6）。
 
+### 从 npm 拉取（推荐）
+
+> **注意：安装插件不是 `npm install`。** `npm install` 只会把包放进 `node_modules`，不会注册到 DSH 的 profile；正确入口是 DSH 的插件安装器，由它从 npm 拉取并注册。
+
+| 入口 | 命令 / 操作 |
+| --- | --- |
+| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@0.6.6`） |
+| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.6.6` |
+| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.6.6` |
+
+安装器会从 npm registry 解析版本；想跟最新版就省略 `@0.6.6`。下文分别说明桌面版与 CLI profile 的细节。
+
 先确认你跑的是哪种入口——**`desktop` profile 由桌面应用独占管理，命令行改不了它**（`dsh plugin --profile desktop …` 会被明确拒绝），所以两种入口的安装方式不同：
 
 | 启动方式 | profile | 安装入口 |
@@ -448,7 +460,9 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
 
 ---
 
-## 开发
+## 开发（源码构建与测试）
+
+> 这里的 `npm install` 只用于**源码开发/测试**，不是安装插件的方式；用户安装请看上方 [安装](#安装)。
 
 `lib/` 是随仓库提交的构建产物，**使用插件不需要编译**。只有改 `src/` 时才需要重新构建并一起提交：
 
