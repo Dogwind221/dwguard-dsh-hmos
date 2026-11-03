@@ -109,7 +109,7 @@ how DSH actually manages profiles.
 
 ### Added
 
-- npm publication (`dwgward-dsh-hmos` on the public registry; installed with
+- npm publication (`dwguard-dsh-hmos` on the public registry; installed with
   `dsh plugin add dwguard-dsh-hmos` in CLI profiles or the **Plugins → Add
   plugin** dialog in the desktop app) plus an npm badge in both READMEs.
 - Trusted publishing (OIDC) for the tag-triggered publish workflow: no

@@ -42,6 +42,35 @@ export function bumpVersion(current, bump) {
   return `${major}.${minor}.${patch}`;
 }
 
+/**
+ * Rewrite the version references that live in the READMEs so a bump can never
+ * leave the install instructions pinning an older release.
+ *
+ * The patterns are deliberately narrow: only the "current version" note, the
+ * `dwguard-dsh-hmos@x.y.z` pin examples and the `git tag vx.y.z` release
+ * command are rewritten. Historical CHANGELOG entries stay untouched.
+ *
+ * @param text - current README text.
+ * @param version - version to write, e.g. `0.6.1`.
+ * @param lang - `zh` for README.md, `en` for README.en.md.
+ */
+export function syncVersionText(text, version, lang) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`invalid version: ${version}`);
+  const patterns = [
+    [/dwguard-dsh-hmos@\d+\.\d+\.\d+/g, `dwguard-dsh-hmos@${version}`],
+    [/git tag v\d+\.\d+\.\d+/g, `git tag v${version}`],
+    [/git push origin v\d+\.\d+\.\d+/g, `git push origin v${version}`]
+  ];
+  if (lang === 'zh') {
+    patterns.unshift([/（当前 \d+\.\d+\.\d+）/g, `（当前 ${version}）`]);
+  } else {
+    patterns.unshift([/\(current \d+\.\d+\.\d+\)/g, `(current ${version})`]);
+  }
+  let next = text;
+  for (const [pattern, replacement] of patterns) next = next.replace(pattern, replacement);
+  return next;
+}
+
 function parseArgs(argv) {
   const options = {};
   for (const arg of argv) {
@@ -84,11 +113,37 @@ async function main(argv) {
       : bumpVersion(current, options.bump === undefined || options.bump === 'true' ? 'patch' : options.bump);
   if (!/^\d+\.\d+\.\d+$/.test(next)) throw new Error(`invalid target version: ${next}`);
 
+  // The changelog entry is written by hand before the release; refuse to bump
+  // when the heading is missing so a release can never ship notes-less.
+  const changelogPath = join(ROOT, 'CHANGELOG.md');
+  const changelog = await readFile(changelogPath, 'utf8');
+  if (!new RegExp(`^## ${next.replace(/\./g, '\\.')} — `, 'm').test(changelog)) {
+    throw new Error(
+      `CHANGELOG.md 缺少 \`## ${next} — <date>\` 小节；先写变更记录，再跑 release。`
+    );
+  }
+
   console.log(`version: ${current} -> ${next}${options['dry-run'] === 'true' ? ' (dry run)' : ''}`);
-  if (options['dry-run'] === 'true') return;
+  if (options['dry-run'] === 'true') {
+    console.log('would update: package.json, README.md, README.en.md');
+    return;
+  }
 
   pkg.version = next;
   await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
+
+  // Keep the install pins in sync with the version we just wrote. 0.4.2 was a
+  // hand-fix for exactly this drift; the bump must handle it from now on.
+  for (const [file, lang] of [['README.md', 'zh'], ['README.en.md', 'en']]) {
+    const filePath = join(ROOT, file);
+    const before = await readFile(filePath, 'utf8');
+    const after = syncVersionText(before, next, lang);
+    if (after !== before) {
+      await writeFile(filePath, after, 'utf8');
+      console.log(`updated version references: ${file}`);
+    }
+  }
+
   console.log('rebuilding lib/ ...');
   runNpm(['run', 'build']);
   console.log('packing ...');
