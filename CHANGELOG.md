@@ -4,6 +4,57 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.1 — 2026-11-03
+
+The aesthetic-learning release: preferences become a first-class, auditable
+record instead of a fresh argument every round. `learn` only proposes; the user
+chooses; only then is the profile written.
+
+### Added
+
+- **`dwguard_aesthetic`** (the 14th tool), four actions:
+  - `profile` (`list` / `get` / `write` / `remove`): writes require a `source`
+    and a `confidence`; a write without a source is rejected. `remove` only
+    marks the entry `superseded` — history is never deleted.
+  - `learn`: deterministic extraction (clause split, area keywords, numbers,
+    units, colours). Default returns proposals/conflicts and writes nothing;
+    `apply` requires `confirmed: true`; a same-area value conflict requires a
+    `choice`, the loser is marked `superseded` and the decision is appended to
+    `aesthetic-history.jsonl`. Confidence: confirm +0.1 / reject −0.2 / repeat
+    +0.05, clamped to 0–1.
+  - `baseline` (`save` / `list`): saving is refused unless the current pack has
+    a passing audit **and** a user confirmation; bounds JSON and an optional
+    screenshot are copied into `artifacts/visual-baseline/<specVersion>/` with
+    their SHA-256.
+  - `compare`: numeric layout-tree diff — spacing/radius ±2vp, font size and
+    colours zero tolerance; result is written to
+    `artifacts/aesthetic/compare-latest.json`.
+- **`profileRef` on criteria/checks**: `dwguard_spec` accepts an aesthetic
+  profile reference (`AES-RADIUS-01`) and warns (`W_AEST_PROFILE_HINT`) when an
+  aesthetic criterion ignores an existing preference; malformed refs are
+  rejected. The audit gate refuses a `profileRef` that is missing or
+  `superseded`, and both the audit and acceptance reports render an
+  「审美档案」 column plus a 「审美基线差异」 section; `audit-<n>.json` records
+  `aesthetic.profileRefs` and the latest `compare`.
+- **Cold start**: `learn` (`coldStart: true`) seeds palette / spacing / radius /
+  type from the project's `resources/base/element/color.json` and `float.json`.
+
+### Tests
+
+- `tests/aesthetic.test.mjs`: all eleven acceptance criteria (AEST-A … AEST-K)
+  plus deterministic extraction — profile write/read, learn-never-writes,
+  confidence deltas, same-area conflicts, apply-with-choice, baseline
+  prerequisites, compare thresholds, `profileRef` gate, cold start, report
+  rendering, no-source rejection.
+- `tests/version.test.mjs` + `tests/release.test.mjs`: release hygiene — README
+  version pins and package-name spelling must track `package.json`, and a bump
+  must find a CHANGELOG section for the target version.
+
+### Changed
+
+- Tool count 13 → 14; README, preset comment and the `dwguard-hmos` skill are
+  updated. `scripts/release.mjs` now syncs README version references on bump.
+
 ## 0.6.0 — 2026-11-02
 
 Device-matrix release: every verdict now records **which device and screen family**

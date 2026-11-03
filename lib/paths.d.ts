@@ -26,6 +26,16 @@ export interface SharedPaths {
     readonly auditProgress: string;
     /** Append-only gate calibration ledger (`knowledge/calibration.jsonl`). */
     readonly calibration: string;
+    /** Aesthetic preference profile (`knowledge/aesthetic-profile.md`, table + JSON fence). */
+    readonly aestheticProfileMd: string;
+    /** Append-only aesthetic history (`knowledge/aesthetic-history.jsonl`). */
+    readonly aestheticHistory: string;
+    /** Visual baselines, one directory per task-pack version. */
+    readonly visualBaselineDir: string;
+    /** Latest baseline comparison (`artifacts/aesthetic/compare-latest.json`). */
+    readonly aestheticCompare: string;
+    /** Aesthetic artifacts directory (`artifacts/aesthetic`). */
+    readonly aestheticDir: string;
 }
 /**
  * Resolve the protocol layout for a workspace.

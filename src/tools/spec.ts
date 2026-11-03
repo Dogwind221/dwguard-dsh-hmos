@@ -9,6 +9,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
+import { readProfile } from '../aesthetic.js';
 import type { CriterionAssertion, TaskPack } from '../model.js';
 import { ASSERTION_MATCHERS, DIMENSIONS, DIMENSION_LABELS } from '../model.js';
 import { displayPath } from '../paths.js';
@@ -75,6 +76,7 @@ function parseCriteria(raw: Record<string, unknown>): CriterionInput[] {
       verify: requiredString(item, 'verify', label, 600),
       weight,
       ruleId: optionalString(item, 'ruleId', label, 60),
+      profileRef: optionalString(item, 'profileRef', label, 40),
       ...(assertion === undefined ? {} : { assertion })
     };
   });
@@ -135,6 +137,11 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
               type: 'string',
               description:
                 '引用的规则 ID：`DW-FN-01`…`DW-A11Y-07`，或别名 `STATE-002` / `AGC-RJ-013` 等。目录见 skill `hmos-acceptance-rubric`。'
+            },
+            profileRef: {
+              type: 'string',
+              description:
+                '审美档案 ID（0.6.1，如 `AES-RADIUS-01`）：只有审美判据应带；审计会校验档案存在且 active，并把档案值渲染进报告。'
             },
             weight: {
               type: 'string',
@@ -207,7 +214,8 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
             updatedAt: now
           }
         );
-        const validation = validateTaskPack(pack, options);
+        const profile = await readProfile(paths);
+        const validation = validateTaskPack(pack, options, profile);
         if (validation.errors.length > 0) {
           return fail(`任务包 v${specVersion} 未写入：${validation.errors.length} 个缺口必须先补。`, {
             detail: renderIssues(validation),

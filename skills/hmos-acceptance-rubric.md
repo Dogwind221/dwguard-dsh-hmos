@@ -206,3 +206,23 @@
 - 数值类 matcher 取 `actual` 里的**第一个数字**，所以实测值可以带单位（`12vp`、`720ms`、`4.9:1`）；
 - 带 `assertion` 的判据，审计时 `checks[].actual` **必填**；断言不通过却写 `pass` 会被闸门拒绝；
 - 写不出断言的判据（如"看起来舒服"）说明还没可证伪，请改写判据而不是硬造断言。
+
+## 8. 引用审美档案（`profileRef`，0.6.1 起）
+
+用户确认过的审美数值不用每轮重新争论：先把它写进审美档案，判据只引用档案 ID。
+
+```jsonc
+{
+  "id": "A-02",
+  "dimension": "aesthetic",
+  "statement": "卡片圆角与审美档案 AES-RADIUS-01 一致（20vp）",
+  "verify": "布局树 bounds 实测圆角 + 截图对照",
+  "ruleId": "DW-AES-04",
+  "profileRef": "AES-RADIUS-01",
+  "assertion": { "matcher": "range", "min": 18, "max": 22, "unit": "vp" }
+}
+```
+
+- 档案用 `dwguard_aesthetic`（`profile write` 需 `source` + `confidence`；或 `learn` 提议后用户确认再 `apply`）维护；
+- 审计闸门会拒绝**不存在**或**已 superseded** 的 `profileRef`，并在审计/验收报告里渲染「审美档案」与「审美基线差异」；
+- 基线回归用 `compare`：间距/圆角 ±2vp、字号与颜色 0 容差；差异是回归还是新设计，由用户拍板并重建基线。

@@ -31,6 +31,10 @@ import {
 } from './model.js';
 import type { DeviceConfig } from './device.js';
 import { matrixFamilies } from './device.js';
+import type { AestheticProfile } from './aesthetic.js';
+import { AREA_LABELS, findProfileEntry, valueLabel } from './aesthetic.js';
+import type { BaselineCompareResult } from './baseline.js';
+import { renderCompareMarkdown } from './baseline.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { isKnownRuleId } from './rules.js';
@@ -64,6 +68,8 @@ export interface CheckInput {
   readonly device?: string;
   /** Screen family the device belongs to. */
   readonly family?: ScreenFamily;
+  /** Aesthetic-profile entry this check measured against (0.6.1). */
+  readonly profileRef?: string;
 }
 
 /** Gate outcome. */
@@ -101,6 +107,23 @@ export interface PrereviewReport {
   readonly gate: Gate;
 }
 
+/** One profile reference recorded by an audit. */
+export interface AestheticAuditRef {
+  readonly criterionId: string;
+  readonly profileRef: string;
+  readonly status: 'active' | 'missing' | 'superseded';
+  readonly decision?: string;
+  readonly area?: string;
+  readonly value?: string;
+}
+
+/** Aesthetic evidence attached to an audit report (0.6.1). */
+export interface AestheticAuditSummary {
+  readonly profileRefs: readonly AestheticAuditRef[];
+  /** Latest baseline comparison, when one was run for this pack version. */
+  readonly compare?: BaselineCompareResult;
+}
+
 /** A persisted delivery audit. */
 export interface AuditReport {
   readonly id: number;
@@ -115,6 +138,8 @@ export interface AuditReport {
   readonly dimensions: readonly DimensionSummary[];
   /** Devices referenced by this audit (matrix mode), in first-seen order. */
   readonly devices?: readonly DeviceEvidence[];
+  /** Aesthetic profile refs and baseline diff (0.6.1). */
+  readonly aesthetic?: AestheticAuditSummary;
 }
 
 const SELF_REPORT_MARKERS = ['自测通过', '自认为', '开发者确认', 'deveco 已确认', '应该没问题', '目测没问题', '看起来正常'];
@@ -170,6 +195,9 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
     ...(item.actual === undefined || item.actual.trim().length === 0 ? {} : { actual: item.actual.trim() }),
     ...(item.device === undefined || item.device.trim().length === 0 ? {} : { device: item.device.trim() }),
     ...(item.family === undefined ? {} : { family: item.family }),
+    ...(item.profileRef === undefined || item.profileRef.trim().length === 0
+      ? {}
+      : { profileRef: item.profileRef.trim() }),
     ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
       ? {}
       : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
@@ -349,7 +377,8 @@ export function gateDelivery(
   pack: TaskPack,
   checks: readonly Check[],
   findings: readonly Finding[],
-  policy?: DeviceConfig
+  policy?: DeviceConfig,
+  aesthetic?: AestheticProfile
 ): Gate {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -417,6 +446,31 @@ export function gateDelivery(
   }
   if (missing.length > 0) {
     errors.push(`以下 must 判据没有检查记录：${missing.map((id) => `\`${id}\``).join('、')}。`);
+  }
+
+  // Aesthetic profile references: a ref that does not resolve to an active
+  // entry cannot be used as an acceptance basis (0.6.1 AEST-H).
+  if (aesthetic !== undefined) {
+    const checkRef = (ref: string, owner: string): void => {
+      const entry = findProfileEntry(aesthetic, ref);
+      if (entry === undefined) {
+        errors.push(`${owner} 引用的审美档案 \`${ref}\` 不存在；先在 \`dwguard_aesthetic\` 里建立该偏好。`);
+        return;
+      }
+      if (entry.status !== 'active') {
+        errors.push(`${owner} 引用的审美档案 \`${ref}\` 已 superseded，不能作为本轮验收依据。`);
+      }
+    };
+    for (const criterion of pack.criteria) {
+      if (criterion.profileRef !== undefined && criterion.profileRef.length > 0) {
+        checkRef(criterion.profileRef, `判据 \`${criterion.id}\``);
+      }
+    }
+    for (const check of checks) {
+      if (check.profileRef !== undefined && check.profileRef.length > 0) {
+        checkRef(check.profileRef, `检查 \`${check.criterionId}\``);
+      }
+    }
   }
 
   for (const dimension of DIMENSIONS) {
@@ -597,12 +651,22 @@ export function renderDeviceMatrix(pack: TaskPack, checks: readonly Check[], pol
   return table(['判据', '维度', ...families.map((family) => SCREEN_FAMILY_LABELS[family])], rows);
 }
 
+/** One cell for the aesthetic-profile column. */
+function aestheticCell(profileRef: string | undefined, profile: AestheticProfile | undefined): string {
+  if (profileRef === undefined || profileRef.length === 0) return '—';
+  if (profile === undefined) return `\`${profileRef}\``;
+  const entry = findProfileEntry(profile, profileRef);
+  if (entry === undefined) return `\`${profileRef}\`<br>缺失`;
+  return `\`${profileRef}\`<br>${AREA_LABELS[entry.area]} ${valueLabel(entry.value)}`;
+}
+
 /** Render `artifacts/audit-<n>.md`. */
 export function renderAuditMarkdown(
   report: AuditReport,
   pack: TaskPack,
   paths: SharedPaths,
-  policy?: DeviceConfig
+  policy?: DeviceConfig,
+  aesthetic?: AestheticProfile
 ): string {
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const checkRows = report.checks.map((check) => {
@@ -613,6 +677,7 @@ export function renderAuditMarkdown(
       criterion === undefined ? '—' : DIMENSION_LABELS[criterion.dimension],
       check.device ?? '—',
       check.family === undefined ? '—' : SCREEN_FAMILY_LABELS[check.family],
+      aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
       RESULT_LABELS[check.result],
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual === undefined ? '—' : check.actual,
@@ -673,7 +738,7 @@ export function renderAuditMarkdown(
     report.checks.length === 0
       ? '（无）'
       : table(
-          ['判据', '维度', '设备', '屏幕族', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
+          ['判据', '维度', '设备', '屏幕族', '审美档案', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
           checkRows
         ),
     '',
@@ -778,7 +843,8 @@ export function renderAcceptanceMarkdown(
   report: AuditReport,
   pack: TaskPack,
   paths: SharedPaths,
-  policy?: DeviceConfig
+  policy?: DeviceConfig,
+  aesthetic?: AestheticProfile
 ): string {
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const passed = report.checks.filter((check) => check.result === 'pass');
@@ -792,6 +858,7 @@ export function renderAcceptanceMarkdown(
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual ?? '—',
       check.family === undefined ? check.device ?? '—' : `${check.device ?? '—'} · ${SCREEN_FAMILY_LABELS[check.family]}`,
+      aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
       check.evidence
     ];
   });
@@ -816,7 +883,7 @@ export function renderAcceptanceMarkdown(
     '',
     '## 2. 证据索引',
     '',
-    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '独立证据'], rows),
+    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '审美档案', '独立证据'], rows),
     '',
     '### 2.1 屏幕族矩阵',
     '',
@@ -835,6 +902,12 @@ export function renderAcceptanceMarkdown(
             device.kind ?? '—'
           ])
         ),
+    '',
+    '### 2.2 审美基线差异',
+    '',
+    report.aesthetic?.compare === undefined
+      ? '（本轮未运行 `dwguard_aesthetic compare`；审美判据以档案与截图证据为准。）'
+      : renderCompareMarkdown(report.aesthetic.compare, '####'),
     '',
     '## 3. 遗留风险',
     '',

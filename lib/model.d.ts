@@ -69,6 +69,8 @@ export interface Criterion {
     readonly ruleId?: string;
     /** Optional declarative expectation the audit gate can recompute. */
     readonly assertion?: CriterionAssertion;
+    /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`, 0.6.1). */
+    readonly profileRef?: string;
 }
 /** The frozen task pack DSH hands to the executor agent. */
 export interface TaskPack {
@@ -122,6 +124,8 @@ export interface Check {
     readonly device?: string;
     /** Screen family the device belongs to (matrix mode requires it). */
     readonly family?: ScreenFamily;
+    /** Aesthetic-profile entry this check measured against (0.6.1). */
+    readonly profileRef?: string;
 }
 /** One device recorded in an audit report. */
 export interface DeviceEvidence {

@@ -65,7 +65,7 @@ flowchart TD
 
 要求：DSH `0.2.1-rc.x`（`engines.dsh: >=0.2.1-rc.0 <0.3.0`）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-已发布到 npm：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.6.0）。
+已发布到 npm：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.6.1）。
 
 先确认你跑的是哪种入口——**`desktop` profile 由桌面应用独占管理，命令行改不了它**（`dsh plugin --profile desktop …` 会被明确拒绝），所以两种入口的安装方式不同：
 
@@ -77,7 +77,7 @@ flowchart TD
 ### 桌面版：应用内安装
 
 1. 左侧栏打开 **插件** → 右上 **添加插件**；
-2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.6.0`）→ 安装、选配置层、确认；
+2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.6.1`）→ 安装、选配置层、确认；
 3. 装完按提示重启应用（托盘里也要退出）。
 
 同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
@@ -89,7 +89,7 @@ flowchart TD
 dsh plugin --profile web add dwguard-dsh-hmos
 
 # 固定版本
-dsh plugin --profile web add dwguard-dsh-hmos@0.6.0
+dsh plugin --profile web add dwguard-dsh-hmos@0.6.1
 
 # 机器上没有 dsh 命令时，用 npm 上的 CLI 包
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
@@ -108,7 +108,7 @@ dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
 - 桌面版：**插件** 页出现 `DwGuard-Dsh-Hmos`；
 - 命令行：`dsh --profile web --dump-config` 里能看到 `# == dwguard-dsh-hmos`。
 
-装好后，**新开的会话**都会拿到 13 个工具、3 个 skill 和一段策略提示词。让 DSH「给鸿蒙做个 XX 页面」，它会自动加载 `dwguard-hmos` skill。已经打开的旧会话如果没热加载到新工具，新开一个会话即可（工具表在会话开始时就固定了）。
+装好后，**新开的会话**都会拿到 14 个工具、3 个 skill 和一段策略提示词。让 DSH「给鸿蒙做个 XX 页面」，它会自动加载 `dwguard-hmos` skill。已经打开的旧会话如果没热加载到新工具，新开一个会话即可（工具表在会话开始时就固定了）。
 
 ### 可选：独立的 Agent 预设
 
@@ -222,7 +222,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 
 ---
 
-## 十三个工具
+## 十四个工具
 
 | 工具 | 阶段 | 作用 | 关键闸门 |
 | --- | --- | --- | --- |
@@ -234,7 +234,8 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_shadow` | 执行期 | 影子审查：**增量扫描**（只看上次之后改过的文件），自动尝试调用宿主的 `harmony_ui_tree`（失败则需手动传 `uiTree`），写 `artifacts/shadow-<n>.json`；**只把新增**的 must 级风险写 `shadow-risk` 出站 | 只在 dispatched / rework 阶段可跑；`status` 超过 `shadowIntervalMinutes` 会提醒；同一问题不会重复刷屏 |
 | `dwguard_rules` | 全程 | 查规则目录（`list` / `get`，支持别名）与本地官方语料（`search`，返回 file:line + 出处 URL） | 语料目录由 `docsDir` / `DWG_DOCS_DIR` 指定；`get` 未知 ID 直接报错 |
 | `dwguard_audit_dimension` | 审计取证 | 单个维度子代理返回后立刻记录（`passed` / `failed` / `note`） | 写 `artifacts/audit-progress.json`；面板据此让四张卡**逐张落地**，而不是同时亮 |
-| `dwguard_audit` | 外部审计 | 汇总逐条检查与发现，自动出返工单或验收报告 | must 全覆盖、四维全评估、无未关闭 blocker/major、失败项不许记成 unverified；带 `assertion` 的判据必须给 `actual` 实测值，闸门重算断言并拒绝矛盾结论；matrix 模式（主机内存 ≥32GB）下 checks 必须带 `device`+`family`，审美/无障碍缺屏族会被拒绝；证据文件缺失或**超过 20MB/份、100MB/包**整次拒绝；完成后清空进度文件；每次审计自动记账 |
+| `dwguard_audit` | 外部审计 | 汇总逐条检查与发现，自动出返工单或验收报告 | must 全覆盖、四维全评估、无未关闭 blocker/major、失败项不许记成 unverified；带 `assertion` 的判据必须给 `actual` 实测值，闸门重算断言并拒绝矛盾结论；matrix 模式（主机内存 ≥32GB）下 checks 必须带 `device`+`family`，审美/无障碍缺屏族会被拒绝；`profileRef` 引用不存在/已 superseded 的审美档案 → error；证据文件缺失或**超过 20MB/份、100MB/包**整次拒绝；完成后清空进度文件；每次审计自动记账 |
+| `dwguard_aesthetic` | 审美学习（0.6.1） | `profile`（list/get/write/remove 审美档案）、`baseline`（save/list 视觉基线）、`compare`（布局树数值 diff）、`learn`（从用户确认/驳回/审计发现/项目资源提议偏好） | 写档案必须带 `source` + `confidence`；`learn` 默认只提议不落盘，`apply` 必须 `confirmed: true`，同领域不同值必须 `choice` 裁决；`baseline save` 必须有通过审计 + 用户确认；`compare` 间距/圆角 ±2vp、字号/颜色 0 容差 |
 | `dwguard_calibration` | 收尾 | 闸门准确率账本：`report` 算四维漏检率，`miss` 记录"审计通过但用户后来发现问题" | `miss` 必须针对已通过的审计；账本 `knowledge/calibration.jsonl` 只追加 |
 | `dwguard_confirm` | 收尾 | 记录用户对验收报告的决定：`accept` 结束本轮，`new_round` 迭代号 +1 | 必须有通过的审计与 acceptance-report；写 `artifacts/confirmation-<n>.json` 并更新 state |
 | `dwguard_knowledge` | 沉淀 | 追加到 `knowledge/<topic>.md` | 索引按 kind+结论去重 |
@@ -243,6 +244,15 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 每个工具都返回同一个信封：`{ ok, summary, detail, files, next }`。`detail` 是可直接展示的 Markdown；`next` 是唯一的下一步建议。
 
 规则来源与"官方文档还没学什么"分开记录：[docs/rule-sources.md](docs/rule-sources.md)（已引用出处）与 [docs/learning-backlog.md](docs/learning-backlog.md)（未覆盖清单 + 0.4 优先顺序）。0.4.0 范围与验收见 [docs/0.4.0-plan.md](docs/0.4.0-plan.md)。
+
+### 审美学习（0.6.1）
+
+审美判据不再每轮重新争论：
+
+1. `dwguard_aesthetic` 的 `learn` 从用户确认/驳回、审计发现、校准漏检与项目 `resources/base/element/color.json` / `float.json` 里**确定性抽取**偏好（间距/圆角/字号/配色/动效/深色/图标/卡片），默认只返回提议与冲突，不写档案；
+2. 用户裁决后带 `apply: true` + `confirmed: true`（冲突还要 `choice`）写入 `knowledge/aesthetic-profile.md`，历史追加到 `aesthetic-history.jsonl`，旧值标 `superseded` 而不删除；
+3. `dwguard_spec` 的审美判据可带 `profileRef: "AES-RADIUS-01"`；`dwguard_audit` 校验引用存在且 active，并在审计/验收报告里渲染「审美档案」列；
+4. 通过审计 + 用户确认后可用 `baseline save` 存视觉基线；下一轮用 `compare` 做数值回归（间距/圆角 ±2vp，字号/颜色 0 容差），差异自动进验收报告的「审美基线差异」小节。
 
 ### 三个 Skill
 
@@ -278,10 +288,14 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
 │  ├─ scan-<n>.json          # 独立静态扫描结果（规则 ID + file:line）
 │  ├─ shadow-<n>.json        # 影子审查记录（含可选 UI 树摘要）
 │  ├─ confirmation-<n>.json  # 用户确认记录（accept / new_round）
+│  ├─ visual-baseline/<specVersion>/  # 视觉基线：bounds JSON + 截图（每份带 sha256）
+│  ├─ aesthetic/compare-latest.json   # 最近一次审美基线 diff（验收报告引用）
 │  └─ acceptance-report.md   # 验收报告（通过时）
 └─ knowledge/
    ├─ index.json             # 去重索引
    ├─ calibration.jsonl      # 闸门账本：审计/确认/漏检（每行一条）
+   ├─ aesthetic-profile.md   # 审美档案（表格 + JSON 块）
+   ├─ aesthetic-history.jsonl# 追加式：applied / superseded / conflict
    └─ <topic>.md             # 按主题沉淀
 ```
 
@@ -411,12 +425,12 @@ New-Item -ItemType Junction -Path node_modules\@deepseek-ai `
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.6.0 && git push origin v0.6.0`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.6.1 && git push origin v0.6.1`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（61 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本、注册）；
+2. `npm test` 全绿（81 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、审美学习（AEST-A~K：档案写读 / learn 不落盘 / 置信度 / 冲突裁决 / 基线前置 / compare 阈值 / profileRef 闸门 / 冷启动 / 报告渲染）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

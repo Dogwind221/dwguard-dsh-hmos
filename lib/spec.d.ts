@@ -8,6 +8,7 @@
  * @module dwguard-dsh-hmos/spec
  */
 import type { Options } from './config.js';
+import type { AestheticProfile } from './aesthetic.js';
 import type { Criterion, CriterionAssertion, CriterionWeight, Dimension, TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** The model-supplied shape of one criterion. */
@@ -21,6 +22,8 @@ export interface CriterionInput {
     readonly ruleId?: string;
     /** Optional machine-checkable expectation (see {@link normalizeAssertion}). */
     readonly assertion?: CriterionAssertion;
+    /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`). */
+    readonly profileRef?: string;
 }
 /** The model-supplied shape of a task pack. */
 export interface TaskPackInput {
@@ -62,8 +65,9 @@ export declare function assertionLabel(assertion: CriterionAssertion): string;
  * Validate a pack against the workflow's acceptance contract.
  * @param pack - the built task pack.
  * @param options - resolved plugin options (dimension minimums).
+ * @param profile - optional aesthetic profile, used for profileRef hints.
  */
-export declare function validateTaskPack(pack: TaskPack, options: Options): ValidationResult;
+export declare function validateTaskPack(pack: TaskPack, options: Options, profile?: AestheticProfile): ValidationResult;
 /**
  * Normalize model input into a canonical pack. Trims text, dedupes constraints,
  * assigns `must` as the default weight, and fills counters from the caller.

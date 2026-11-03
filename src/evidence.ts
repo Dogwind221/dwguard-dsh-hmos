@@ -55,7 +55,7 @@ export function bundleDir(paths: SharedPaths, auditId: number): string {
 }
 
 /** Resolve one evidence path, refusing anything outside `.shared/`. */
-function resolveInside(paths: SharedPaths, file: string): string {
+export function resolveSharedPath(paths: SharedPaths, file: string): string {
   if (isAbsolute(file)) throw new EvidenceError(`证据文件必须写相对 \`.shared/\` 的路径：${file}`);
   const source = resolve(paths.shared, file);
   const rel = relative(paths.shared, source);
@@ -73,7 +73,7 @@ export async function missingEvidence(paths: SharedPaths, checks: readonly Check
   const missing: string[] = [];
   for (const check of checks) {
     for (const file of check.evidenceFiles ?? []) {
-      const source = resolveInside(paths, file);
+      const source = resolveSharedPath(paths, file);
       if (!(await fileExists(source))) missing.push(file);
     }
   }
@@ -107,7 +107,7 @@ export async function writeEvidenceBundle(
   let copiedBytes = 0;
   for (const check of checks) {
     for (const file of check.evidenceFiles ?? []) {
-      const source = resolveInside(paths, file);
+      const source = resolveSharedPath(paths, file);
       const info = await stat(source).catch(() => null);
       if (info === null) throw new EvidenceError(`证据文件不存在：${file}`);
       if (info.size > perFileBytes) {

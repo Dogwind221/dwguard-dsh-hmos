@@ -29,6 +29,16 @@ export interface SharedPaths {
   readonly auditProgress: string;
   /** Append-only gate calibration ledger (`knowledge/calibration.jsonl`). */
   readonly calibration: string;
+  /** Aesthetic preference profile (`knowledge/aesthetic-profile.md`, table + JSON fence). */
+  readonly aestheticProfileMd: string;
+  /** Append-only aesthetic history (`knowledge/aesthetic-history.jsonl`). */
+  readonly aestheticHistory: string;
+  /** Visual baselines, one directory per task-pack version. */
+  readonly visualBaselineDir: string;
+  /** Latest baseline comparison (`artifacts/aesthetic/compare-latest.json`). */
+  readonly aestheticCompare: string;
+  /** Aesthetic artifacts directory (`artifacts/aesthetic`). */
+  readonly aestheticDir: string;
 }
 
 /**
@@ -54,7 +64,12 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     questionMd: resolve(shared, 'tasks', 'question.md'),
     knowledgeIndex: resolve(shared, 'knowledge', 'index.json'),
     auditProgress: resolve(shared, 'artifacts', 'audit-progress.json'),
-    calibration: resolve(shared, 'knowledge', 'calibration.jsonl')
+    calibration: resolve(shared, 'knowledge', 'calibration.jsonl'),
+    aestheticProfileMd: resolve(shared, 'knowledge', 'aesthetic-profile.md'),
+    aestheticHistory: resolve(shared, 'knowledge', 'aesthetic-history.jsonl'),
+    visualBaselineDir: resolve(shared, 'artifacts', 'visual-baseline'),
+    aestheticCompare: resolve(shared, 'artifacts', 'aesthetic', 'compare-latest.json'),
+    aestheticDir: resolve(shared, 'artifacts', 'aesthetic')
   };
 }
 

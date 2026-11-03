@@ -12,6 +12,8 @@
 import type { Options } from './config.js';
 import type { Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence, Dimension, Finding, ReviewDimension, ScreenFamily, Severity, TaskPack } from './model.js';
 import type { DeviceConfig } from './device.js';
+import type { AestheticProfile } from './aesthetic.js';
+import type { BaselineCompareResult } from './baseline.js';
 import type { SharedPaths } from './paths.js';
 /** Model-supplied finding. */
 export interface FindingInput {
@@ -39,6 +41,8 @@ export interface CheckInput {
     readonly device?: string;
     /** Screen family the device belongs to. */
     readonly family?: ScreenFamily;
+    /** Aesthetic-profile entry this check measured against (0.6.1). */
+    readonly profileRef?: string;
 }
 /** Gate outcome. */
 export interface Gate {
@@ -71,6 +75,21 @@ export interface PrereviewReport {
     readonly findings: readonly Finding[];
     readonly gate: Gate;
 }
+/** One profile reference recorded by an audit. */
+export interface AestheticAuditRef {
+    readonly criterionId: string;
+    readonly profileRef: string;
+    readonly status: 'active' | 'missing' | 'superseded';
+    readonly decision?: string;
+    readonly area?: string;
+    readonly value?: string;
+}
+/** Aesthetic evidence attached to an audit report (0.6.1). */
+export interface AestheticAuditSummary {
+    readonly profileRefs: readonly AestheticAuditRef[];
+    /** Latest baseline comparison, when one was run for this pack version. */
+    readonly compare?: BaselineCompareResult;
+}
 /** A persisted delivery audit. */
 export interface AuditReport {
     readonly id: number;
@@ -85,6 +104,8 @@ export interface AuditReport {
     readonly dimensions: readonly DimensionSummary[];
     /** Devices referenced by this audit (matrix mode), in first-seen order. */
     readonly devices?: readonly DeviceEvidence[];
+    /** Aesthetic profile refs and baseline diff (0.6.1). */
+    readonly aesthetic?: AestheticAuditSummary;
 }
 /** Rebuild canonical findings from model input, numbering untitled ids. */
 export declare function normalizeFindings(input: readonly FindingInput[]): Finding[];
@@ -124,7 +145,7 @@ export declare function gatePrereview(findings: readonly Finding[], note: string
  * @param findings - additional findings.
  * @param options - resolved options.
  */
-export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig): Gate;
+export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig, aesthetic?: AestheticProfile): Gate;
 /** Summarize coverage of a delivery audit. */
 export declare function summarizeCoverage(pack: TaskPack, checks: readonly Check[], policy?: DeviceConfig): Coverage;
 /** Per-dimension coverage rows for the audit table. */
@@ -134,10 +155,10 @@ export declare function renderPrereviewMarkdown(report: PrereviewReport, pack: T
 /** Render the「判据 × 屏幕族」matrix; empty string in single-device mode. */
 export declare function renderDeviceMatrix(pack: TaskPack, checks: readonly Check[], policy: DeviceConfig): string;
 /** Render `artifacts/audit-<n>.md`. */
-export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig): string;
+export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile): string;
 /** Render `tasks/rework-<n>.md` from a failed audit. */
 export declare function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
 /** Render `artifacts/acceptance-report.md` from a passing audit. */
-export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig): string;
+export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile): string;
 /** One criterion as a bullet line, used by briefs and gap reports. */
 export declare function criterionLine(criterion: Criterion): string;

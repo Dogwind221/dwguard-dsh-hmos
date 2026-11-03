@@ -39,6 +39,8 @@ export declare class EvidenceError extends Error {
 }
 /** Bundle directory for one audit. */
 export declare function bundleDir(paths: SharedPaths, auditId: number): string;
+/** Resolve one evidence path, refusing anything outside `.shared/`. */
+export declare function resolveSharedPath(paths: SharedPaths, file: string): string;
 /**
  * Check every referenced file exists before anything is written.
  * @returns missing paths, in input order.

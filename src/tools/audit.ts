@@ -13,15 +13,19 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
+import type { AestheticProfile } from '../aesthetic.js';
+import { AREA_LABELS, findProfileEntry, readProfile, valueLabel } from '../aesthetic.js';
 import { appendOutboxDsh } from '../dispatch.js';
 import { appendCalibration, dimensionVerdicts } from '../calibration.js';
+import { readCompareResult } from '../baseline.js';
 import { collectDeviceEvidence } from '../device.js';
 import { EvidenceError, missingEvidence, writeEvidenceBundle } from '../evidence.js';
 import { DIMENSIONS, DIMENSION_LABELS, SCREEN_FAMILIES } from '../model.js';
+import type { Check, TaskPack } from '../model.js';
 import { displayPath } from '../paths.js';
 import { clearAuditProgress } from '../progress.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
-import type { AuditReport, CheckInput, FindingInput } from '../review.js';
+import type { AestheticAuditRef, AestheticAuditSummary, AuditReport, CheckInput, FindingInput } from '../review.js';
 import {
   applyAssertionVerdicts,
   gateDelivery,
@@ -69,7 +73,8 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
       evidenceFiles: optionalStringArray(item, 'evidenceFiles', label, 8),
       actual: optionalString(item, 'actual', label, 500),
       device: optionalString(item, 'device', label, 200),
-      family: optionalEnum(item, 'family', SCREEN_FAMILIES, label)
+      family: optionalEnum(item, 'family', SCREEN_FAMILIES, label),
+      profileRef: optionalString(item, 'profileRef', label, 40)
     };
   });
 }
@@ -99,6 +104,34 @@ function coverageLine(coverage: ReturnType<typeof summarizeCoverage>): string {
   if (coverage.unverified > 0) parts.push(`${coverage.unverified} 未验证`);
   if (coverage.missing.length > 0) parts.push(`${coverage.missing.length} 未覆盖`);
   return parts.join(' · ');
+}
+
+/** Resolve every `profileRef` named by the pack/checks into a report entry. */
+function collectAestheticRefs(
+  pack: TaskPack,
+  checks: readonly Check[],
+  profile: AestheticProfile
+): AestheticAuditRef[] {
+  const refs = new Map<string, AestheticAuditRef>();
+  const add = (criterionId: string, profileRef: string): void => {
+    if (refs.has(profileRef)) return;
+    const entry = findProfileEntry(profile, profileRef);
+    refs.set(profileRef, {
+      criterionId,
+      profileRef,
+      status: entry === undefined ? 'missing' : entry.status,
+      ...(entry === undefined
+        ? {}
+        : { decision: entry.decision, area: AREA_LABELS[entry.area], value: valueLabel(entry.value) })
+    });
+  };
+  for (const criterion of pack.criteria) {
+    if (criterion.profileRef !== undefined && criterion.profileRef.length > 0) add(criterion.id, criterion.profileRef);
+  }
+  for (const check of checks) {
+    if (check.profileRef !== undefined && check.profileRef.length > 0) add(check.criterionId, check.profileRef);
+  }
+  return [...refs.values()];
 }
 
 /**
@@ -145,6 +178,11 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               enum: [...SCREEN_FAMILIES],
               description: '屏幕族：phone / widefold / foldable / triplefold（matrix 模式必填）。'
             },
+            profileRef: {
+              type: 'string',
+              description:
+                '审美档案 ID（如 `AES-RADIUS-01`，0.6.1）。引用不存在或已 superseded 的档案会被闸门拒绝；档案值会渲染进审计与验收报告。'
+            },
             evidenceFiles: {
               type: 'array',
               items: { type: 'string' },
@@ -187,6 +225,8 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       const paths = await pathsOf(exec, { options, ctx }, TOOL);
       const pack = await requireSpec(paths, options, TOOL);
       const policy = options.device;
+      const profile = await readProfile(paths);
+      const compare = await readCompareResult(paths, pack.specVersion);
       const checks = applyAssertionVerdicts(pack, normalizeChecks(parseChecks(args)));
       const findings = normalizeFindings(parseFindings(args));
       const note = optionalString(args, 'note', TOOL, 2000) ?? '';
@@ -218,9 +258,14 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         throw error;
       }
 
-      const gate = gateDelivery(pack, checks, findings, policy);
+      const gate = gateDelivery(pack, checks, findings, policy, profile);
       const coverage = summarizeCoverage(pack, checks, policy);
       const dimensions = summarizeDimensions(pack, checks);
+      const aestheticRefs = collectAestheticRefs(pack, checks, profile);
+      const aesthetic: AestheticAuditSummary = {
+        profileRefs: aestheticRefs,
+        ...(compare === null ? {} : { compare })
+      };
       const report: AuditReport = {
         id,
         stage: 'delivery',
@@ -232,11 +277,15 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         gate,
         coverage,
         dimensions,
-        devices
+        devices,
+        aesthetic
       };
 
       await ensureShared(paths);
-      await writeTextAtomic(`${paths.artifactsDir}/audit-${id}.md`, renderAuditMarkdown(report, pack, paths, policy));
+      await writeTextAtomic(
+        `${paths.artifactsDir}/audit-${id}.md`,
+        renderAuditMarkdown(report, pack, paths, policy, profile)
+      );
       await writeTextAtomic(`${paths.artifactsDir}/audit-${id}.json`, `${JSON.stringify(report, null, 2)}\n`);
       // Calibration ledger: every gate verdict is a data point.
       await appendCalibration(paths, {
@@ -269,7 +318,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
           : `设备：单机验证（主机内存 ${policy.hostMemoryGb}GB，< ${policy.matrixMinMemoryGb}GB 不启用矩阵）`;
 
       if (gate.pass) {
-        const acceptance = renderAcceptanceMarkdown(report, pack, paths, policy);
+        const acceptance = renderAcceptanceMarkdown(report, pack, paths, policy, profile);
         await writeTextAtomic(`${paths.artifactsDir}/acceptance-report.md`, acceptance);
         await clearAuditProgress(paths);
         await updateState(paths, now, (current) => ({

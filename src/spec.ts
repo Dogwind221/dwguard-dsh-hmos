@@ -9,6 +9,8 @@
  */
 
 import type { Options } from './config.js';
+import type { AestheticProfile } from './aesthetic.js';
+import { AREA_LABELS, detectAestheticAreas, isAestheticId } from './aesthetic.js';
 import type { AssertionMatcher, Criterion, CriterionAssertion, CriterionWeight, Dimension, TaskPack } from './model.js';
 import { findRule } from './rules.js';
 import {
@@ -34,6 +36,8 @@ export interface CriterionInput {
   readonly ruleId?: string;
   /** Optional machine-checkable expectation (see {@link normalizeAssertion}). */
   readonly assertion?: CriterionAssertion;
+  /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`). */
+  readonly profileRef?: string;
 }
 
 /** The model-supplied shape of a task pack. */
@@ -297,10 +301,27 @@ function criterionIssue(input: CriterionInput, index: number): Issue[] {
     }
   }
 
+  if (input.profileRef !== undefined && inline(input.profileRef).length > 0) {
+    const ref = inline(input.profileRef);
+    if (!isAestheticId(ref)) {
+      issues.push({
+        code: 'E_CRITERION_PROFILE_FORMAT',
+        message: `判据 \`${label}\` 的 profileRef \`${ref}\` 格式不对；应为 \`AES-<领域>-<两位数字>\`（如 \`AES-RADIUS-01\`）。`,
+        criterionId: label
+      });
+    } else if (input.dimension !== 'aesthetic') {
+      issues.push({
+        code: 'W_CRITERION_PROFILE_DIMENSION',
+        message: `判据 \`${label}\` 位于「${DIMENSION_LABELS[input.dimension]}」，却引用了审美档案 \`${ref}\`；只有审美判据应带 profileRef。`,
+        criterionId: label
+      });
+    }
+  }
+
   return issues;
 }
 
-function criterionWarnings(input: CriterionInput, index: number): Issue[] {
+function criterionWarnings(input: CriterionInput, index: number, profile?: AestheticProfile): Issue[] {
   const warnings: Issue[] = [];
   const label = inline(input.id).length > 0 ? inline(input.id) : `#${index + 1}`;
   const statement = inline(input.statement);
@@ -334,6 +355,32 @@ function criterionWarnings(input: CriterionInput, index: number): Issue[] {
       criterionId: label
     });
   }
+
+  if (input.dimension === 'aesthetic' && profile !== undefined) {
+    const ref = input.profileRef === undefined ? '' : inline(input.profileRef);
+    if (ref.length === 0) {
+      const areas = detectAestheticAreas(statement);
+      const candidates = profile.entries
+        .filter((entry) => entry.status === 'active' && (areas.length === 0 || areas.includes(entry.area)))
+        .slice(0, 3);
+      if (candidates.length > 0) {
+        warnings.push({
+          code: 'W_AEST_PROFILE_HINT',
+          message: `判据 \`${label}\` 没有引用审美档案；档案里已有 ${candidates
+            .map((entry) => `\`${entry.id}\`（${AREA_LABELS[entry.area]} ${entry.decision}）`)
+            .join('、')}，可用 \`profileRef\` 引用，让审计自动对照并写进报告。`,
+          criterionId: label
+        });
+      }
+    } else if (!profile.entries.some((entry) => entry.id === ref && entry.status === 'active')) {
+      warnings.push({
+        code: 'W_CRITERION_PROFILE_UNKNOWN',
+        message: `判据 \`${label}\` 引用的审美档案 \`${ref}\` 不存在或已 superseded；审计闸门会因此报错。`,
+        criterionId: label
+      });
+    }
+  }
+
   return warnings;
 }
 
@@ -341,8 +388,13 @@ function criterionWarnings(input: CriterionInput, index: number): Issue[] {
  * Validate a pack against the workflow's acceptance contract.
  * @param pack - the built task pack.
  * @param options - resolved plugin options (dimension minimums).
+ * @param profile - optional aesthetic profile, used for profileRef hints.
  */
-export function validateTaskPack(pack: TaskPack, options: Options): ValidationResult {
+export function validateTaskPack(
+  pack: TaskPack,
+  options: Options,
+  profile?: AestheticProfile
+): ValidationResult {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
 
@@ -392,7 +444,7 @@ export function validateTaskPack(pack: TaskPack, options: Options): ValidationRe
       if (issue.code.startsWith('E_')) errors.push(issue);
       else warnings.push(issue);
     }
-    for (const warning of criterionWarnings(input, index)) warnings.push(warning);
+    for (const warning of criterionWarnings(input, index, profile)) warnings.push(warning);
   });
 
   for (const dimension of DIMENSIONS) {
@@ -434,6 +486,9 @@ export function buildTaskPack(
     ...(criterion.ruleId === undefined || inline(criterion.ruleId).length === 0
       ? {}
       : { ruleId: inline(criterion.ruleId) }),
+    ...(criterion.profileRef === undefined || inline(criterion.profileRef).length === 0
+      ? {}
+      : { profileRef: inline(criterion.profileRef) }),
     ...(criterion.assertion === undefined ? {} : { assertion: criterion.assertion })
   }));
   const constraints = dedupe((input.constraints ?? []).map((item) => inline(item)).filter((item) => item.length > 0));
@@ -495,6 +550,9 @@ export function parseTaskPack(raw: string | null): TaskPack | null {
       ...(typeof entry['ruleId'] === 'string' && entry['ruleId'].trim().length > 0
         ? { ruleId: entry['ruleId'].trim() }
         : {}),
+      ...(typeof entry['profileRef'] === 'string' && entry['profileRef'].trim().length > 0
+        ? { profileRef: entry['profileRef'].trim() }
+        : {}),
       ...(assertion === undefined ? {} : { assertion })
     });
   }
@@ -544,6 +602,7 @@ export function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths): string {
         DIMENSION_LABELS[dimension],
         criterion.weight,
         criterion.ruleId === undefined ? '—' : `\`${criterion.ruleId}\``,
+        criterion.profileRef === undefined ? '—' : `\`${criterion.profileRef}\``,
         criterion.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
         criterion.statement,
         criterion.verify
@@ -577,7 +636,7 @@ export function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths): string {
     '',
     `共 ${pack.criteria.length} 条（must ${must} / should ${should}）。验收由 DSH 独立取证，不采信执行者自述。`,
     '',
-    table(['ID', '维度', '权重', '规则', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
+    table(['ID', '维度', '权重', '规则', '审美档案', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
     '',
     '### 维度覆盖',
     '',

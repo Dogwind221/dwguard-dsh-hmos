@@ -31,14 +31,14 @@ This plugin makes the hand-off explicit:
 
 ## Install
 
-Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.0).
+Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.1).
 
 The `desktop` profile is managed **exclusively by the desktop app** — the CLI
 refuses `dsh plugin --profile desktop …`. Pick the path that matches how you run
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.6.0`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.6.1`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -47,7 +47,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.6.0   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.6.1   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -61,7 +61,7 @@ dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
 
 Verify: `dsh --profile web --dump-config` should show `# == dwguard-dsh-hmos`.
 
-Every **new** session then gets 13 tools, 3 skills and a policy prompt. Sessions
+Every **new** session then gets 14 tools, 3 skills and a policy prompt. Sessions
 opened before the install keep their old tool table — open a new one.
 
 ## The `DshHoms` entry
@@ -107,11 +107,20 @@ self-report never becomes a `pass`.
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
-| `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; evidence bundle; acceptance report or rework order |
+| `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
+| `dwguard_aesthetic` | Aesthetic learning (0.6.1): `profile` (list/get/write/remove), `baseline` (save/list), `compare` (numeric layout diff) and `learn` (propose preferences from confirmations, rejections, audit findings and project resources). Writes need `source` + `confidence`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; conflicts need `choice`; `baseline save` needs a passing audit + user confirmation |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
 | `dwguard_status` | Derive the phase, unread deliveries, un-acked dispatches, next action; shows host memory, device mode, matrix gaps and the device lock |
+
+`dwguard_aesthetic` closes the aesthetic loop: a preference is proposed from
+confirmed user wording or project resource files, the user picks between
+conflicting values, and only then is it written to
+`knowledge/aesthetic-profile.md`. A passing audit plus a user confirmation let
+you save a visual baseline; `compare` then turns the next layout dump into
+numeric diffs (±2vp for spacing/radius, zero tolerance for font size and
+colours) that appear in the acceptance report.
 
 ## Protocol (`.shared/`)
 
@@ -215,7 +224,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 npm run typecheck
 npm run build
-npm test          # 61 tests
+npm test          # 81 tests
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

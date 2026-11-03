@@ -81,8 +81,10 @@ function parseArgs(argv) {
   return options;
 }
 
-function run(command, args) {
-  const result = spawnSync(command, args, { cwd: ROOT, stdio: 'inherit', shell: process.platform === 'win32' });
+function run(command, args, shell = process.platform === 'win32') {
+  // `process.execPath` is an absolute Windows path ("C:\Program Files\…");
+  // routing it through a shell splits it at the space. Node runs fine without one.
+  const result = spawnSync(command, args, { cwd: ROOT, stdio: 'inherit', shell });
   if (result.status !== 0) {
     throw new Error(`${command} ${args.join(' ')} failed with code ${result.status ?? '?'}`);
   }
@@ -96,7 +98,7 @@ function run(command, args) {
 function runNpm(args) {
   const execPath = process.env['npm_execpath'];
   if (typeof execPath === 'string' && execPath.length > 0) {
-    run(process.execPath, [execPath, ...args]);
+    run(process.execPath, [execPath, ...args], false);
     return;
   }
   run('npm', args);
