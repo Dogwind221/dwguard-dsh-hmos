@@ -9,13 +9,14 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
-import { appendOutboxDsh, chooseExecutor, renderCliSection, renderDispatchEntry, renderGoalBrief } from '../dispatch.js';
+import { DesignLibraryError, generateDesignBrief, readDesignManifest } from '../design.js';
+import { appendOutboxDsh, chooseExecutor, parseOutbox, renderCliSection, renderDispatchEntry, renderGoalBrief } from '../dispatch.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import type { PrereviewReport } from '../review.js';
 import { ensureShared } from '../scaffold.js';
 import { readLatestJson, readState, updateState } from '../state.js';
-import { writeTextAtomic } from '../util/fs.js';
+import { readTextOrNull, writeTextAtomic } from '../util/fs.js';
 import { nowIso } from '../util/md.js';
 import { asRecord, optionalString } from './args.js';
 import { pathsOf, requireSpec } from './common.js';
@@ -64,7 +65,28 @@ export function createDispatchTool(options: Options, ctx?: PluginContext): ToolD
       const counter = state.dispatches + 1;
       const executor = chooseExecutor(pack, options);
       const cli = executor === 'cli';
-      const goalBrief = renderGoalBrief(pack, paths, counter);
+
+      // 0.6.2 P1: attach a design brief when the library has cards. A broken
+      // library must not block the dispatch; the brief then says so explicitly.
+      let design: { file: string; cards: Array<{ id: string; title: string; license: string }>; empty?: boolean; error?: string } | undefined;
+      let designGenerated = false;
+      try {
+        const manifest = await readDesignManifest(paths);
+        if (manifest !== null && manifest.cards.length > 0) {
+          const brief = await generateDesignBrief(paths, options, pack, now);
+          designGenerated = true;
+          design = {
+            file: displayPath(paths, brief.file),
+            cards: brief.hits.map((hit) => ({ id: hit.cardId, title: hit.title, license: hit.source.license })),
+            empty: brief.hits.length === 0
+          };
+        }
+      } catch (error) {
+        if (!(error instanceof DesignLibraryError)) throw error;
+        design = { file: '', cards: [], error: error.message };
+      }
+
+      const goalBrief = renderGoalBrief(pack, paths, counter, design);
       const brief = cli ? `${goalBrief}\n\n${renderCliSection(pack)}` : goalBrief;
       await ensureShared(paths);
       await writeTextAtomic(paths.briefMd, goalBrief);
@@ -76,6 +98,27 @@ export function createDispatchTool(options: Options, ctx?: PluginContext): ToolD
         now,
         { kind: 'dispatch', id: `d-${counter}`, from: 'dsh', to: 'deveco' }
       );
+      if (designGenerated) {
+        const sent = parseOutbox(await readTextOrNull(paths.outboxDsh));
+        let max = 0;
+        for (const entry of sent) {
+          const match = /^i-(\d+)$/.exec(entry.id ?? '');
+          if (match?.[1] === undefined) continue;
+          const value = Number.parseInt(match[1], 10);
+          if (Number.isFinite(value) && value > max) max = value;
+        }
+        await appendOutboxDsh(
+          paths,
+          `dispatch #${counter} · 设计参考（0.6.2）`,
+          [
+            `- 简报：\`${displayPath(paths, paths.designBriefMd)}\``,
+            `- 卡片：${design === undefined || design.cards.length === 0 ? '（无命中）' : design.cards.map((card) => `\`${card.id}\` ${card.title}`).join('、')}`,
+            '- 参考是证据不是判据；实现前先读简报。'
+          ].join('\n'),
+          now,
+          { kind: 'inspiration', id: `i-${max + 1}`, from: 'dsh', to: 'deveco', replyTo: `d-${counter}` }
+        );
+      }
       await updateState(paths, now, (current) => ({
         ...current,
         dispatches: current.dispatches + 1,
@@ -85,9 +128,13 @@ export function createDispatchTool(options: Options, ctx?: PluginContext): ToolD
 
       return ok(`已派发第 ${counter} 次：任务包 v${pack.specVersion}，${pack.criteria.length} 条判据。`, {
         detail: brief,
-        files: cli
-          ? [displayPath(paths, paths.cliBriefMd), displayPath(paths, paths.outboxDsh)]
-          : [displayPath(paths, paths.briefMd), displayPath(paths, paths.outboxDsh)],
+        files: [
+          ...(cli
+            ? [displayPath(paths, paths.cliBriefMd)]
+            : [displayPath(paths, paths.briefMd)]),
+          ...(designGenerated ? [displayPath(paths, paths.designBriefMd)] : []),
+          displayPath(paths, paths.outboxDsh)
+        ],
         next: cli
           ? '把上面简报交给 CLI Agent（它用 `devecocli` 构建/运行）；交付后 `dwguard_status` 看 outbox，再 `dwguard_audit` 独立取证（截图/UI 树由 DSH 自己取）。'
           : '把上面简报粘进 DevEco Code 的 Goal 模式；交付后运行 `dwguard_status` 看 outbox 新记录，再 `dwguard_audit` 独立取证。'

@@ -4,6 +4,52 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.2 — 2026-11-03
+
+The design-reference release: "what should it look like" becomes a shared,
+retrievable and citable asset — one deterministic index read by both agents,
+with design references wired into the four-dimension gate.
+
+### Added
+
+- **`dwguard_design`** (the 15th tool): `library init` writes
+  `.shared/design-library/` (manifest / chunks / index) and generates a
+  dependency-free read-only `query.mjs`; `library ingest` seeds cards from the
+  aesthetic rule catalog and `inbox/*.meta.json` (images are copied into `refs/`
+  by sha256); `library list`, `search` (deterministic BM25 + token/tag/profile
+  boosts), `stats`.
+- **Design brief + dual-agent channel (P1)**: `brief` writes
+  `tasks/design-brief.md` and appends an `inspiration` outbox record;
+  `dwguard_dispatch` generates and embeds the brief automatically; DevEco can
+  append a `design-request` and `brief --request q-1` answers it;
+  `dwguard_status` lists unanswered design requests in its next action.
+- **Protocol v2.1**: new outbox kinds `inspiration` and `design-request`
+  (append-only, `inspiration` answers carry `re=#q-N`).
+- **`designRefs` gate (P2)**: criteria/checks may reference `DSG-*` cards;
+  `dwguard_spec` validates they exist and are active (unknown/blocked are
+  errors), the audit gate rejects missing/blocked refs, and audit/acceptance
+  reports render a 「参考对照」 column; `audit-<n>.json` records
+  `design.refs` (title/license/tokens).
+- **Feedback + capture (P3)**: `feedback` applies `useful / off / block /
+  unblock` (weight ×1.1 / ×0.8 inside 0.5–1.5, block hides the card, ledger in
+  `feedback.jsonl`); `capture` (after a passing audit + user confirmation)
+  stores the visual baseline as a `project` card, deduped by baseline hash.
+- Config: `designTopK`, `designMaxChunks`, `designRanker` (`lexical` default,
+  `hybrid` reserved with explicit fallback), `designBriefCards`,
+  `designLicenseRequired`; paths for `design-library/` and `design-brief.md`.
+- `hybrid` is accepted by the interface but falls back to lexical in 0.6.2 and
+  says so in the result notes; no vector database, no model calls, no network.
+
+### Tests
+
+- `tests/design.test.mjs` (18 cases): RAG-A deterministic re-ingest, RAG-B
+  24-card/8-query top-3 + stability, RAG-C path isolation + read-only search,
+  RAG-E CLI parity, standalone CLI/licence/empty-query, hybrid fallback,
+  P1 brief + design-request round-trip + dispatch embedding + empty-library
+  behaviour, P2 spec/audit designRefs gates and report column, P3
+  feedback block/unblock/weight and capture prerequisites/dedup.
+- Full suite: 111/111.
+
 ## 0.6.1 — 2026-11-03
 
 The aesthetic-learning release: preferences become a first-class, auditable

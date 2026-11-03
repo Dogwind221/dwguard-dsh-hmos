@@ -9,7 +9,7 @@ import type { Options } from './config.js';
 import type { DeviceConfig } from './device.js';
 import { coverageGaps, readDeviceLock } from './device.js';
 import type { OutboxEntry } from './dispatch.js';
-import { parseOutbox, unackedDispatches } from './dispatch.js';
+import { parseOutbox, pendingDesignRequests, unackedDispatches } from './dispatch.js';
 import type { SharedState, TaskPack } from './model.js';
 import { DIMENSIONS, DIMENSION_LABELS, SCREEN_FAMILY_LABELS } from './model.js';
 import type { SharedPaths } from './paths.js';
@@ -81,6 +81,8 @@ export interface Snapshot {
   readonly outboxSent: readonly OutboxEntry[];
   readonly unacked: readonly OutboxEntry[];
   readonly unread: readonly OutboxEntry[];
+  /** DevEco `design-request` entries DSH has not answered yet (0.6.2 P1). */
+  readonly designRequests: readonly OutboxEntry[];
   readonly question: string | null;
   /** Effective device policy (host memory, mode, matrix scope, pool). */
   readonly device: DeviceConfig;
@@ -145,6 +147,7 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
   const outboxSent = parseOutbox(await readTextOrNull(paths.outboxDsh));
   const roundStart = state.dispatches - (state.roundDispatches ?? state.dispatches) + 1;
   const unacked = unackedDispatches(outboxSent, outboxEntries, roundStart);
+  const designRequests = pendingDesignRequests(outboxEntries, outboxSent);
   const cursor = Math.min(state.inboxCursor, outboxEntries.length);
   const unread = outboxEntries.slice(cursor);
   const questionRaw = await readTextOrNull(paths.questionMd);
@@ -161,6 +164,10 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
   if (unacked.length > 0) {
     action += `（派发 ${unacked.map((entry) => `#${entry.id ?? '?'}`).join('、')} 还没有回执：请 DevEco 在 \`outbox-deveco.md\` 追加 \`## [时间] deliver · #a-N · from=deveco to=dsh · re=#d-N | …\`）`;
     actionEn += ` (dispatch ${unacked.map((entry) => `#${entry.id ?? '?'}`).join(', ')} has no acknowledgement: append a deliver record with re=#d-N to outbox-deveco.md)`;
+  }
+  if (designRequests.length > 0) {
+    action += `（${designRequests.length} 个设计请求待应答：用 \`dwguard_design\` 的 \`brief\` 带 \`request: "${designRequests[0]?.id ?? 'q-1'}"\` 回答）`;
+    actionEn += ` (${designRequests.length} design request(s) pending: answer with dwguard_design brief --request "${designRequests[0]?.id ?? 'q-1'}")`;
   }
   // Shadow review goes stale while the executor codes: surface it in the one next action.
   if (phase === 'dispatched' || phase === 'rework') {
@@ -217,6 +224,7 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
     outboxSent,
     unacked,
     unread,
+    designRequests,
     question,
     device,
     deviceLock,
@@ -270,6 +278,7 @@ export function renderStatusMarkdown(snapshot: Snapshot): string {
     `- 审计：${auditText}`,
     `- 未读交付：${unread.length} 条（共 ${snapshot.outboxEntries.length} 条）`,
     `- 未回执派发：${snapshot.unacked.length} 条${snapshot.unacked.length === 0 ? '' : `（${snapshot.unacked.map((entry) => `#${entry.id ?? '?'}`).join('、')}）`}`,
+    `- 设计请求：${snapshot.designRequests.length} 条待应答${snapshot.designRequests.length === 0 ? '' : `（${snapshot.designRequests.map((entry) => `#${entry.id ?? '?'}`).join('、')}）`}`,
     `- 影子审查：${(state.shadowRuns ?? 0)} 次${state.lastShadowAt === undefined ? '' : `（最近 ${state.lastShadowAt}）`}`,
     `- 用户确认：${(state.confirmations ?? 0) > 0 ? `${state.confirmations} 次${state.confirmedAt === undefined ? '' : `（最近 ${state.confirmedAt}）`}` : '（未确认）'}`
   ];

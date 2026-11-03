@@ -64,6 +64,8 @@ export const Config = z.object({
   designMaxChunks: z.number().default(2000),
   /** `lexical` (deterministic BM25) or `hybrid` (reserved; falls back to lexical). */
   designRanker: z.string().default('lexical'),
+  /** Cards per design brief handed to DevEco (0.6.2 P1). */
+  designBriefCards: z.number().default(5),
   /** Exclude cards whose license is unknown from search results. */
   designLicenseRequired: z.boolean().default(true)
 });
@@ -93,6 +95,8 @@ export interface Options {
   readonly designTopK: number;
   readonly designMaxChunks: number;
   readonly designRanker: 'lexical' | 'hybrid';
+  /** Cards included in `tasks/design-brief.md`. */
+  readonly designBriefCards: number;
   readonly designLicenseRequired: boolean;
 }
 
@@ -113,6 +117,7 @@ const DEFAULTS: Options = {
   designTopK: 5,
   designMaxChunks: 2000,
   designRanker: 'lexical',
+  designBriefCards: 5,
   designLicenseRequired: true
 };
 
@@ -163,6 +168,7 @@ export function resolveOptions(raw: unknown): Options {
     designTopK: positiveInt(input['designTopK'], DEFAULTS.designTopK, 1),
     designMaxChunks: positiveInt(input['designMaxChunks'], DEFAULTS.designMaxChunks, 1),
     designRanker: input['designRanker'] === 'hybrid' ? 'hybrid' : 'lexical',
+    designBriefCards: positiveInt(input['designBriefCards'], DEFAULTS.designBriefCards, 1),
     designLicenseRequired: bool(input['designLicenseRequired'], DEFAULTS.designLicenseRequired)
   };
 }

@@ -14,11 +14,14 @@ import { extname, join } from 'node:path';
 
 import type { AestheticArea } from './aesthetic.js';
 import { AREA_LABELS, isAestheticArea } from './aesthetic.js';
+import type { BaselineEntry } from './baseline.js';
+import { baselineDir, extractMetrics, findBaselineEntry, readBaselineIndex, readBoundsJson } from './baseline.js';
 import type { Options } from './config.js';
+import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { RULES } from './rules.js';
-import { copyFileTo, ensureDir, fileExists, listDir, readTextOrNull, sha256File, writeTextAtomic } from './util/fs.js';
+import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull, sha256File, writeTextAtomic } from './util/fs.js';
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
@@ -868,6 +871,330 @@ export function renderDesignCardsMarkdown(manifest: DesignManifest): string {
       String(cardChunks(card).length)
     ]);
   return ['| ID | 标题 | 来源 | license | 状态 | 权重 | 块数 |', '| --- | --- | --- | --- | --- | --- | --- |', ...rows.map((row) => `| ${row.join(' | ')} |`)].join('\n');
+}
+
+/** One-line token summary used by spec/audit reports (0.6.2 P2). */
+export function designCardTokenSummary(card: DesignCard): string {
+  return tokensText(card.tokens).split('\n').join('；');
+}
+
+/** Result of generating a design brief. */
+export interface DesignBriefResult {
+  readonly file: string;
+  readonly query: string;
+  readonly hits: readonly DesignSearchHit[];
+  readonly result: DesignSearchResult;
+}
+
+function buildBriefQuery(pack: TaskPack): string {
+  const aesthetic = pack.criteria
+    .filter((criterion) => criterion.dimension === 'aesthetic')
+    .map((criterion) => `${criterion.statement} ${criterion.verify}`)
+    .join(' ');
+  return truncate(normalizeDesignText(`${pack.title} ${pack.requirement} ${aesthetic}`), 400);
+}
+
+function renderCardDetail(card: DesignCard): string[] {
+  const lines = [`### \`${card.id}\` · ${card.title}`, ''];
+  lines.push(`- 来源：${card.source.kind}${card.source.ref === undefined ? '' : `（${card.source.ref}）`} · license ${card.source.license}`);
+  const tokens = tokensText(card.tokens);
+  if (tokens.length > 0) lines.push(`- tokens：${tokens.split('\n').join('；')}`);
+  if (card.rationale !== undefined) lines.push(`- 理由：${truncate(card.rationale, 240)}`);
+  if (card.dos.length > 0) lines.push(`- Do：${card.dos.join('；')}`);
+  if (card.donts.length > 0) lines.push(`- Don't：${card.donts.join('；')}`);
+  if (card.images.length > 0) {
+    lines.push(`- 图片：${card.images.map((image) => `\`${image.path}\``).join('、')}`);
+  }
+  lines.push('');
+  return lines;
+}
+
+/** Render `tasks/design-brief.md`. */
+export function renderDesignBriefMarkdown(
+  pack: TaskPack,
+  result: DesignSearchResult,
+  cards: readonly DesignCard[],
+  now: string
+): string {
+  const lines = [
+    `# 设计参考简报 · ${pack.title}`,
+    '',
+    `> 任务包 v${pack.specVersion} · ${now} · 查询：\`${result.query}\` · 排序 ${result.ranker} · 命中 ${result.results.length} 张`,
+    '> **参考是证据不是判据**：DSH 仍然独立取证；参考卡片不能替代设备上的验收证据。',
+    ''
+  ];
+  if (result.notes.length > 0) lines.push(...result.notes.map((note) => `> ${note}`), '');
+  if (result.results.length === 0) {
+    lines.push('本轮没有命中的参考卡片：按任务包与审美档案实现，不要自行发明风格。', '');
+    return lines.join('\n');
+  }
+  lines.push(
+    '## 1. 参考卡片',
+    '',
+    '| ID | 标题 | 来源 | license | 命中分 |',
+    '| --- | --- | --- | --- | --- |',
+    ...result.results.map(
+      (hit) => `| \`${hit.cardId}\` | ${hit.title} | ${hit.source.kind} | ${hit.source.license} | ${hit.score.toFixed(2)} |`
+    ),
+    '',
+    '## 2. 卡片详情',
+    ''
+  );
+  for (const hit of result.results) {
+    const card = cards.find((item) => item.id === hit.cardId);
+    if (card !== undefined) lines.push(...renderCardDetail(card));
+  }
+  lines.push(
+    '## 3. 怎么用',
+    '',
+    '- 实现前先读上面的 tokens 与 Do/Don\'t；需要更多参考就在 IDE 终端运行 `node .shared/design-library/query.mjs "<关键词>" --top 5 --json`。',
+    '- 编码中需要 DSH 再找参考：往 `outbox-deveco.md` 追加 `design-request · #q-N · from=deveco to=dsh · re=#d-N` 记录，等 DSH 回 `inspiration`。',
+    '- 最终判定以 DSH 的设备证据为准；参考不一致时先问用户，不要自行改验收标准。',
+    ''
+  );
+  return lines.join('\n');
+}
+
+/**
+ * Generate the design brief for the current pack and write it to disk.
+ * Throws {@link DesignLibraryError} when the library is missing.
+ */
+export async function generateDesignBrief(
+  paths: SharedPaths,
+  options: Options,
+  pack: TaskPack,
+  now: string
+): Promise<DesignBriefResult> {
+  const manifest = await readDesignManifest(paths);
+  if (manifest === null) {
+    throw new DesignLibraryError('设计库尚未初始化；先运行 `dwguard_design` 的 `library init` + `library ingest`。');
+  }
+  const { index, chunks } = await readDesignIndex(paths);
+  const query = buildBriefQuery(pack);
+  const result = searchDesignLibrary(manifest, index, chunks, query, {
+    topK: options.designBriefCards,
+    ranker: options.designRanker,
+    licenseRequired: options.designLicenseRequired
+  });
+  const cards = result.results
+    .map((hit) => manifest.cards.find((card) => card.id === hit.cardId))
+    .filter((card): card is DesignCard => card !== undefined);
+  await writeTextAtomic(paths.designBriefMd, renderDesignBriefMarkdown(pack, result, cards, now));
+  return { file: paths.designBriefMd, query, hits: result.results, result };
+}
+
+/** Feedback verdicts a card can receive (0.6.2 P3). */
+export const DESIGN_FEEDBACK_VERDICTS = ['useful', 'off', 'block', 'unblock'] as const;
+
+/** One feedback verdict. */
+export type DesignFeedbackVerdict = (typeof DESIGN_FEEDBACK_VERDICTS)[number];
+
+/** One feedback entry supplied by the user. */
+export interface DesignFeedbackInput {
+  readonly cardId: string;
+  readonly verdict: DesignFeedbackVerdict;
+  readonly note?: string;
+}
+
+/** Outcome of applying feedback. */
+export interface DesignFeedbackResult {
+  readonly manifest: DesignManifest;
+  readonly applied: ReadonlyArray<{
+    cardId: string;
+    verdict: DesignFeedbackVerdict;
+    weight: number;
+    status: 'active' | 'blocked';
+  }>;
+  readonly skipped: readonly string[];
+  readonly files: string[];
+  readonly changed: boolean;
+}
+
+function clampWeight(weight: number): number {
+  return Math.min(1.5, Math.max(0.5, Number(weight.toFixed(2))));
+}
+
+/**
+ * Apply `useful / off / block / unblock` feedback.
+ *
+ * Weight moves inside 0.5–1.5 (useful ×1.1, off ×0.8); block hides the card from
+ * search but keeps it in the manifest, and every verdict is appended to
+ * `feedback.jsonl` (never deleted).
+ */
+export async function applyDesignFeedback(
+  paths: SharedPaths,
+  manifest: DesignManifest,
+  entries: readonly DesignFeedbackInput[],
+  now: string
+): Promise<DesignFeedbackResult> {
+  const applied: DesignFeedbackResult['applied'][number][] = [];
+  const skipped: string[] = [];
+  const events: string[] = [];
+  let changed = false;
+  let cards: DesignCard[] = [...manifest.cards];
+  for (const entry of entries) {
+    const index = cards.findIndex((card) => card.id === entry.cardId);
+    if (index < 0) {
+      skipped.push(entry.cardId);
+      continue;
+    }
+    const card = cards[index];
+    if (card === undefined) continue;
+    let weight = card.weight;
+    let status = card.status;
+    if (entry.verdict === 'useful') {
+      weight = clampWeight(weight * 1.1);
+      status = 'active';
+    } else if (entry.verdict === 'off') {
+      weight = clampWeight(weight * 0.8);
+    } else if (entry.verdict === 'block') {
+      status = 'blocked';
+    } else {
+      status = 'active';
+    }
+    const next: DesignCard = { ...card, weight, status, updatedAt: now };
+    cards = cards.map((item, itemIndex) => (itemIndex === index ? next : item));
+    changed = changed || weight !== card.weight || status !== card.status;
+    applied.push({ cardId: card.id, verdict: entry.verdict, weight, status });
+    events.push(
+      JSON.stringify({
+        at: now,
+        cardId: card.id,
+        verdict: entry.verdict,
+        weight,
+        status,
+        ...(entry.note === undefined ? {} : { note: entry.note })
+      })
+    );
+  }
+  let nextManifest: DesignManifest = { ...manifest, cards, updatedAt: changed ? now : manifest.updatedAt };
+  const files: string[] = [];
+  if (changed) {
+    files.push(...(await writeLibrary(paths, nextManifest)));
+    nextManifest = (await readDesignManifest(paths)) ?? nextManifest;
+  }
+  if (events.length > 0) {
+    await appendText(paths.designFeedback, `${events.join('\n')}\n`);
+    files.push(displayPath(paths, paths.designFeedback));
+  }
+  return { manifest: nextManifest, applied, skipped, files, changed };
+}
+
+/** One captured project card request (0.6.2 P3). */
+export interface CaptureDesignInput {
+  readonly page: string;
+  readonly state: string;
+  readonly title?: string;
+  readonly tags?: readonly string[];
+  readonly note?: string;
+}
+
+/** Outcome of `captureDesignCard`. */
+export interface CaptureDesignResult {
+  readonly manifest: DesignManifest;
+  readonly card: DesignCard;
+  readonly changed: boolean;
+  readonly files: string[];
+}
+
+const TOKEN_CAPS = 12;
+
+function tokensFromMetrics(metrics: ReturnType<typeof extractMetrics>): DesignTokens {
+  const palette: DesignColorToken[] = [];
+  const spacing: DesignNumberToken[] = [];
+  const radius: DesignNumberToken[] = [];
+  const type: DesignNumberToken[] = [];
+  const seen = new Set<string>();
+  const pushNumber = (target: DesignNumberToken[], area: string, name: string, value: number, unit: string): void => {
+    if (target.length >= TOKEN_CAPS) return;
+    const key = `${area}:${name}:${value}${unit}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    target.push({ name, value, unit });
+  };
+  for (const [node, fields] of metrics) {
+    for (const [field, value] of fields) {
+      if (value.kind === 'color') {
+        if (palette.length >= TOKEN_CAPS) continue;
+        const key = `palette:${value.value}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        palette.push({ name: `${node}.${field}`, value: value.value });
+        continue;
+      }
+      if (field === 'fontSize') {
+        pushNumber(type, 'type', node, value.value, value.unit.length > 0 ? value.unit : 'fp');
+      } else if (field === 'radius' || field === 'borderRadius' || field === 'cornerRadius') {
+        pushNumber(radius, 'radius', node, value.value, value.unit.length > 0 ? value.unit : 'vp');
+      } else if (field.startsWith('padding') || field.startsWith('margin')) {
+        pushNumber(spacing, 'spacing', `${node}.${field}`, value.value, value.unit.length > 0 ? value.unit : 'vp');
+      }
+    }
+  }
+  return { palette, spacing, radius, type, motion: [] };
+}
+
+/**
+ * Capture a passing baseline as a `project` card.
+ *
+ * The caller (tool) is responsible for the prerequisites: a passing audit for
+ * the current pack version, a user confirmation, and the baseline entry itself.
+ */
+export async function captureDesignCard(
+  paths: SharedPaths,
+  manifest: DesignManifest,
+  specVersion: number,
+  input: CaptureDesignInput,
+  now: string
+): Promise<CaptureDesignResult> {
+  const index = await readBaselineIndex(paths, specVersion);
+  const entry: BaselineEntry | undefined = findBaselineEntry(index, input.page, input.state);
+  if (entry === undefined) {
+    throw new DesignLibraryError(
+      `任务包 v${specVersion} 里没有 ${input.page}/${input.state} 的视觉基线；先通过审计 + 用户确认后 baseline save。`
+    );
+  }
+  const ingestKey = sha256Text(`capture|${specVersion}|${entry.page}|${entry.state}|${entry.boundsSha256}`);
+  const existing = manifest.cards.find((card) => card.source.kind === 'project' && card.ingestKey === ingestKey);
+  if (existing !== undefined) {
+    return { manifest, card: existing, changed: false, files: [] };
+  }
+  const boundsRead = await readBoundsJson(join(baselineDir(paths, specVersion), entry.boundsFile));
+  if ('error' in boundsRead) throw new DesignLibraryError(`基线布局树不可读：${boundsRead.error}`);
+  const tokens = tokensFromMetrics(extractMetrics(boundsRead.value));
+  const images: Array<{ path: string; sha256: string; alt: string }> = [];
+  if (entry.screenshotFile !== undefined) {
+    const source = join(baselineDir(paths, specVersion), entry.screenshotFile);
+    if (await fileExists(source)) {
+      const sha = await sha256File(source);
+      const ext = extname(entry.screenshotFile).toLowerCase() || '.png';
+      const storedAs = `refs/${sha}${ext}`;
+      await copyFileTo(source, join(paths.designDir, storedAs));
+      images.push({ path: storedAs, sha256: sha, alt: `${input.page}/${input.state}` });
+    }
+  }
+  const title = input.title ?? `项目模式 · ${input.page}/${input.state}`;
+  const card: DesignCard = {
+    id: nextDesignId(manifest.cards),
+    title,
+    summary: `从任务包 v${specVersion} 的视觉基线捕获（${input.page}/${input.state}）；通过审计 + 用户确认。`,
+    tags: ['project', input.page, input.state, ...(input.tags ?? [])].slice(0, 12),
+    source: { kind: 'project', ref: `baseline:${specVersion}:${input.page}/${input.state}`, license: 'internal' },
+    tokens,
+    rationale: input.note ?? '通过审计与用户确认后的项目模式，可作为后续轮次的参考。',
+    dos: [],
+    donts: [],
+    images,
+    status: 'active',
+    weight: 1,
+    createdAt: now,
+    updatedAt: now,
+    ingestKey
+  };
+  const nextManifest: DesignManifest = { ...manifest, updatedAt: now, cards: [...manifest.cards, card] };
+  const files = await writeLibrary(paths, nextManifest);
+  const written = (await readDesignManifest(paths)) ?? nextManifest;
+  return { manifest: written, card, changed: true, files };
 }
 
 /** Generate the dependency-free read-only query CLI (same ranking as the tool). */

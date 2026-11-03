@@ -10,6 +10,7 @@
  */
 import type { AestheticArea } from './aesthetic.js';
 import type { Options } from './config.js';
+import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
 export declare const DESIGN_ENGINE_VERSION = "0.6.2-p0";
@@ -211,5 +212,74 @@ export declare function searchDesignLibrary(manifest: DesignManifest, index: Des
 export declare function renderDesignSearchMarkdown(result: DesignSearchResult): string;
 /** Render the full card table for `library list`. */
 export declare function renderDesignCardsMarkdown(manifest: DesignManifest): string;
+/** One-line token summary used by spec/audit reports (0.6.2 P2). */
+export declare function designCardTokenSummary(card: DesignCard): string;
+/** Result of generating a design brief. */
+export interface DesignBriefResult {
+    readonly file: string;
+    readonly query: string;
+    readonly hits: readonly DesignSearchHit[];
+    readonly result: DesignSearchResult;
+}
+/** Render `tasks/design-brief.md`. */
+export declare function renderDesignBriefMarkdown(pack: TaskPack, result: DesignSearchResult, cards: readonly DesignCard[], now: string): string;
+/**
+ * Generate the design brief for the current pack and write it to disk.
+ * Throws {@link DesignLibraryError} when the library is missing.
+ */
+export declare function generateDesignBrief(paths: SharedPaths, options: Options, pack: TaskPack, now: string): Promise<DesignBriefResult>;
+/** Feedback verdicts a card can receive (0.6.2 P3). */
+export declare const DESIGN_FEEDBACK_VERDICTS: readonly ["useful", "off", "block", "unblock"];
+/** One feedback verdict. */
+export type DesignFeedbackVerdict = (typeof DESIGN_FEEDBACK_VERDICTS)[number];
+/** One feedback entry supplied by the user. */
+export interface DesignFeedbackInput {
+    readonly cardId: string;
+    readonly verdict: DesignFeedbackVerdict;
+    readonly note?: string;
+}
+/** Outcome of applying feedback. */
+export interface DesignFeedbackResult {
+    readonly manifest: DesignManifest;
+    readonly applied: ReadonlyArray<{
+        cardId: string;
+        verdict: DesignFeedbackVerdict;
+        weight: number;
+        status: 'active' | 'blocked';
+    }>;
+    readonly skipped: readonly string[];
+    readonly files: string[];
+    readonly changed: boolean;
+}
+/**
+ * Apply `useful / off / block / unblock` feedback.
+ *
+ * Weight moves inside 0.5–1.5 (useful ×1.1, off ×0.8); block hides the card from
+ * search but keeps it in the manifest, and every verdict is appended to
+ * `feedback.jsonl` (never deleted).
+ */
+export declare function applyDesignFeedback(paths: SharedPaths, manifest: DesignManifest, entries: readonly DesignFeedbackInput[], now: string): Promise<DesignFeedbackResult>;
+/** One captured project card request (0.6.2 P3). */
+export interface CaptureDesignInput {
+    readonly page: string;
+    readonly state: string;
+    readonly title?: string;
+    readonly tags?: readonly string[];
+    readonly note?: string;
+}
+/** Outcome of `captureDesignCard`. */
+export interface CaptureDesignResult {
+    readonly manifest: DesignManifest;
+    readonly card: DesignCard;
+    readonly changed: boolean;
+    readonly files: string[];
+}
+/**
+ * Capture a passing baseline as a `project` card.
+ *
+ * The caller (tool) is responsible for the prerequisites: a passing audit for
+ * the current pack version, a user confirmation, and the baseline entry itself.
+ */
+export declare function captureDesignCard(paths: SharedPaths, manifest: DesignManifest, specVersion: number, input: CaptureDesignInput, now: string): Promise<CaptureDesignResult>;
 /** Generate the dependency-free read-only query CLI (same ranking as the tool). */
 export declare function renderQueryCli(): string;

@@ -35,6 +35,8 @@ import type { AestheticProfile } from './aesthetic.js';
 import { AREA_LABELS, findProfileEntry, valueLabel } from './aesthetic.js';
 import type { BaselineCompareResult } from './baseline.js';
 import { renderCompareMarkdown } from './baseline.js';
+import type { DesignCard } from './design.js';
+import { designCardTokenSummary } from './design.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { isKnownRuleId } from './rules.js';
@@ -70,6 +72,8 @@ export interface CheckInput {
   readonly family?: ScreenFamily;
   /** Aesthetic-profile entry this check measured against (0.6.1). */
   readonly profileRef?: string;
+  /** Design-library cards this check compared against (0.6.2). */
+  readonly designRefs?: readonly string[];
 }
 
 /** Gate outcome. */
@@ -117,11 +121,26 @@ export interface AestheticAuditRef {
   readonly value?: string;
 }
 
+/** One design reference recorded by an audit (0.6.2 P2). */
+export interface DesignAuditRef {
+  readonly criterionId: string;
+  readonly designRef: string;
+  readonly status: 'active' | 'blocked' | 'missing';
+  readonly title?: string;
+  readonly license?: string;
+  readonly tokens?: string;
+}
+
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
   readonly profileRefs: readonly AestheticAuditRef[];
   /** Baseline comparisons recorded for this pack version (one per page/state). */
   readonly compares?: readonly BaselineCompareResult[];
+}
+
+/** Design evidence attached to an audit report (0.6.2 P2). */
+export interface DesignAuditSummary {
+  readonly refs: readonly DesignAuditRef[];
 }
 
 /** A persisted delivery audit. */
@@ -140,6 +159,8 @@ export interface AuditReport {
   readonly devices?: readonly DeviceEvidence[];
   /** Aesthetic profile refs and baseline diff (0.6.1). */
   readonly aesthetic?: AestheticAuditSummary;
+  /** Design reference cards named by this audit (0.6.2 P2). */
+  readonly design?: DesignAuditSummary;
 }
 
 const SELF_REPORT_MARKERS = ['自测通过', '自认为', '开发者确认', 'deveco 已确认', '应该没问题', '目测没问题', '看起来正常'];
@@ -198,6 +219,9 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
     ...(item.profileRef === undefined || item.profileRef.trim().length === 0
       ? {}
       : { profileRef: item.profileRef.trim() }),
+    ...(item.designRefs === undefined || item.designRefs.length === 0
+      ? {}
+      : { designRefs: [...new Set(item.designRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
     ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
       ? {}
       : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
@@ -378,7 +402,8 @@ export function gateDelivery(
   checks: readonly Check[],
   findings: readonly Finding[],
   policy?: DeviceConfig,
-  aesthetic?: AestheticProfile
+  aesthetic?: AestheticProfile,
+  design?: ReadonlyMap<string, DesignCard>
 ): Gate {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -469,6 +494,31 @@ export function gateDelivery(
     for (const check of checks) {
       if (check.profileRef !== undefined && check.profileRef.length > 0) {
         checkRef(check.profileRef, `检查 \`${check.criterionId}\``);
+      }
+    }
+  }
+
+  // Design references (0.6.2 P2): a ref that does not resolve to an active card
+  // cannot be used as an acceptance basis. A missing library is an error only
+  // when a pack/check actually names a ref.
+  const designRefs: Array<{ ref: string; owner: string }> = [];
+  for (const criterion of pack.criteria) {
+    for (const ref of criterion.designRefs ?? []) designRefs.push({ ref, owner: `判据 \`${criterion.id}\`` });
+  }
+  for (const check of checks) {
+    for (const ref of check.designRefs ?? []) designRefs.push({ ref, owner: `检查 \`${check.criterionId}\`` });
+  }
+  if (designRefs.length > 0) {
+    if (design === undefined) {
+      errors.push('判据/检查引用了设计参考，但设计库不可用；先初始化并 ingest 设计库。');
+    } else {
+      for (const { ref, owner } of designRefs) {
+        const card = design.get(ref);
+        if (card === undefined) {
+          errors.push(`${owner} 引用的设计参考 \`${ref}\` 不存在；先 ingest 该卡片或换一个 ref。`);
+        } else if (card.status !== 'active') {
+          errors.push(`${owner} 引用的设计参考 \`${ref}\` 已被 block，不能作为验收依据。`);
+        }
       }
     }
   }
@@ -660,13 +710,31 @@ function aestheticCell(profileRef: string | undefined, profile: AestheticProfile
   return `\`${profileRef}\`<br>${AREA_LABELS[entry.area]} ${valueLabel(entry.value)}`;
 }
 
+/** One cell for the design-reference column (0.6.2 P2). */
+function designCell(
+  refs: readonly string[] | undefined,
+  design: ReadonlyMap<string, DesignCard> | undefined
+): string {
+  if (refs === undefined || refs.length === 0) return '—';
+  return refs
+    .map((ref) => {
+      if (design === undefined) return `\`${ref}\`<br>库不可用`;
+      const card = design.get(ref);
+      if (card === undefined) return `\`${ref}\`<br>缺失`;
+      const tokens = designCardTokenSummary(card);
+      return `\`${ref}\`<br>${card.title}${tokens.length === 0 ? '' : `<br>${tokens}`}`;
+    })
+    .join('<br><br>');
+}
+
 /** Render `artifacts/audit-<n>.md`. */
 export function renderAuditMarkdown(
   report: AuditReport,
   pack: TaskPack,
   paths: SharedPaths,
   policy?: DeviceConfig,
-  aesthetic?: AestheticProfile
+  aesthetic?: AestheticProfile,
+  design?: ReadonlyMap<string, DesignCard>
 ): string {
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const checkRows = report.checks.map((check) => {
@@ -678,6 +746,7 @@ export function renderAuditMarkdown(
       check.device ?? '—',
       check.family === undefined ? '—' : SCREEN_FAMILY_LABELS[check.family],
       aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
+      designCell(check.designRefs ?? criterion?.designRefs, design),
       RESULT_LABELS[check.result],
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual === undefined ? '—' : check.actual,
@@ -738,7 +807,7 @@ export function renderAuditMarkdown(
     report.checks.length === 0
       ? '（无）'
       : table(
-          ['判据', '维度', '设备', '屏幕族', '审美档案', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
+          ['判据', '维度', '设备', '屏幕族', '审美档案', '参考对照', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
           checkRows
         ),
     '',
@@ -844,7 +913,8 @@ export function renderAcceptanceMarkdown(
   pack: TaskPack,
   paths: SharedPaths,
   policy?: DeviceConfig,
-  aesthetic?: AestheticProfile
+  aesthetic?: AestheticProfile,
+  design?: ReadonlyMap<string, DesignCard>
 ): string {
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const passed = report.checks.filter((check) => check.result === 'pass');
@@ -861,6 +931,7 @@ export function renderAcceptanceMarkdown(
       check.actual ?? '—',
       check.family === undefined ? check.device ?? '—' : `${check.device ?? '—'} · ${SCREEN_FAMILY_LABELS[check.family]}`,
       aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
+      designCell(check.designRefs ?? criterion?.designRefs, design),
       check.evidence
     ];
   });
@@ -886,7 +957,7 @@ export function renderAcceptanceMarkdown(
     '',
     '## 2. 证据索引',
     '',
-    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '审美档案', '独立证据'], rows),
+    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '审美档案', '参考对照', '独立证据'], rows),
     '',
     '### 2.1 屏幕族矩阵',
     '',

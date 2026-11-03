@@ -10,15 +10,17 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import { readProfile } from '../aesthetic.js';
+import { DesignLibraryError, readDesignManifest } from '../design.js';
 import type { CriterionAssertion, TaskPack } from '../model.js';
 import { ASSERTION_MATCHERS, DIMENSIONS, DIMENSION_LABELS } from '../model.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { ensureShared } from '../scaffold.js';
-import type { CriterionInput } from '../spec.js';
+import type { CriterionInput, Issue, ValidationResult } from '../spec.js';
 import {
   buildTaskPack,
   criteriaByDimension,
+  isDesignRefId,
   normalizeAssertion,
   parseTaskPack,
   renderSpecMarkdown,
@@ -77,9 +79,87 @@ function parseCriteria(raw: Record<string, unknown>): CriterionInput[] {
       weight,
       ruleId: optionalString(item, 'ruleId', label, 60),
       profileRef: optionalString(item, 'profileRef', label, 40),
+      designRefs: optionalStringArray(item, 'designRefs', label, 8),
       ...(assertion === undefined ? {} : { assertion })
     };
   });
+}
+
+/**
+ * Validate `designRefs` against the local design library (0.6.2 P2).
+ * A missing/blocked card is a spec-time error; a corrupt library downgrades to
+ * a warning so the user can still freeze a pack offline.
+ */
+async function designRefIssues(
+  paths: Awaited<ReturnType<typeof pathsOf>>,
+  pack: TaskPack,
+  options: Options
+): Promise<{ errors: Issue[]; warnings: Issue[] }> {
+  const errors: Issue[] = [];
+  const warnings: Issue[] = [];
+  let manifest: Awaited<ReturnType<typeof readDesignManifest>>;
+  try {
+    manifest = await readDesignManifest(paths);
+  } catch (error) {
+    if (!(error instanceof DesignLibraryError)) throw error;
+    if (pack.criteria.some((criterion) => (criterion.designRefs?.length ?? 0) > 0)) {
+      warnings.push({
+        code: 'W_DESIGN_LIBRARY_UNREADABLE',
+        message: `设计库不可读（${error.message}），本轮无法校验 designRefs；修好库后重跑 \`dwguard_spec\` 复检。`
+      });
+    }
+    return { errors, warnings };
+  }
+  if (manifest === null) {
+    for (const criterion of pack.criteria) {
+      if ((criterion.designRefs?.length ?? 0) === 0) continue;
+      errors.push({
+        code: 'E_DESIGN_LIBRARY_MISSING',
+        message: `判据 \`${criterion.id}\` 引用了设计参考，但设计库还没初始化；先 \`dwguard_design\` 的 \`library init\` + \`library ingest\`。`,
+        criterionId: criterion.id
+      });
+    }
+    return { errors, warnings };
+  }
+  const cards = new Map(manifest.cards.map((card) => [card.id, card]));
+  for (const criterion of pack.criteria) {
+    for (const ref of criterion.designRefs ?? []) {
+      if (!isDesignRefId(ref)) continue; // format error already reported
+      const card = cards.get(ref);
+      if (card === undefined) {
+        errors.push({
+          code: 'E_DESIGN_REF_UNKNOWN',
+          message: `判据 \`${criterion.id}\` 引用的设计参考 \`${ref}\` 不存在；先 ingest 该卡片或换一个 ref。`,
+          criterionId: criterion.id
+        });
+      } else if (card.status !== 'active') {
+        errors.push({
+          code: 'E_DESIGN_REF_BLOCKED',
+          message: `判据 \`${criterion.id}\` 引用的设计参考 \`${ref}\` 已被 block，不能作为验收依据。`,
+          criterionId: criterion.id
+        });
+      } else if (options.designLicenseRequired && card.source.license.toLowerCase() === 'unknown') {
+        warnings.push({
+          code: 'W_DESIGN_REF_LICENSE',
+          message: `判据 \`${criterion.id}\` 引用的设计参考 \`${ref}\` license 未知；报告里会标注来源风险。`,
+          criterionId: criterion.id
+        });
+      }
+    }
+    if (
+      manifest.cards.length > 0 &&
+      criterion.dimension === 'aesthetic' &&
+      criterion.weight === 'must' &&
+      (criterion.designRefs?.length ?? 0) === 0
+    ) {
+      warnings.push({
+        code: 'W_AEST_NO_DESIGN_REF',
+        message: `审美 must 判据 \`${criterion.id}\` 没有引用设计参考；库里有 ${manifest.cards.length} 张卡，可用 \`designRefs\` 让审计有可对照的参考。`,
+        criterionId: criterion.id
+      });
+    }
+  }
+  return { errors, warnings };
 }
 
 /**
@@ -142,6 +222,12 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
               type: 'string',
               description:
                 '审美档案 ID（0.6.1，如 `AES-RADIUS-01`）：只有审美判据应带；审计会校验档案存在且 active，并把档案值渲染进报告。'
+            },
+            designRefs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '设计参考卡 ID（0.6.2，如 `DSG-0007`）：只有审美判据应带；写入时校验卡片存在且 active，审计报告会渲染「参考对照」。'
             },
             weight: {
               type: 'string',
@@ -216,9 +302,14 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
         );
         const profile = await readProfile(paths);
         const validation = validateTaskPack(pack, options, profile);
-        if (validation.errors.length > 0) {
-          return fail(`任务包 v${specVersion} 未写入：${validation.errors.length} 个缺口必须先补。`, {
-            detail: renderIssues(validation),
+        const design = await designRefIssues(paths, pack, options);
+        const merged: ValidationResult = {
+          errors: [...validation.errors, ...design.errors],
+          warnings: [...validation.warnings, ...design.warnings]
+        };
+        if (merged.errors.length > 0) {
+          return fail(`任务包 v${specVersion} 未写入：${merged.errors.length} 个缺口必须先补。`, {
+            detail: renderIssues(merged),
             next: '按上面的缺口修正后，再次调用 `dwguard_spec`（action: write）。'
           });
         }
@@ -239,7 +330,7 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
           detail: [
             summaryTable(pack),
             '',
-            validation.warnings.length > 0 ? renderIssues({ errors: [], warnings: validation.warnings }) : '没有提醒。'
+            validation.warnings.length > 0 ? renderIssues({ errors: [], warnings: merged.warnings }) : '没有提醒。'
           ].join('\n'),
           files: [displayPath(paths, paths.specMd), displayPath(paths, paths.specJson), ...created],
           next: '用 `dwguard_prereview` 做派发前对抗预审（性能 / 生命周期 / 并发 / API 兼容 + 四维可行性）。'

@@ -1,10 +1,10 @@
-// 0.6.2 P0: design library — deterministic ingest, BM25 ranking, CLI parity.
+// 0.6.2 P0/P1: design library — ingest, BM25, CLI parity, design brief + outbox.
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { promisify } from 'node:util';
 
@@ -13,12 +13,103 @@ process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dwguard-home-'));
 
 import { resolveOptions } from '../lib/config.js';
 import { readDesignIndex, readDesignManifest, searchDesignLibrary } from '../lib/design.js';
+import { parseOutbox } from '../lib/dispatch.js';
 import { resolvePaths } from '../lib/paths.js';
+import { createAestheticTool } from '../lib/tools/aesthetic.js';
+import { createAuditTool } from '../lib/tools/audit.js';
+import { createConfirmTool } from '../lib/tools/confirm.js';
 import { createDesignTool } from '../lib/tools/design.js';
+import { createDispatchTool } from '../lib/tools/dispatch.js';
+import { createPrereviewTool } from '../lib/tools/prereview.js';
+import { createSpecTool } from '../lib/tools/spec.js';
+import { createStatusTool } from '../lib/tools/status.js';
 
 const run = promisify(execFile);
 const options = resolveOptions({});
 const tool = createDesignTool(options);
+const specTool = createSpecTool(options);
+const prereviewTool = createPrereviewTool(options);
+const dispatchTool = createDispatchTool(options);
+const statusTool = createStatusTool(options);
+const auditTool = createAuditTool(options);
+const aestheticTool = createAestheticTool(options);
+const confirmTool = createConfirmTool(options);
+
+const criteria = [
+  { id: 'F-01', dimension: 'function', statement: '点击打卡后连续天数从 3 变成 4', verify: '操作步骤 + 截图 F-01.png' },
+  {
+    id: 'A-01',
+    dimension: 'aesthetic',
+    statement: '深色模式卡片使用深色背景与 16vp 圆角',
+    verify: '布局树 bounds 实测 + 截图 A-01.png'
+  },
+  { id: 'P-01', dimension: 'performance', statement: '冷启动到首帧 ≤ 800ms', verify: 'Profiler 启动分析截图与毫秒数' },
+  {
+    id: 'X-01',
+    dimension: 'accessibility',
+    statement: '打卡按钮文字对比度 ≥ 4.5:1',
+    verify: '截图取样计算对比度数值'
+  }
+];
+
+async function writeSpec(cwd, aestheticExtra = {}) {
+  const withExtra = criteria.map((criterion) =>
+    criterion.dimension === 'aesthetic' ? { ...criterion, ...aestheticExtra } : criterion
+  );
+  return specTool.execute(
+    {
+      action: 'write',
+      title: '训练打卡',
+      requirement: '用户需要每天记录一次训练，并在首页看到连续打卡天数。',
+      spec: '首页展示打卡卡片与连续天数；点击打卡写入本地存储并刷新天数。深色模式需要可读。',
+      constraints: ['compatibleSdkVersion 5.0.0(12)'],
+      criteria: withExtra
+    },
+    exec(cwd)
+  );
+}
+
+const checks = [
+  { criterionId: 'F-01', result: 'pass', evidence: '点击后截图显示连续天数 4' },
+  { criterionId: 'A-01', result: 'pass', evidence: '布局树 bounds 实测深色背景与 16vp 圆角' },
+  { criterionId: 'P-01', result: 'pass', evidence: 'Profiler 冷启动 720ms' },
+  { criterionId: 'X-01', result: 'pass', evidence: '对比度取样 4.9:1' }
+];
+
+async function passPrereview(cwd) {
+  return prereviewTool.execute(
+    { note: '通读任务包/规格/工作区，覆盖性能、生命周期、并发、API 兼容与四维验收可行性。', findings: [] },
+    exec(cwd)
+  );
+}
+
+async function outboxKinds(cwd) {
+  return parseOutbox(await readFile(join(paths(cwd).shared, 'outbox-dsh.md'), 'utf8')).map((entry) => ({
+    kind: entry.kind,
+    id: entry.id,
+    replyTo: entry.replyTo
+  }));
+}
+
+const boundsV1 = {
+  id: 'page',
+  children: [
+    {
+      id: 'card',
+      padding: { top: 16, right: 16, bottom: 16, left: 16 },
+      radius: 20,
+      fontSize: 16,
+      backgroundColor: '#FAF8F4'
+    }
+  ]
+};
+
+async function writeBounds(cwd, relative, value) {
+  const file = join(paths(cwd).shared, relative);
+  await mkdir(dirname(file), { recursive: true });
+  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
+  return file;
+}
 
 const dirs = [];
 after(async () => {
@@ -311,4 +402,273 @@ test('search on a missing library fails with an actionable next step', async () 
   const result = await tool.execute({ action: 'search', query: '圆角' }, exec(cwd));
   assert.equal(result.ok, false);
   assert.match(result.next, /library init/);
+});
+
+test('P1: brief writes tasks/design-brief.md and appends an inspiration record', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  const spec = await writeSpec(cwd);
+  assert.equal(spec.ok, true, spec.detail);
+  const result = await tool.execute({ action: 'brief', topK: 3 }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  const briefPath = paths(cwd).designBriefMd;
+  const brief = await readFile(briefPath, 'utf8');
+  assert.match(brief, /设计参考简报/);
+  assert.match(brief, /参考是证据不是判据/);
+  assert.match(brief, /深色模式卡片|深色空态插画|暖白配色首页/);
+  assert.match(brief, /\| ID \| 标题 \| 来源 \| license \| 命中分 \|/);
+  const outbox = await outboxKinds(cwd);
+  assert.deepEqual(outbox.map((entry) => entry.kind), ['inspiration']);
+  assert.match(result.detail, /tasks\/design-brief\.md/);
+});
+
+test('P1: a design-request is answered with inspiration re=#q-N, status clears it', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  await writeSpec(cwd);
+  await tool.execute({ action: 'brief', topK: 2 }, exec(cwd));
+  const devecoOutbox = join(paths(cwd).shared, 'outbox-deveco.md');
+  await writeFile(
+    devecoOutbox,
+    '# DevEco Code → DSH\n\n## [2026-11-03T12:00:00.000Z] design-request · #q-1 · from=deveco to=dsh · re=#d-1 | 需要深色空态参考\n\n- 场景: 深色 空态\n\n',
+    'utf8'
+  );
+  const before = await statusTool.execute({}, exec(cwd));
+  assert.match(before.detail, /设计请求：1 条待应答/);
+  assert.match(before.next, /design-request|设计请求|brief/);
+
+  const answer = await tool.execute({ action: 'brief', request: 'q-1', topK: 2 }, exec(cwd));
+  assert.equal(answer.ok, true, answer.detail);
+  const outbox = await outboxKinds(cwd);
+  const reply = outbox.filter((entry) => entry.kind === 'inspiration' && entry.replyTo === 'q-1');
+  assert.equal(reply.length, 1, 'inspiration 必须回指 q-1');
+  const after = await statusTool.execute({}, exec(cwd));
+  assert.match(after.detail, /设计请求：0 条待应答/);
+});
+
+test('P1: dispatch embeds the design brief and answers with inspiration re=#d-1', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  await writeSpec(cwd);
+  const review = await passPrereview(cwd);
+  assert.equal(review.ok, true, review.detail);
+  const dispatched = await dispatchTool.execute({}, exec(cwd));
+  assert.equal(dispatched.ok, true, dispatched.detail);
+  assert.match(dispatched.detail, /## 2\.5 设计参考/);
+  assert.match(dispatched.detail, /design-brief\.md/);
+  const outbox = await outboxKinds(cwd);
+  assert.ok(outbox.some((entry) => entry.kind === 'inspiration' && entry.replyTo === 'd-1'));
+  const brief = await readFile(paths(cwd).designBriefMd, 'utf8');
+  assert.match(brief, /设计参考简报/);
+});
+
+test('P1: an empty library does not block dispatch and produces no design section', async () => {
+  const cwd = await workspace();
+  await writeSpec(cwd);
+  const review = await passPrereview(cwd);
+  assert.equal(review.ok, true, review.detail);
+  const dispatched = await dispatchTool.execute({}, exec(cwd));
+  assert.equal(dispatched.ok, true, dispatched.detail);
+  assert.doesNotMatch(dispatched.detail, /## 2\.5 设计参考/);
+  const outbox = await outboxKinds(cwd);
+  assert.deepEqual(outbox.map((entry) => entry.kind), ['dispatch']);
+
+  const brief = await tool.execute({ action: 'brief' }, exec(cwd));
+  assert.equal(brief.ok, false);
+  assert.match(brief.next, /library init/);
+});
+
+test('P2: spec validates designRefs against the library (unknown/blocked rejected)', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const dark = manifest.cards.find((card) => card.title === '深色模式卡片');
+  assert.ok(dark !== undefined);
+
+  const ok = await writeSpec(cwd, { designRefs: [dark.id] });
+  assert.equal(ok.ok, true, ok.detail);
+  const specJson = JSON.parse(await readFile(paths(cwd).specJson, 'utf8'));
+  assert.deepEqual(specJson.criteria.find((criterion) => criterion.id === 'A-01')?.designRefs, [dark.id]);
+
+  const unknown = await writeSpec(cwd, { designRefs: ['DSG-9999'] });
+  assert.equal(unknown.ok, false);
+  assert.match(unknown.detail, /不存在/);
+
+  const raw = JSON.parse(await readFile(paths(cwd).designManifest, 'utf8'));
+  raw.cards = raw.cards.map((card) => (card.id === dark.id ? { ...card, status: 'blocked' } : card));
+  await writeFile(paths(cwd).designManifest, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+  const blocked = await writeSpec(cwd, { designRefs: [dark.id] });
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.detail, /block/);
+});
+
+test('P2: audit accepts designRefs, renders 参考对照 and records design.refs', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const dark = manifest.cards.find((card) => card.title === '深色模式卡片');
+  assert.ok(dark !== undefined);
+  const spec = await writeSpec(cwd, { designRefs: [dark.id] });
+  assert.equal(spec.ok, true, spec.detail);
+
+  const audit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audit.ok, true, audit.detail);
+  const report = await readFile(join(paths(cwd).shared, 'artifacts', 'acceptance-report.md'), 'utf8');
+  assert.match(report, /参考对照/);
+  assert.match(report, new RegExp(dark.id));
+  assert.match(report, /深色模式卡片/);
+  assert.match(report, /圆角|配色/);
+
+  const json = JSON.parse(await readFile(join(paths(cwd).shared, 'artifacts', 'audit-1.json'), 'utf8'));
+  assert.equal(json.design.refs.length, 1);
+  assert.equal(json.design.refs[0].designRef, dark.id);
+  assert.equal(json.design.refs[0].status, 'active');
+  assert.match(json.design.refs[0].tokens ?? '', /圆角|配色/);
+});
+
+test('P2: audit gate rejects unknown or blocked designRefs', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const dark = manifest.cards.find((card) => card.title === '深色模式卡片');
+  assert.ok(dark !== undefined);
+  const spec = await writeSpec(cwd, { designRefs: [dark.id] });
+  assert.equal(spec.ok, true, spec.detail);
+
+  // Bypass spec validation by editing the frozen pack, as a stale/foreign pack could.
+  const specJson = JSON.parse(await readFile(paths(cwd).specJson, 'utf8'));
+  specJson.criteria = specJson.criteria.map((criterion) =>
+    criterion.id === 'A-01' ? { ...criterion, designRefs: ['DSG-9999'] } : criterion
+  );
+  await writeFile(paths(cwd).specJson, `${JSON.stringify(specJson, null, 2)}\n`, 'utf8');
+  const unknown = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(unknown.ok, false);
+  assert.match(unknown.detail, /不存在/);
+
+  // Now block the real card and audit against it.
+  const raw = JSON.parse(await readFile(paths(cwd).designManifest, 'utf8'));
+  raw.cards = raw.cards.map((card) => (card.id === dark.id ? { ...card, status: 'blocked' } : card));
+  await writeFile(paths(cwd).designManifest, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+  specJson.criteria = specJson.criteria.map((criterion) =>
+    criterion.id === 'A-01' ? { ...criterion, designRefs: [dark.id] } : criterion
+  );
+  await writeFile(paths(cwd).specJson, `${JSON.stringify(specJson, null, 2)}\n`, 'utf8');
+  const blocked = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.detail, /block/);
+});
+
+test('P3: feedback block/unblock/off/useful changes retrieval and weight', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const dark = manifest.cards.find((card) => card.title === '深色模式卡片');
+  assert.ok(dark !== undefined);
+
+  const query = '深色模式卡片';
+  const before = await tool.execute({ action: 'search', query, topK: 5 }, exec(cwd));
+  assert.match(before.detail, new RegExp(dark.id));
+
+  const blocked = await tool.execute(
+    { action: 'feedback', entries: [{ cardId: dark.id, verdict: 'block', note: '太花' }] },
+    exec(cwd)
+  );
+  assert.equal(blocked.ok, true, blocked.detail);
+  const hidden = await tool.execute({ action: 'search', query, topK: 5 }, exec(cwd));
+  assert.doesNotMatch(hidden.detail, new RegExp(dark.id));
+
+  const unblocked = await tool.execute(
+    { action: 'feedback', entries: [{ cardId: dark.id, verdict: 'unblock' }] },
+    exec(cwd)
+  );
+  assert.equal(unblocked.ok, true, unblocked.detail);
+  const restored = await tool.execute({ action: 'search', query, topK: 5 }, exec(cwd));
+  assert.match(restored.detail, new RegExp(dark.id));
+
+  const off = await tool.execute({ action: 'feedback', entries: [{ cardId: dark.id, verdict: 'off' }] }, exec(cwd));
+  assert.equal(off.ok, true, off.detail);
+  let updated = await readDesignManifest(paths(cwd));
+  assert.equal(updated?.cards.find((card) => card.id === dark.id)?.weight, 0.8);
+
+  const useful = await tool.execute(
+    { action: 'feedback', entries: [{ cardId: dark.id, verdict: 'useful' }] },
+    exec(cwd)
+  );
+  assert.equal(useful.ok, true, useful.detail);
+  updated = await readDesignManifest(paths(cwd));
+  assert.equal(updated?.cards.find((card) => card.id === dark.id)?.weight, 0.88);
+  const ledger = await readFile(paths(cwd).designFeedback, 'utf8');
+  assert.equal(ledger.trim().split('\n').length, 4);
+  assert.match(ledger, /block/);
+  assert.match(ledger, /unblock/);
+});
+
+test('P3: capture requires confirmation + passing audit + baseline, then dedupes', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  await writeSpec(cwd);
+  const unconfirmed = await tool.execute({ action: 'capture', page: 'home', state: 'default' }, exec(cwd));
+  assert.equal(unconfirmed.ok, false);
+  assert.match(unconfirmed.summary, /confirmed/);
+
+  const noAudit = await tool.execute(
+    { action: 'capture', page: 'home', state: 'default', confirmed: true },
+    exec(cwd)
+  );
+  assert.equal(noAudit.ok, false);
+  assert.match(noAudit.summary, /审计/);
+
+  const audit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audit.ok, true, audit.detail);
+  const noConfirmation = await tool.execute(
+    { action: 'capture', page: 'home', state: 'default', confirmed: true },
+    exec(cwd)
+  );
+  assert.equal(noConfirmation.ok, false);
+  assert.match(noConfirmation.summary, /确认/);
+
+  const confirmed = await confirmTool.execute({ decision: 'accept' }, exec(cwd));
+  assert.equal(confirmed.ok, true, confirmed.detail);
+  const noBaseline = await tool.execute(
+    { action: 'capture', page: 'home', state: 'default', confirmed: true },
+    exec(cwd)
+  );
+  assert.equal(noBaseline.ok, false);
+  assert.match(noBaseline.summary, /基线/);
+
+  await writeBounds(cwd, 'artifacts/evidence/bounds-v1.json', boundsV1);
+  const saved = await aestheticTool.execute(
+    { action: 'baseline', op: 'save', page: 'home', state: 'default', bounds: 'artifacts/evidence/bounds-v1.json' },
+    exec(cwd)
+  );
+  assert.equal(saved.ok, true, saved.detail);
+
+  const captured = await tool.execute(
+    { action: 'capture', page: 'home', state: 'default', confirmed: true, title: '项目首页', tags: ['dark'] },
+    exec(cwd)
+  );
+  assert.equal(captured.ok, true, captured.detail);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const projectCard = manifest.cards.find((card) => card.title === '项目首页');
+  assert.ok(projectCard !== undefined);
+  assert.equal(projectCard.source.kind, 'project');
+  assert.equal(projectCard.tokens.radius[0]?.value, 20);
+  assert.equal(projectCard.tokens.radius[0]?.unit, 'vp');
+  assert.ok(projectCard.tokens.spacing.length >= 1);
+  assert.equal(projectCard.tokens.palette[0]?.value, '#FAF8F4');
+  assert.ok(projectCard.tokens.type.some((token) => token.value === 16));
+
+  const again = await tool.execute(
+    { action: 'capture', page: 'home', state: 'default', confirmed: true },
+    exec(cwd)
+  );
+  assert.equal(again.ok, true, again.detail);
+  assert.match(again.summary, /已存在/);
+  const after = await readDesignManifest(paths(cwd));
+  assert.equal(after?.cards.length, manifest.cards.length);
 });

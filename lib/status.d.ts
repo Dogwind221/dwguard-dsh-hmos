@@ -35,6 +35,8 @@ export interface Snapshot {
     readonly outboxSent: readonly OutboxEntry[];
     readonly unacked: readonly OutboxEntry[];
     readonly unread: readonly OutboxEntry[];
+    /** DevEco `design-request` entries DSH has not answered yet (0.6.2 P1). */
+    readonly designRequests: readonly OutboxEntry[];
     readonly question: string | null;
     /** Effective device policy (host memory, mode, matrix scope, pool). */
     readonly device: DeviceConfig;

@@ -108,6 +108,8 @@ export interface Criterion {
   readonly assertion?: CriterionAssertion;
   /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`, 0.6.1). */
   readonly profileRef?: string;
+  /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */
+  readonly designRefs?: readonly string[];
 }
 
 /** The frozen task pack DSH hands to the executor agent. */
@@ -169,6 +171,8 @@ export interface Check {
   readonly family?: ScreenFamily;
   /** Aesthetic-profile entry this check measured against (0.6.1). */
   readonly profileRef?: string;
+  /** Design-library cards this check compared against (0.6.2). */
+  readonly designRefs?: readonly string[];
 }
 
 /** One device recorded in an audit report. */

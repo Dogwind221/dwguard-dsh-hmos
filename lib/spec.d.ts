@@ -24,6 +24,8 @@ export interface CriterionInput {
     readonly assertion?: CriterionAssertion;
     /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`). */
     readonly profileRef?: string;
+    /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */
+    readonly designRefs?: readonly string[];
 }
 /** The model-supplied shape of a task pack. */
 export interface TaskPackInput {
@@ -61,6 +63,8 @@ export declare function normalizeAssertion(value: unknown): {
 };
 /** Compact one-line rendering of an assertion (used by specs, briefs and audits). */
 export declare function assertionLabel(assertion: CriterionAssertion): string;
+/** Whether a string is a well-formed design-library id (`DSG-0007`). */
+export declare function isDesignRefId(value: string): boolean;
 /**
  * Validate a pack against the workflow's acceptance contract.
  * @param pack - the built task pack.

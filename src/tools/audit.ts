@@ -15,9 +15,11 @@ import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import type { AestheticProfile } from '../aesthetic.js';
 import { AREA_LABELS, findProfileEntry, readProfile, valueLabel } from '../aesthetic.js';
+import { readCompareResults } from '../baseline.js';
+import { DesignLibraryError, designCardTokenSummary, readDesignManifest } from '../design.js';
+import type { DesignCard } from '../design.js';
 import { appendOutboxDsh } from '../dispatch.js';
 import { appendCalibration, dimensionVerdicts } from '../calibration.js';
-import { readCompareResults } from '../baseline.js';
 import { collectDeviceEvidence } from '../device.js';
 import { EvidenceError, missingEvidence, writeEvidenceBundle } from '../evidence.js';
 import { DIMENSIONS, DIMENSION_LABELS, SCREEN_FAMILIES } from '../model.js';
@@ -25,7 +27,15 @@ import type { Check, TaskPack } from '../model.js';
 import { displayPath } from '../paths.js';
 import { clearAuditProgress } from '../progress.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
-import type { AestheticAuditRef, AestheticAuditSummary, AuditReport, CheckInput, FindingInput } from '../review.js';
+import type {
+  AestheticAuditRef,
+  AestheticAuditSummary,
+  AuditReport,
+  CheckInput,
+  DesignAuditRef,
+  DesignAuditSummary,
+  FindingInput
+} from '../review.js';
 import {
   applyAssertionVerdicts,
   gateDelivery,
@@ -74,7 +84,8 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
       actual: optionalString(item, 'actual', label, 500),
       device: optionalString(item, 'device', label, 200),
       family: optionalEnum(item, 'family', SCREEN_FAMILIES, label),
-      profileRef: optionalString(item, 'profileRef', label, 40)
+      profileRef: optionalString(item, 'profileRef', label, 40),
+      designRefs: optionalStringArray(item, 'designRefs', label, 8)
     };
   });
 }
@@ -134,6 +145,38 @@ function collectAestheticRefs(
   return [...refs.values()];
 }
 
+/** Resolve every `designRef` named by the pack/checks into a report entry. */
+function collectDesignRefs(
+  pack: TaskPack,
+  checks: readonly Check[],
+  design: ReadonlyMap<string, DesignCard> | undefined
+): DesignAuditRef[] {
+  const refs = new Map<string, DesignAuditRef>();
+  const add = (criterionId: string, designRef: string): void => {
+    if (refs.has(designRef)) return;
+    const card = design?.get(designRef);
+    refs.set(designRef, {
+      criterionId,
+      designRef,
+      status: card === undefined ? 'missing' : card.status,
+      ...(card === undefined
+        ? {}
+        : {
+            title: card.title,
+            license: card.source.license,
+            tokens: designCardTokenSummary(card)
+          })
+    });
+  };
+  for (const criterion of pack.criteria) {
+    for (const ref of criterion.designRefs ?? []) add(criterion.id, ref);
+  }
+  for (const check of checks) {
+    for (const ref of check.designRefs ?? []) add(check.criterionId, ref);
+  }
+  return [...refs.values()];
+}
+
 /**
  * Create the `dwguard_audit` tool.
  * @param options - resolved plugin options.
@@ -183,6 +226,12 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               description:
                 '审美档案 ID（如 `AES-RADIUS-01`，0.6.1）。引用不存在或已 superseded 的档案会被闸门拒绝；档案值会渲染进审计与验收报告。'
             },
+            designRefs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '设计参考卡 ID（0.6.2，如 `DSG-0007`）。引用不存在或已 block 的卡片会被闸门拒绝；报告渲染「参考对照」。'
+            },
             evidenceFiles: {
               type: 'array',
               items: { type: 'string' },
@@ -227,6 +276,15 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       const policy = options.device;
       const profile = await readProfile(paths);
       const compares = await readCompareResults(paths, pack.specVersion);
+      let designCards: Map<string, DesignCard> | undefined;
+      try {
+        const designManifest = await readDesignManifest(paths);
+        if (designManifest !== null) {
+          designCards = new Map(designManifest.cards.map((card) => [card.id, card]));
+        }
+      } catch (error) {
+        if (!(error instanceof DesignLibraryError)) throw error;
+      }
       const checks = applyAssertionVerdicts(pack, normalizeChecks(parseChecks(args)));
       const findings = normalizeFindings(parseFindings(args));
       const note = optionalString(args, 'note', TOOL, 2000) ?? '';
@@ -258,7 +316,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         throw error;
       }
 
-      const baseGate = gateDelivery(pack, checks, findings, policy, profile);
+      const baseGate = gateDelivery(pack, checks, findings, policy, profile, designCards);
       const failedCompares = compares.filter((compare) => !compare.pass);
       const gate =
         failedCompares.length === 0
@@ -280,6 +338,8 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         profileRefs: aestheticRefs,
         ...(compares.length === 0 ? {} : { compares })
       };
+      const designRefs = collectDesignRefs(pack, checks, designCards);
+      const design: DesignAuditSummary | undefined = designRefs.length === 0 ? undefined : { refs: designRefs };
       const report: AuditReport = {
         id,
         stage: 'delivery',
@@ -292,13 +352,14 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         coverage,
         dimensions,
         devices,
-        aesthetic
+        aesthetic,
+        ...(design === undefined ? {} : { design })
       };
 
       await ensureShared(paths);
       await writeTextAtomic(
         `${paths.artifactsDir}/audit-${id}.md`,
-        renderAuditMarkdown(report, pack, paths, policy, profile)
+        renderAuditMarkdown(report, pack, paths, policy, profile, designCards)
       );
       await writeTextAtomic(`${paths.artifactsDir}/audit-${id}.json`, `${JSON.stringify(report, null, 2)}\n`);
       // Calibration ledger: every gate verdict is a data point.
@@ -332,7 +393,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
           : `设备：单机验证（主机内存 ${policy.hostMemoryGb}GB，< ${policy.matrixMinMemoryGb}GB 不启用矩阵）`;
 
       if (gate.pass) {
-        const acceptance = renderAcceptanceMarkdown(report, pack, paths, policy, profile);
+        const acceptance = renderAcceptanceMarkdown(report, pack, paths, policy, profile, designCards);
         await writeTextAtomic(`${paths.artifactsDir}/acceptance-report.md`, acceptance);
         await clearAuditProgress(paths);
         await updateState(paths, now, (current) => ({

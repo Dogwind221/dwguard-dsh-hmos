@@ -10,7 +10,7 @@
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Message kinds carried by the outbox protocol. */
-export type OutboxKind = 'dispatch' | 'ack' | 'deliver' | 'question' | 'answer' | 'blocked' | 'shadow-risk' | 'rework';
+export type OutboxKind = 'dispatch' | 'ack' | 'deliver' | 'question' | 'answer' | 'blocked' | 'shadow-risk' | 'rework' | 'inspiration' | 'design-request';
 /** Which agent implements a task pack. */
 export type ExecutorMode = 'ide' | 'cli';
 /**
@@ -66,12 +66,29 @@ export declare function appendOutboxDsh(paths: SharedPaths, title: string, body:
  */
 export declare function unackedDispatches(sent: readonly OutboxEntry[], replies: readonly OutboxEntry[], sinceDispatchNumber?: number): OutboxEntry[];
 /**
+ * Design requests from DevEco that DSH has not answered yet.
+ *
+ * A `design-request` (outbox-deveco) is answered when an `inspiration` entry in
+ * outbox-dsh carries `re=#q-N`; anything else (ack/deliver) does not answer it.
+ */
+export declare function pendingDesignRequests(requests: readonly OutboxEntry[], answers: readonly OutboxEntry[]): OutboxEntry[];
+/**
  * Render the brief the human pastes into DevEco Code's Goal mode.
  * @param pack - the frozen task pack.
  * @param paths - resolved layout (for the file references in the brief).
  * @param briefCounter - the dispatch number used in the delivery-record template.
+ * @param design - optional design-brief reference produced by `dwguard_design`.
  */
-export declare function renderGoalBrief(pack: TaskPack, paths: SharedPaths, briefCounter: number): string;
+export declare function renderGoalBrief(pack: TaskPack, paths: SharedPaths, briefCounter: number, design?: {
+    readonly file: string;
+    readonly cards: ReadonlyArray<{
+        id: string;
+        title: string;
+        license: string;
+    }>;
+    readonly empty?: boolean;
+    readonly error?: string;
+}): string;
 /** The DevEco outbox path (kept as a helper so the brief and status agree). */
 export declare function outboxFile(paths: SharedPaths): string;
 /** A compact dispatch note for DSH's own outbox. */

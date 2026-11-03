@@ -14,6 +14,7 @@ import type { Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence,
 import type { DeviceConfig } from './device.js';
 import type { AestheticProfile } from './aesthetic.js';
 import type { BaselineCompareResult } from './baseline.js';
+import type { DesignCard } from './design.js';
 import type { SharedPaths } from './paths.js';
 /** Model-supplied finding. */
 export interface FindingInput {
@@ -43,6 +44,8 @@ export interface CheckInput {
     readonly family?: ScreenFamily;
     /** Aesthetic-profile entry this check measured against (0.6.1). */
     readonly profileRef?: string;
+    /** Design-library cards this check compared against (0.6.2). */
+    readonly designRefs?: readonly string[];
 }
 /** Gate outcome. */
 export interface Gate {
@@ -84,11 +87,24 @@ export interface AestheticAuditRef {
     readonly area?: string;
     readonly value?: string;
 }
+/** One design reference recorded by an audit (0.6.2 P2). */
+export interface DesignAuditRef {
+    readonly criterionId: string;
+    readonly designRef: string;
+    readonly status: 'active' | 'blocked' | 'missing';
+    readonly title?: string;
+    readonly license?: string;
+    readonly tokens?: string;
+}
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
     readonly profileRefs: readonly AestheticAuditRef[];
     /** Baseline comparisons recorded for this pack version (one per page/state). */
     readonly compares?: readonly BaselineCompareResult[];
+}
+/** Design evidence attached to an audit report (0.6.2 P2). */
+export interface DesignAuditSummary {
+    readonly refs: readonly DesignAuditRef[];
 }
 /** A persisted delivery audit. */
 export interface AuditReport {
@@ -106,6 +122,8 @@ export interface AuditReport {
     readonly devices?: readonly DeviceEvidence[];
     /** Aesthetic profile refs and baseline diff (0.6.1). */
     readonly aesthetic?: AestheticAuditSummary;
+    /** Design reference cards named by this audit (0.6.2 P2). */
+    readonly design?: DesignAuditSummary;
 }
 /** Rebuild canonical findings from model input, numbering untitled ids. */
 export declare function normalizeFindings(input: readonly FindingInput[]): Finding[];
@@ -145,7 +163,7 @@ export declare function gatePrereview(findings: readonly Finding[], note: string
  * @param findings - additional findings.
  * @param options - resolved options.
  */
-export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig, aesthetic?: AestheticProfile): Gate;
+export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>): Gate;
 /** Summarize coverage of a delivery audit. */
 export declare function summarizeCoverage(pack: TaskPack, checks: readonly Check[], policy?: DeviceConfig): Coverage;
 /** Per-dimension coverage rows for the audit table. */
@@ -155,10 +173,10 @@ export declare function renderPrereviewMarkdown(report: PrereviewReport, pack: T
 /** Render the「判据 × 屏幕族」matrix; empty string in single-device mode. */
 export declare function renderDeviceMatrix(pack: TaskPack, checks: readonly Check[], policy: DeviceConfig): string;
 /** Render `artifacts/audit-<n>.md`. */
-export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile): string;
+export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>): string;
 /** Render `tasks/rework-<n>.md` from a failed audit. */
 export declare function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
 /** Render `artifacts/acceptance-report.md` from a passing audit. */
-export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile): string;
+export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>): string;
 /** One criterion as a bullet line, used by briefs and gap reports. */
 export declare function criterionLine(criterion: Criterion): string;

@@ -35,6 +35,8 @@ export interface Options {
     readonly designTopK: number;
     readonly designMaxChunks: number;
     readonly designRanker: 'lexical' | 'hybrid';
+    /** Cards included in `tasks/design-brief.md`. */
+    readonly designBriefCards: number;
     readonly designLicenseRequired: boolean;
 }
 /**

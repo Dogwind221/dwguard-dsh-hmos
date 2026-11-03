@@ -25,7 +25,9 @@ export type OutboxKind =
   | 'answer'
   | 'blocked'
   | 'shadow-risk'
-  | 'rework';
+  | 'rework'
+  | 'inspiration'
+  | 'design-request';
 
 /** Which agent implements a task pack. */
 export type ExecutorMode = 'ide' | 'cli';
@@ -75,7 +77,8 @@ export interface OutboxEntry {
   readonly replyTo?: string;
 }
 
-const ENVELOPE = /^(dispatch|ack|deliver|question|answer|blocked|shadow-risk|rework)\s+·\s+#([\w.-]+)\s+·\s+from=(dsh|deveco)\s+to=(dsh|deveco)(?:\s+·\s+re=#([\w.-]+))?(?:\s*\|\s*(.*))?$/i;
+const ENVELOPE =
+  /^(dispatch|ack|deliver|question|answer|blocked|shadow-risk|rework|inspiration|design-request)\s+·\s+#([\w.-]+)\s+·\s+from=(dsh|deveco)\s+to=(dsh|deveco)(?:\s+·\s+re=#([\w.-]+))?(?:\s*\|\s*(.*))?$/i;
 
 /**
  * Parse an outbox file into entries.
@@ -172,6 +175,27 @@ export function unackedDispatches(
   });
 }
 
+/**
+ * Design requests from DevEco that DSH has not answered yet.
+ *
+ * A `design-request` (outbox-deveco) is answered when an `inspiration` entry in
+ * outbox-dsh carries `re=#q-N`; anything else (ack/deliver) does not answer it.
+ */
+export function pendingDesignRequests(
+  requests: readonly OutboxEntry[],
+  answers: readonly OutboxEntry[]
+): OutboxEntry[] {
+  const answered = new Set(
+    answers
+      .filter((entry) => entry.kind === 'inspiration')
+      .map((entry) => entry.replyTo)
+      .filter((id): id is string => id !== undefined)
+  );
+  return requests.filter(
+    (entry) => entry.kind === 'design-request' && entry.id !== undefined && !answered.has(entry.id)
+  );
+}
+
 /** Dimension rows shared by the brief and the spec document. */
 function criteriaTable(pack: TaskPack): string {
   const grouped = criteriaByDimension(pack);
@@ -196,8 +220,19 @@ function criteriaTable(pack: TaskPack): string {
  * @param pack - the frozen task pack.
  * @param paths - resolved layout (for the file references in the brief).
  * @param briefCounter - the dispatch number used in the delivery-record template.
+ * @param design - optional design-brief reference produced by `dwguard_design`.
  */
-export function renderGoalBrief(pack: TaskPack, paths: SharedPaths, briefCounter: number): string {
+export function renderGoalBrief(
+  pack: TaskPack,
+  paths: SharedPaths,
+  briefCounter: number,
+  design?: {
+    readonly file: string;
+    readonly cards: ReadonlyArray<{ id: string; title: string; license: string }>;
+    readonly empty?: boolean;
+    readonly error?: string;
+  }
+): string {
   const grouped = criteriaByDimension(pack);
   const coverage = DIMENSIONS.map((dimension) => [
     DIMENSION_LABELS[dimension],
@@ -228,6 +263,29 @@ export function renderGoalBrief(pack: TaskPack, paths: SharedPaths, briefCounter
     '',
     pack.spec.trim(),
     '',
+    ...(design === undefined
+      ? []
+      : [
+          '## 2.5 设计参考（0.6.2）',
+          '',
+          design.error !== undefined
+            ? `设计库不可用（${design.error}）；本轮按任务包与审美档案实现，不要自行发明风格。`
+            : design.empty
+              ? '设计库为空或没有命中；本轮按任务包与审美档案实现，不要自行发明风格。'
+              : `参考简报：\`${design.file}\`（**参考是证据不是判据**；动手前先读它）。`,
+          '',
+          ...(design.cards.length === 0
+            ? []
+            : [
+                table(
+                  ['ID', '标题', 'license'],
+                  design.cards.map((card) => [`\`${card.id}\``, card.title, card.license])
+                ),
+                ''
+              ]),
+          '编码中可随时在 IDE 终端查同一个索引：`node .shared/design-library/query.mjs "<关键词>" --top 5 --json`；需要新参考就往 `outbox-deveco.md` 追加 `design-request` 记录（带 `re=#d-N`）。',
+          ''
+        ]),
     '## 3. 验收标准（逐条自证，但结论由 DSH 独立复核）',
     '',
     criteriaTable(pack),
