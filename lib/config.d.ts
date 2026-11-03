@@ -51,6 +51,13 @@ export interface Options {
     readonly designEmbeddingWeight: number;
     /** Global directory for cross-project aesthetic templates (empty = default). */
     readonly aestheticTemplatesDir: string;
+    /** Global directory for design card packs (empty = default). */
+    readonly designPacksDir: string;
+    readonly designClipEndpoint: string;
+    readonly designClipModel: string;
+    readonly designClipApiKeyEnv: string;
+    readonly designClipTimeoutMs: number;
+    readonly designClipWeight: number;
     readonly designLicenseRequired: boolean;
 }
 /**

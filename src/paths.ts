@@ -55,6 +55,8 @@ export interface SharedPaths {
   readonly designEmbeddings: string;
   /** Image feature cache for search-by-image (0.6.4). */
   readonly designImageFeatures: string;
+  /** CLIP/multimodal embedding cache (0.6.5). */
+  readonly designClipEmbeddings: string;
   readonly designRefsDir: string;
   readonly designInboxDir: string;
 }
@@ -98,6 +100,7 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     designReworkQueue: resolve(shared, 'design-library', 'rework-suggestions.json'),
     designEmbeddings: resolve(shared, 'design-library', 'embeddings.json'),
     designImageFeatures: resolve(shared, 'design-library', 'image-features.json'),
+    designClipEmbeddings: resolve(shared, 'design-library', 'clip-embeddings.json'),
     designRefsDir: resolve(shared, 'design-library', 'refs'),
     designInboxDir: resolve(shared, 'design-library', 'inbox')
   };

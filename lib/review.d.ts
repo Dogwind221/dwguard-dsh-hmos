@@ -98,12 +98,16 @@ export interface DesignAuditRef {
     readonly license?: string;
     readonly tokens?: string;
 }
-/** One anti-pattern reference recorded by an audit (0.6.4). */
+/** One anti-pattern reference recorded by an audit (0.6.4/0.6.5). */
 export interface DesignAntiPatternAuditRef {
     readonly criterionId: string;
     readonly antiPatternRef: string;
     readonly status: 'active' | 'blocked' | 'missing';
     readonly title?: string;
+    /** `explicit` refs were named by the criterion; `inherited` come from a design card (0.6.5). */
+    readonly source?: 'explicit' | 'inherited';
+    /** The design card this AP was inherited from (0.6.5). */
+    readonly inheritedFrom?: string;
 }
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {

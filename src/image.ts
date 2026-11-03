@@ -314,3 +314,68 @@ export function imageSimilarity(left: ImageFeatures, right: ImageFeatures): Imag
     histogramSimilarity: Number(histogramSimilarity.toFixed(4))
   };
 }
+
+/** Optional multimodal (CLIP-style) embedding endpoint (0.6.5). */
+export interface ClipConfig {
+  readonly endpoint: string;
+  readonly model: string;
+  readonly apiKey?: string;
+  readonly timeoutMs: number;
+}
+
+/** One CLIP embedding response. */
+export interface ClipEmbeddings {
+  readonly imageEmbeddings: readonly (readonly number[])[];
+  readonly textEmbeddings: readonly (readonly number[])[];
+}
+
+/**
+ * Call a multimodal embedding endpoint with one documented contract:
+ * `POST {model, images?: [dataUrl], texts?: [string]}` →
+ * `{imageEmbeddings?: number[][], textEmbeddings?: number[][]}`.
+ */
+export async function createClipClient(
+  config: ClipConfig
+): Promise<(
+  request: { readonly images?: readonly Buffer[]; readonly texts?: readonly string[] }
+) => Promise<ClipEmbeddings>> {
+  return async (request) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1000, config.timeoutMs));
+    try {
+      const images = (request.images ?? []).map((buffer) => `data:image/png;base64,${buffer.toString('base64')}`);
+      const response = await fetch(config.endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(config.apiKey === undefined ? {} : { authorization: `Bearer ${config.apiKey}` })
+        },
+        body: JSON.stringify({
+          model: config.model,
+          ...(images.length === 0 ? {} : { images }),
+          ...(request.texts === undefined ? {} : { texts: request.texts })
+        }),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`CLIP HTTP ${response.status}`);
+      const body = (await response.json()) as Record<string, unknown>;
+      const parse = (raw: unknown, expected: number, label: string): number[][] => {
+        if (raw === undefined) return [];
+        if (!Array.isArray(raw) || raw.length !== expected) throw new Error(`${label} 条数与输入不一致`);
+        return raw.map((row) => {
+          if (!Array.isArray(row) || row.length === 0) throw new Error(`${label} 向量格式不对`);
+          return row.map((value) => {
+            if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${label} 含非数值`);
+            return value;
+          });
+        });
+      };
+      return {
+        imageEmbeddings: parse(body['imageEmbeddings'], images.length, 'imageEmbeddings'),
+        textEmbeddings: parse(body['textEmbeddings'], request.texts?.length ?? 0, 'textEmbeddings')
+      };
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}

@@ -30,3 +30,24 @@ export declare function imageFeatures(image: DecodedImage): ImageFeatures;
 export declare function hashDistance(left: string, right: string): number;
 /** Score two feature sets: 60% pHash similarity + 40% histogram intersection. */
 export declare function imageSimilarity(left: ImageFeatures, right: ImageFeatures): ImageSimilarity;
+/** Optional multimodal (CLIP-style) embedding endpoint (0.6.5). */
+export interface ClipConfig {
+    readonly endpoint: string;
+    readonly model: string;
+    readonly apiKey?: string;
+    readonly timeoutMs: number;
+}
+/** One CLIP embedding response. */
+export interface ClipEmbeddings {
+    readonly imageEmbeddings: readonly (readonly number[])[];
+    readonly textEmbeddings: readonly (readonly number[])[];
+}
+/**
+ * Call a multimodal embedding endpoint with one documented contract:
+ * `POST {model, images?: [dataUrl], texts?: [string]}` →
+ * `{imageEmbeddings?: number[][], textEmbeddings?: number[][]}`.
+ */
+export declare function createClipClient(config: ClipConfig): Promise<(request: {
+    readonly images?: readonly Buffer[];
+    readonly texts?: readonly string[];
+}) => Promise<ClipEmbeddings>>;

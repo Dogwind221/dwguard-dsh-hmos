@@ -4,6 +4,39 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.5 — 2026-11-03
+
+The inheritance + portability release: anti-patterns follow their design cards
+into the audit checklist, image search gains an optional multimodal ranker, and
+whole card libraries can move between projects.
+
+### Added
+
+- **AP auto-inheritance**: referencing a `DSG-*` card now pulls that card's
+  `antiPatterns` into the spec validation and audit checklist (derived, not
+  frozen into `spec.json`). `spec.md` lists `criterion ← designRef → AP`; reports
+  mark inherited refs as 「（继承 DSG-xxxx）」; `audit-<n>.json` adds
+  `source: explicit|inherited` and `inheritedFrom`. Missing/blocked APs anywhere
+  in the chain fail both spec and audit.
+- **CLIP / multimodal search**: optional `designClipEndpoint` (documented
+  `POST {model, images?, texts?}` → `{imageEmbeddings?, textEmbeddings?}`
+  contract), `designClipModel`, `designClipApiKeyEnv`, `designClipTimeoutMs`,
+  `designClipWeight`. `search image:` blends perceptual and CLIP scores;
+  `search imageText:` does text→image. Vectors cache in `clip-embeddings.json`;
+  image search falls back to pHash if CLIP fails, text→image reports a clear
+  error. `query.mjs` stays lexical.
+- **Design card packs**: `dwguard_design pack list/export/import` with a global
+  `designPacksDir` (default `~/.dsh/dwguard/design-packs`). Export writes
+  `pack.json` + `refs/<sha>` for active cards; import (requires
+  `confirmed: true`) assigns fresh ids, preserves kind/brand/tokens/source,
+  dedupes semantically, copies images and rebuilds the index.
+- `DESIGN_ENGINE_VERSION` → `0.6.5`.
+
+### Tests
+
+- `tests/design.test.mjs` gains AP inheritance, pack export/import and CLIP
+  text→image/image-search/fallback/cache cases; suite is now 127/127.
+
 ## 0.6.4 — 2026-11-03
 
 The adversarial-knowledge release: anti-patterns become first-class acceptance

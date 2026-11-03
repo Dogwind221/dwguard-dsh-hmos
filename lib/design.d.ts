@@ -10,10 +10,11 @@
  */
 import type { AestheticArea } from './aesthetic.js';
 import type { Options } from './config.js';
+import { type ClipConfig } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
-export declare const DESIGN_ENGINE_VERSION = "0.6.4";
+export declare const DESIGN_ENGINE_VERSION = "0.6.5";
 /** The card sections that become retrievable chunks. */
 export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand"];
 /** One retrievable section of a card. */
@@ -158,6 +159,8 @@ export interface DesignSearchFilters {
 }
 /** The effective kind of a card, matching the `search` filter vocabulary. */
 export declare function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand';
+/** Anti-pattern ids a referenced design card contributes to an audit checklist (0.6.5). */
+export declare function inheritedAntiPatterns(card: DesignCard | undefined): string[];
 /** `search` output; the generated CLI prints the same shape. */
 export interface DesignSearchResult {
     readonly schemaVersion: 1;
@@ -308,39 +311,93 @@ export declare function searchDesignWithRanker(paths: SharedPaths, options: Opti
     readonly profileAreas?: ReadonlySet<AestheticArea>;
     readonly filters?: DesignSearchFilters;
 }): Promise<DesignSearchResult>;
-/** One card matching a query image (0.6.4). */
+/** One card matching a query image/text (0.6.4/0.6.5). */
 export interface DesignImageHit {
     readonly cardId: string;
     readonly title: string;
     readonly score: number;
-    readonly hashDistance: number;
-    readonly hashSimilarity: number;
-    readonly histogramSimilarity: number;
+    /** pHash component (undefined for text→image). */
+    readonly hashDistance?: number;
+    readonly hashSimilarity?: number;
+    readonly histogramSimilarity?: number;
+    /** CLIP cosine normalized to 0–1 (undefined when CLIP is off). */
+    readonly clipScore?: number;
     readonly license: string;
     readonly imagePath: string;
 }
-/** Result of `search` with an `image` argument. */
+/** Result of `search` with an `image` or `imageText` argument. */
 export interface DesignImageSearchResult {
     readonly query: {
-        readonly width: number;
-        readonly height: number;
-        readonly phash: string;
+        readonly width?: number;
+        readonly height?: number;
+        readonly phash?: string;
+        readonly text?: string;
     };
     readonly results: readonly DesignImageHit[];
     readonly notes: readonly string[];
 }
 /**
  * Rank cards by perceptual similarity to a query PNG (0.6.4).
- *
- * Card images are keyed by their sha256; features are cached in
- * `image-features.json` so repeated searches do not re-decode every image.
+ * With a CLIP config the final score blends pHash and multimodal similarity.
  */
 export declare function searchDesignByImage(paths: SharedPaths, manifest: DesignManifest, queryPath: string, topK: number, options: {
     readonly licenseRequired: boolean;
+    readonly clip?: {
+        readonly config: ClipConfig;
+        readonly weight: number;
+    };
 }): Promise<DesignImageSearchResult>;
-/** Render the image-search result table. */
+/** Text→image search via the CLIP endpoint (0.6.5). */
+export declare function searchDesignByText(paths: SharedPaths, manifest: DesignManifest, text: string, topK: number, options: {
+    readonly licenseRequired: boolean;
+    readonly clip: {
+        readonly config: ClipConfig;
+        readonly weight: number;
+    };
+}): Promise<DesignImageSearchResult>;
+/** Render the image/text-search result table. */
 export declare function renderDesignImageSearchMarkdown(result: DesignImageSearchResult): string;
-/** One targeted suggestion for a failed aesthetic criterion (0.6.3 F). */
+/** Default global directory for cross-project design packs (0.6.5). */
+export declare function defaultDesignPacksDir(): string;
+/** One exported design pack. */
+export interface DesignPack {
+    readonly schemaVersion: 1;
+    readonly name: string;
+    readonly createdAt: string;
+    readonly engineVersion: string;
+    readonly cards: readonly DesignCard[];
+}
+/** One row of `pack list`. */
+export interface DesignPackSummary {
+    readonly name: string;
+    readonly cards: number;
+    readonly createdAt: string;
+    readonly path: string;
+}
+/** Result of `pack export`. */
+export interface DesignPackExportResult {
+    readonly dir: string;
+    readonly pack: DesignPack;
+    readonly warnings: readonly string[];
+}
+/** Result of `pack import`. */
+export interface DesignPackImportResult {
+    readonly manifest: DesignManifest;
+    readonly imported: readonly DesignCard[];
+    readonly skipped: number;
+    readonly files: string[];
+    readonly changed: boolean;
+}
+/** Validate a pack name (safe as a directory name). */
+export declare function isDesignPackName(value: string): boolean;
+/** List packs in the global directory (invalid packs are skipped). */
+export declare function listDesignPacks(dir: string): Promise<DesignPackSummary[]>;
+/** Export active cards (and their images) into `<dir>/<name>/pack.json`. */
+export declare function exportDesignPack(paths: SharedPaths, dir: string, manifest: DesignManifest, name: string, now: string): Promise<DesignPackExportResult>;
+/** Read and validate a pack; returns null when missing/invalid. */
+export declare function readDesignPack(dir: string, name: string): Promise<DesignPack | null>;
+/** Import a pack into the local library (new ids, deduped by semantic key). */
+export declare function importDesignPack(paths: SharedPaths, dir: string, name: string, now: string): Promise<DesignPackImportResult>;
 export interface DesignReworkSuggestion {
     readonly criterionId: string;
     /** The query the next brief should reuse. */

@@ -36,7 +36,7 @@ import { AREA_LABELS, findProfileEntry, valueLabel } from './aesthetic.js';
 import type { BaselineCompareResult } from './baseline.js';
 import { renderCompareMarkdown } from './baseline.js';
 import type { DesignCard, DesignReworkSuggestion } from './design.js';
-import { designCardTokenSummary } from './design.js';
+import { designCardTokenSummary, inheritedAntiPatterns } from './design.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { isKnownRuleId } from './rules.js';
@@ -133,12 +133,16 @@ export interface DesignAuditRef {
   readonly tokens?: string;
 }
 
-/** One anti-pattern reference recorded by an audit (0.6.4). */
+/** One anti-pattern reference recorded by an audit (0.6.4/0.6.5). */
 export interface DesignAntiPatternAuditRef {
   readonly criterionId: string;
   readonly antiPatternRef: string;
   readonly status: 'active' | 'blocked' | 'missing';
   readonly title?: string;
+  /** `explicit` refs were named by the criterion; `inherited` come from a design card (0.6.5). */
+  readonly source?: 'explicit' | 'inherited';
+  /** The design card this AP was inherited from (0.6.5). */
+  readonly inheritedFrom?: string;
 }
 
 /** Aesthetic evidence attached to an audit report (0.6.1). */
@@ -537,6 +541,35 @@ export function gateDelivery(
           errors.push(`${owner} 引用的${label} \`${ref}\` 已被 block，不能作为验收依据。`);
         }
       }
+      // 0.6.5: anti-patterns carried by a referenced design card are part of the
+      // audit checklist; a broken inheritance chain also fails the gate.
+      const explicitKeys = new Set(
+        designRefs.filter((item) => item.label === '反模式').map((item) => `${item.owner}\u0000${item.ref}`)
+      );
+      const inherited: Array<{ ref: string; from: string; owner: string }> = [];
+      const pushInherited = (owner: string, designRef: string): void => {
+        const card = design.get(designRef);
+        for (const ref of inheritedAntiPatterns(card)) {
+          const key = `${owner}\u0000${ref}`;
+          if (explicitKeys.has(key)) continue;
+          explicitKeys.add(key);
+          inherited.push({ ref, from: designRef, owner });
+        }
+      };
+      for (const criterion of pack.criteria) {
+        for (const designRef of criterion.designRefs ?? []) pushInherited(`判据 \`${criterion.id}\``, designRef);
+      }
+      for (const check of checks) {
+        for (const designRef of check.designRefs ?? []) pushInherited(`检查 \`${check.criterionId}\``, designRef);
+      }
+      for (const item of inherited) {
+        const card = design.get(item.ref);
+        if (card === undefined) {
+          errors.push(`${item.owner} 引用的设计参考 \`${item.from}\` 带有反模式 \`${item.ref}\`，但该反模式卡不存在。`);
+        } else if (card.status !== 'active') {
+          errors.push(`${item.owner} 引用的设计参考 \`${item.from}\` 继承的反模式 \`${item.ref}\` 已被 block，不能作为验收依据。`);
+        }
+      }
     }
   }
 
@@ -744,17 +777,47 @@ function designCell(
     .join('<br><br>');
 }
 
-/** One cell for the anti-pattern column (0.6.4). */
+/** Effective anti-pattern refs: explicit plus inherited from referenced cards (0.6.5). */
+interface EffectiveAntiPattern {
+  readonly ref: string;
+  readonly inheritedFrom?: string;
+}
+
+function effectiveAntiPatterns(
+  explicit: readonly string[] | undefined,
+  designRefs: readonly string[] | undefined,
+  design: ReadonlyMap<string, DesignCard> | undefined
+): EffectiveAntiPattern[] {
+  const out: EffectiveAntiPattern[] = [];
+  const seen = new Set<string>();
+  for (const ref of explicit ?? []) {
+    if (seen.has(ref)) continue;
+    seen.add(ref);
+    out.push({ ref });
+  }
+  for (const designRef of designRefs ?? []) {
+    const card = design?.get(designRef);
+    for (const ref of inheritedAntiPatterns(card)) {
+      if (seen.has(ref)) continue;
+      seen.add(ref);
+      out.push({ ref, inheritedFrom: designRef });
+    }
+  }
+  return out;
+}
+
+/** One cell for the anti-pattern column (0.6.4/0.6.5). */
 function antiPatternCell(
-  refs: readonly string[] | undefined,
+  refs: readonly EffectiveAntiPattern[],
   design: ReadonlyMap<string, DesignCard> | undefined
 ): string {
-  if (refs === undefined || refs.length === 0) return '—';
+  if (refs.length === 0) return '—';
   return refs
-    .map((ref) => {
-      const card = design?.get(ref);
-      if (card === undefined) return `\`${ref}\`<br>缺失`;
-      return `\`${ref}\`<br>${card.title}`;
+    .map((item) => {
+      const card = design?.get(item.ref);
+      const inherited = item.inheritedFrom === undefined ? '' : `（继承 ${item.inheritedFrom}）`;
+      if (card === undefined) return `\`${item.ref}\`${inherited}<br>缺失`;
+      return `\`${item.ref}\`${inherited}<br>${card.title}`;
     })
     .join('<br>');
 }
@@ -779,7 +842,14 @@ export function renderAuditMarkdown(
       check.family === undefined ? '—' : SCREEN_FAMILY_LABELS[check.family],
       aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
       designCell(check.designRefs ?? criterion?.designRefs, design),
-      antiPatternCell(check.antiPatternRefs ?? criterion?.antiPatternRefs, design),
+      antiPatternCell(
+        effectiveAntiPatterns(
+          check.antiPatternRefs ?? criterion?.antiPatternRefs,
+          check.designRefs ?? criterion?.designRefs,
+          design
+        ),
+        design
+      ),
       RESULT_LABELS[check.result],
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual === undefined ? '—' : check.actual,
@@ -989,7 +1059,14 @@ export function renderAcceptanceMarkdown(
       check.family === undefined ? check.device ?? '—' : `${check.device ?? '—'} · ${SCREEN_FAMILY_LABELS[check.family]}`,
       aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
       designCell(check.designRefs ?? criterion?.designRefs, design),
-      antiPatternCell(check.antiPatternRefs ?? criterion?.antiPatternRefs, design),
+      antiPatternCell(
+        effectiveAntiPatterns(
+          check.antiPatternRefs ?? criterion?.antiPatternRefs,
+          check.designRefs ?? criterion?.designRefs,
+          design
+        ),
+        design
+      ),
       check.evidence
     ];
   });

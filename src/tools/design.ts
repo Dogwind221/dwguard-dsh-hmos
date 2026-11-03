@@ -15,22 +15,28 @@ import { resolve, sep } from 'node:path';
 import { AREA_LABELS, readProfile, type AestheticArea } from '../aesthetic.js';
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
+import type { ClipConfig } from '../image.js';
 import {
   applyDesignFeedback,
   captureDesignCard,
+  defaultDesignPacksDir,
   DesignLibraryError,
   DESIGN_ENGINE_VERSION,
   DESIGN_FEEDBACK_VERDICTS,
   designCardKind,
+  exportDesignPack,
   generateDesignBrief,
+  importDesignPack,
   ingestDesignLibrary,
   initDesignLibrary,
+  listDesignPacks,
   readDesignIndex,
   readDesignManifest,
   renderDesignCardsMarkdown,
   renderDesignSearchMarkdown,
   renderDesignImageSearchMarkdown,
   searchDesignByImage,
+  searchDesignByText,
   searchDesignWithRanker,
   type DesignManifest
 } from '../design.js';
@@ -55,9 +61,22 @@ import {
 import { pathsOf, requireSpec } from './common.js';
 
 const TOOL = 'dwguard_design';
-const ACTIONS = ['library', 'search', 'brief', 'feedback', 'capture', 'stats'] as const;
+const ACTIONS = ['library', 'search', 'brief', 'feedback', 'capture', 'pack', 'stats'] as const;
+const PACK_OPS = ['list', 'export', 'import'] as const;
 const LIBRARY_OPS = ['init', 'ingest', 'list'] as const;
 const INGEST_SOURCES = ['rules', 'inbox'] as const;
+
+/** Optional CLIP/multimodal endpoint from config (0.6.5). */
+function clipConfig(options: Options): ClipConfig | undefined {
+  if (options.designClipEndpoint.length === 0) return undefined;
+  const apiKey = process.env[options.designClipApiKeyEnv];
+  return {
+    endpoint: options.designClipEndpoint,
+    model: options.designClipModel,
+    ...(apiKey === undefined || apiKey.length === 0 ? {} : { apiKey }),
+    timeoutMs: options.designClipTimeoutMs
+  };
+}
 
 /** Next `i-<n>` id from what is already in outbox-dsh.md. */
 async function nextInspirationId(paths: Awaited<ReturnType<typeof pathsOf>>): Promise<string> {
@@ -143,14 +162,14 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Design reference library (0.6.2–0.6.4): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts (or optional hybrid semantic rerank) and supports search-by-image (`image`), `brief` writes `tasks/design-brief.md` for DevEco and appends an `inspiration` outbox record (answer a DevEco `design-request` with `request: "q-1"`), `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `stats` summarizes coverage. ' +
+      'Design reference library (0.6.2–0.6.5): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts (or optional hybrid semantic rerank) and supports search-by-image (`image`) plus CLIP text→image (`imageText`), `brief` writes `tasks/design-brief.md` for DevEco and appends an `inspiration` outbox record (answer a DevEco `design-request` with `request: "q-1"`), `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `pack` exports/imports card packs across projects, `stats` summarizes coverage. ' +
       'No network, no model calls, no extra dependencies; the same input always produces the same index and ranking. 参考是证据不是判据。',
     parameters: {
       action: {
         type: 'string',
         required: true,
         enum: [...ACTIONS],
-        description: 'library / search / brief / feedback / capture / stats。'
+        description: 'library / search / brief / feedback / capture / pack / stats。'
       },
       op: {
         type: 'string',
@@ -165,7 +184,11 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
       query: { type: 'string', description: 'search 的查询词，如「深色 卡片 间距」；与 image 二选一。' },
       image: {
         type: 'string',
-        description: 'search 的以图搜图：`.shared/` 内的 PNG 路径（0.6.4，DSH 侧 pHash + 颜色直方图）。'
+        description: 'search 的以图搜图：`.shared/` 内的 PNG 路径（0.6.4，DSH 侧 pHash + 颜色直方图，可融合 CLIP）。'
+      },
+      imageText: {
+        type: 'string',
+        description: 'search 的文本→图片：需要配置 `designClipEndpoint`（0.6.5，按 CLIP 语义找最像的卡片图片）。'
       },
       topK: { type: 'number', description: 'search/brief 返回条数（search 默认 designTopK，brief 默认 designBriefCards，1–50）。' },
       appType: { type: 'string', description: 'search 过滤：App 类型（如 `金融后台`），命中 dimensions.appType。' },
@@ -202,7 +225,13 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
       state: { type: 'string', description: 'capture：状态名（默认 default）。' },
       title: { type: 'string', description: 'capture：项目卡标题（默认 `项目模式 · page/state`）。' },
       tags: { type: 'array', items: { type: 'string' }, description: 'capture：附加标签。' },
-      confirmed: { type: 'boolean', description: 'capture 必须带 `confirmed: true`（用户确认过的新设计）。' },
+      confirmed: { type: 'boolean', description: 'capture 与 pack import 必须带 `confirmed: true`。' },
+      packOp: {
+        type: 'string',
+        enum: [...PACK_OPS],
+        description: 'pack 的子操作：list / export / import（0.6.5，卡片包跨项目复用）。'
+      },
+      packName: { type: 'string', description: 'pack 的包名（字母/数字/`-`/`_`）；list 不需要。' },
       note: { type: 'string', description: 'capture：备注/理由（写入 rationale）。' }
     },
     output: { schema: RESULT_SCHEMA, render: renderResult },
@@ -442,6 +471,74 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
           );
         }
 
+        if (action === 'pack') {
+          const packOp = requiredEnum(args, 'packOp', PACK_OPS, TOOL);
+          const dir = options.designPacksDir.length > 0 ? resolve(options.designPacksDir) : defaultDesignPacksDir();
+          if (packOp === 'list') {
+            const packs = await listDesignPacks(dir);
+            return ok(packs.length === 0 ? `设计包目录为空：\`${dir}\`` : `共 ${packs.length} 个设计包。`, {
+              detail:
+                packs.length === 0
+                  ? `目录：\`${dir}\`\n用 \`pack export\` 把当前库的 active 卡片（含图片）存成包。`
+                  : [
+                      '| 包名 | 卡片数 | 创建时间 | 目录 |',
+                      '| --- | --- | --- | --- |',
+                      ...packs.map(
+                        (pack) => `| ${pack.name} | ${pack.cards} | ${pack.createdAt || '—'} | \`${pack.path}\` |`
+                      )
+                    ].join('\n'),
+              next: '跨项目复用：`pack import`（需要 `confirmed: true`）。'
+            });
+          }
+          const packName = requiredString(args, 'packName', TOOL, 60);
+          if (packOp === 'export') {
+            const manifest = await readDesignManifest(paths);
+            if (manifest === null) return fail('还没有设计库。', { next: '先运行 `library init` + `library ingest`。' });
+            try {
+              const result = await exportDesignPack(paths, dir, manifest, packName, now);
+              return ok(`已导出设计包 \`${packName}\`（${result.pack.cards.length} 张卡）。`, {
+                detail: [
+                  `- 目录：\`${result.dir}\``,
+                  `- 卡片：${result.pack.cards.length}（只导出 active，图片随包复制到 \`refs/\`）`,
+                  ...(result.warnings.length === 0 ? [] : [`- 警告：${result.warnings.join('；')}`])
+                ].join('\n'),
+                files: [displayPath(paths, paths.designManifest)],
+                next: '其他项目用 `pack import`（`confirmed: true`）导入；导入会重新分配 id 并按语义去重。'
+              });
+            } catch (error) {
+              return fail(`导出设计包失败：${(error as Error).message}`, {
+                next: '检查包名（字母/数字/-/_，2–41 位）和设计库是否为空。'
+              });
+            }
+          }
+          if (!optionalBoolean(args, 'confirmed', false)) {
+            return fail('`pack import` 会向当前设计库追加卡片，需要 `confirmed: true`。', {
+              next: '先 `pack list` / 查看包内容，确认后再导入。'
+            });
+          }
+          try {
+            const result = await importDesignPack(paths, dir, packName, now);
+            return ok(
+              result.imported.length === 0
+                ? `设计包 \`${packName}\` 的卡片都已存在，跳过 ${result.skipped} 张。`
+                : `已从 \`${packName}\` 导入 ${result.imported.length} 张卡片，跳过 ${result.skipped} 张重复卡。`,
+              {
+                detail: [
+                  `- 导入：${result.imported.map((card) => `\`${card.id}\` ${card.title}`).join('；') || '（无）'}`,
+                  result.skipped === 0 ? '- 去重：无重复' : `- 去重：${result.skipped} 张已存在`,
+                  '- 语义：新 id、保留 kind/品牌/tokens/来源；导入后重建索引。'
+                ].join('\n'),
+                files: result.files,
+                next: '用 `library list` 确认卡片；必要时 `feedback` 调整权重。'
+              }
+            );
+          } catch (error) {
+            return fail(`导入设计包失败：${(error as Error).message}`, {
+              next: '检查包名与 `pack.json`；损坏的包不会修改当前设计库。'
+            });
+          }
+        }
+
         if (action === 'stats') {
           const manifest = await readDesignManifest(paths);
           if (manifest === null) return fail('还没有设计库。', { next: '先运行 `library init` + `library ingest`。' });
@@ -455,12 +552,42 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
         if (searchBudget !== null) return searchBudget;
         const queryArg = optionalString(args, 'query', TOOL, 200);
         const imageArg = optionalString(args, 'image', TOOL, 300);
-        if (queryArg === undefined && imageArg === undefined) {
-          return fail('`search` 需要 `query`（关键词）或 `image`（.shared 内的 PNG 路径）。');
+        const imageText = optionalString(args, 'imageText', TOOL, 200);
+        if (queryArg === undefined && imageArg === undefined && imageText === undefined) {
+          return fail('`search` 需要 `query`、`image`（.shared 内 PNG）或 `imageText`（CLIP 文本→图）之一。');
         }
         const topK = optionalInt(args, 'topK', options.designTopK, TOOL, 1, 50);
         const manifest = await readDesignManifest(paths);
         if (manifest === null) return fail('还没有设计库。', { next: '先运行 `library init` + `library ingest`。' });
+        const clip = clipConfig(options);
+        if (imageText !== undefined) {
+          if (clip === undefined) {
+            return fail('`imageText` 需要配置 `designClipEndpoint`（CLIP/多模态端点）。', {
+              next: '配置端点后重试；纯词法检索用 `query`，以图搜图用 `image`。'
+            });
+          }
+          let textResult;
+          try {
+            textResult = await searchDesignByText(paths, manifest, imageText, topK, {
+              licenseRequired: options.designLicenseRequired,
+              clip: { config: clip, weight: options.designClipWeight }
+            });
+          } catch (error) {
+            return fail(`文本→图片检索失败：${(error as Error).message}`, {
+              next: '检查 CLIP 端点/模型；该调用不写库，失败不会影响现有卡片。'
+            });
+          }
+          await consumeSearchBudget(paths, now);
+          return ok(
+            textResult.results.length === 0
+              ? `没有与「${imageText}」语义相近的卡片图片。`
+              : `「${imageText}」命中 ${textResult.results.length} 张卡的图片（CLIP ${options.designClipModel}）。`,
+            {
+              detail: renderDesignImageSearchMarkdown(textResult),
+              next: 'CLIP 只比较图片语义，不替代词法检索；把最像的 refId 交给用户确认。'
+            }
+          );
+        }
         if (imageArg !== undefined) {
           const sharedRoot = paths.shared;
           const resolved = resolve(sharedRoot, imageArg);
@@ -471,7 +598,8 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
           let imageResult;
           try {
             imageResult = await searchDesignByImage(paths, manifest, resolved, topK, {
-              licenseRequired: options.designLicenseRequired
+              licenseRequired: options.designLicenseRequired,
+              ...(clip === undefined ? {} : { clip: { config: clip, weight: options.designClipWeight } })
             });
           } catch (error) {
             return fail(`以图搜图失败：${(error as Error).message}`, {

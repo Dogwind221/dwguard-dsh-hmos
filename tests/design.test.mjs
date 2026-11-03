@@ -163,6 +163,7 @@ const leftLight = (x) => (x < 16 ? [255, 255, 255] : [0, 0, 0]);
 const IMAGE_A = makePng(32, 32, (x) => leftDark(x));
 const IMAGE_C = makePng(32, 32, (x) => leftLight(x));
 const IMAGE_D = makePng(32, 32, () => [128, 128, 128]);
+const IMAGE_E = makePng(32, 32, () => [255, 0, 0]);
 
 const dirs = [];
 after(async () => {
@@ -777,6 +778,239 @@ async function buildStructuredFixture(cwd) {
   const byTitle = new Map(manifest.cards.map((card) => [card.title, card]));
   return { manifest, byTitle };
 }
+
+test('0.6.5 CLIP: multimodal text→image and pHash+CLIP image search', async () => {
+  const requests = [];
+  const server = createServer((request, response) => {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      requests.push(payload);
+      const imageEmbeddings = (payload.images ?? []).map((dataUrl) => {
+        const buffer = Buffer.from(String(dataUrl).split(',')[1] ?? '', 'base64');
+        const decoded = decodePng(buffer);
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        const total = decoded.width * decoded.height;
+        for (let index = 0; index < total; index += 1) {
+          r += decoded.rgba[index * 4];
+          g += decoded.rgba[index * 4 + 1];
+          b += decoded.rgba[index * 4 + 2];
+        }
+        return [r / total / 255, g / total / 255, b / total / 255];
+      });
+      const textEmbeddings = (payload.texts ?? []).map((text) =>
+        text.includes('红') ? [1, 0, 0] : text.includes('黑白') ? [0.5, 0.5, 0.5] : [0, 0, 1]
+      );
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ imageEmbeddings, textEmbeddings }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  try {
+    const cwd = await workspace();
+    await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+    const inbox = join(paths(cwd).shared, 'design-library', 'inbox');
+    await mkdir(inbox, { recursive: true });
+    await writeFile(join(inbox, 'red.png'), IMAGE_E);
+    await writeFile(join(inbox, 'gray.png'), IMAGE_A);
+    await writeMeta(cwd, 'red.meta.json', {
+      title: '红色海报',
+      summary: '大面积红色',
+      image: 'red.png',
+      source: { kind: 'user', license: 'internal' }
+    });
+    await writeMeta(cwd, 'gray.meta.json', {
+      title: '黑白分割',
+      summary: '黑白对比',
+      image: 'gray.png',
+      source: { kind: 'user', license: 'internal' }
+    });
+    const ingested = await tool.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(cwd));
+    assert.equal(ingested.ok, true, ingested.detail);
+    const manifest = await readDesignManifest(paths(cwd));
+    assert.ok(manifest !== null);
+    const red = manifest.cards.find((card) => card.title === '红色海报');
+    assert.ok(red !== undefined);
+
+    const clipTool = createDesignTool(
+      resolveOptions({
+        designClipEndpoint: `http://127.0.0.1:${port}/v1/clip`,
+        designClipModel: 'stub-clip',
+        designClipTimeoutMs: 3000,
+        designClipWeight: 0.8
+      })
+    );
+    const textSearch = await clipTool.execute({ action: 'search', imageText: '红色', topK: 3 }, exec(cwd));
+    assert.equal(textSearch.ok, true, textSearch.detail);
+    assert.match(textSearch.detail, /CLIP|文本→图片/);
+    const textRows = textSearch.detail.split('\n').filter((line) => line.startsWith('| `'));
+    assert.ok(textRows[0].includes(red.id), `红色应排第一，实际：${textRows[0]}`);
+
+    const queryFile = join(paths(cwd).shared, 'artifacts', 'query-red.png');
+    await mkdir(dirname(queryFile), { recursive: true });
+    await writeFile(queryFile, IMAGE_E);
+    const imageSearch = await clipTool.execute({ action: 'search', image: 'artifacts/query-red.png', topK: 3 }, exec(cwd));
+    assert.equal(imageSearch.ok, true, imageSearch.detail);
+    assert.match(imageSearch.detail, /多模态|CLIP/);
+    const imageRows = imageSearch.detail.split('\n').filter((line) => line.startsWith('| `'));
+    assert.ok(imageRows[0].includes(red.id));
+    const clipCache = JSON.parse(await readFile(paths(cwd).designClipEmbeddings, 'utf8'));
+    assert.equal(clipCache.model, 'stub-clip');
+    assert.ok(Object.keys(clipCache.vectors).length >= 3);
+
+    const before = requests.length;
+    const repeat = await clipTool.execute({ action: 'search', imageText: '红色', topK: 3 }, exec(cwd));
+    assert.equal(repeat.ok, true, repeat.detail);
+    assert.equal(requests.length, before, '第二次文本检索应全部命中缓存');
+
+    const noClip = createDesignTool(resolveOptions({}));
+    const noEndpoint = await noClip.execute({ action: 'search', imageText: '红色' }, exec(cwd));
+    assert.equal(noEndpoint.ok, false);
+    assert.match(noEndpoint.summary, /designClipEndpoint/);
+
+    const offline = createDesignTool(
+      resolveOptions({
+        designClipEndpoint: 'http://127.0.0.1:1/v1/clip',
+        designClipTimeoutMs: 1000,
+        designClipWeight: 0.5
+      })
+    );
+    const fallback = await offline.execute({ action: 'search', image: 'artifacts/query-red.png', topK: 3 }, exec(cwd));
+    assert.equal(fallback.ok, true, fallback.detail);
+    assert.match(fallback.detail, /回退|CLIP 不可用/);
+    const textFailure = await offline.execute({ action: 'search', imageText: '红色' }, exec(cwd));
+    assert.equal(textFailure.ok, false);
+    assert.match(textFailure.summary, /CLIP|文本→图片/);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('0.6.5 PK: design packs export/import cards and images across projects', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dwguard-packs-'));
+  after(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  const packTool = createDesignTool(resolveOptions({ designPacksDir: dir }));
+  const source = await workspace();
+  await buildStructuredFixture(source);
+  const inbox = join(paths(source).shared, 'design-library', 'inbox');
+  await writeFile(join(inbox, 'e.png'), IMAGE_A);
+  await writeMeta(source, 'e-image.meta.json', {
+    title: '图片参考卡',
+    summary: '带图片的设计参考',
+    image: 'e.png',
+    source: { kind: 'user', license: 'internal' }
+  });
+  const ingestImage = await packTool.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(source));
+  assert.equal(ingestImage.ok, true, ingestImage.detail);
+
+  const exported = await packTool.execute(
+    { action: 'pack', packOp: 'export', packName: 'shared-pack' },
+    exec(source)
+  );
+  assert.equal(exported.ok, true, exported.detail);
+  const packJson = JSON.parse(await readFile(join(dir, 'shared-pack', 'pack.json'), 'utf8'));
+  assert.equal(packJson.name, 'shared-pack');
+  assert.equal(packJson.cards.length, 5);
+  const listed = await packTool.execute({ action: 'pack', packOp: 'list' }, exec(source));
+  assert.equal(listed.ok, true, listed.detail);
+  assert.match(listed.detail, /shared-pack/);
+
+  const target = await workspace();
+  await packTool.execute({ action: 'library', op: 'init' }, exec(target));
+  const unconfirmed = await packTool.execute(
+    { action: 'pack', packOp: 'import', packName: 'shared-pack' },
+    exec(target)
+  );
+  assert.equal(unconfirmed.ok, false);
+  assert.match(unconfirmed.summary, /confirmed/);
+
+  const imported = await packTool.execute(
+    { action: 'pack', packOp: 'import', packName: 'shared-pack', confirmed: true },
+    exec(target)
+  );
+  assert.equal(imported.ok, true, imported.detail);
+  const manifest = await readDesignManifest(paths(target));
+  assert.ok(manifest !== null);
+  assert.equal(manifest.cards.length, 5);
+  const imageCard = manifest.cards.find((card) => card.title === '图片参考卡');
+  const finance = manifest.cards.find((card) => card.title === '金融后台数据看板');
+  const anti = manifest.cards.find((card) => card.title === '紫粉渐变');
+  assert.ok(imageCard !== undefined && finance !== undefined && anti !== undefined);
+  assert.equal(imageCard.images.length, 1);
+  assert.ok(await readFile(join(paths(target).designDir, imageCard.images[0].path)));
+  assert.deepEqual(finance.stylePriority, ['极简主义', '玻璃拟态']);
+  assert.deepEqual(finance.antiPatterns, [anti.id], '导入后 antiPatterns 指向重映射后的 AP id');
+  assert.match(anti.id, /^AP-\d{4}$/);
+
+  const again = await packTool.execute(
+    { action: 'pack', packOp: 'import', packName: 'shared-pack', confirmed: true },
+    exec(target)
+  );
+  assert.equal(again.ok, true, again.detail);
+  assert.match(again.summary, /跳过 5/);
+  const afterImport = await readDesignManifest(paths(target));
+  assert.equal(afterImport?.cards.length, 5);
+
+  const badName = await packTool.execute(
+    { action: 'pack', packOp: 'export', packName: '../bad' },
+    exec(source)
+  );
+  assert.equal(badName.ok, false);
+});
+
+test('0.6.5 AP-I: design cards inherit their anti-patterns into spec and audit', async () => {
+  const cwd = await workspace();
+  const { byTitle } = await buildStructuredFixture(cwd);
+  const finance = byTitle.get('金融后台数据看板');
+  const anti = byTitle.get('紫粉渐变');
+  assert.ok(finance !== undefined && anti !== undefined);
+  assert.ok((finance.antiPatterns ?? []).includes(anti.id));
+
+  const spec = await writeSpec(cwd, { designRefs: [finance.id] });
+  assert.equal(spec.ok, true, spec.detail);
+  const specMarkdown = await readFile(paths(cwd).specMd, 'utf8');
+  assert.match(specMarkdown, /自动继承的反模式/);
+  assert.match(specMarkdown, new RegExp(anti.id));
+
+  const audit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audit.ok, true, audit.detail);
+  const report = await readFile(join(paths(cwd).shared, 'artifacts', 'acceptance-report.md'), 'utf8');
+  assert.match(report, /反模式对照/);
+  assert.match(report, new RegExp(`继承 ${finance.id}`));
+  const json = JSON.parse(await readFile(join(paths(cwd).shared, 'artifacts', 'audit-1.json'), 'utf8'));
+  const inheritedEntry = json.design.antiPatterns.find((entry) => entry.antiPatternRef === anti.id);
+  assert.equal(inheritedEntry.source, 'inherited');
+  assert.equal(inheritedEntry.inheritedFrom, finance.id);
+
+  // Blocking the inherited AP must fail the audit gate.
+  const raw = JSON.parse(await readFile(paths(cwd).designManifest, 'utf8'));
+  raw.cards = raw.cards.map((card) => (card.id === anti.id ? { ...card, status: 'blocked' } : card));
+  await writeFile(paths(cwd).designManifest, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+  const blocked = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.detail, /block|继承/);
+
+  // A broken inheritance chain is refused at spec time too.
+  raw.cards = raw.cards.map((card) =>
+    card.id === finance.id
+      ? { ...card, antiPatterns: ['AP-9999'] }
+      : card.id === anti.id
+        ? { ...card, status: 'active' }
+        : card
+  );
+  await writeFile(paths(cwd).designManifest, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+  const missing = await writeSpec(cwd, { designRefs: [finance.id] });
+  assert.equal(missing.ok, false);
+  assert.match(missing.detail, /AP-9999|不存在/);
+});
 
 test('0.6.4 AP-A: anti-pattern refs are gated at spec and audit, and rendered in reports', async () => {
   const cwd = await workspace();

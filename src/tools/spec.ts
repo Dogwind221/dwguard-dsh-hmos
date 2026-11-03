@@ -10,7 +10,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import { readProfile } from '../aesthetic.js';
-import { DesignLibraryError, readDesignManifest } from '../design.js';
+import { DesignLibraryError, inheritedAntiPatterns, readDesignManifest } from '../design.js';
 import type { CriterionAssertion, TaskPack } from '../model.js';
 import { ASSERTION_MATCHERS, DIMENSIONS, DIMENSION_LABELS } from '../model.js';
 import { displayPath } from '../paths.js';
@@ -96,11 +96,14 @@ async function designRefIssues(
   paths: Awaited<ReturnType<typeof pathsOf>>,
   pack: TaskPack,
   options: Options
-): Promise<{ errors: Issue[]; warnings: Issue[] }> {
+): Promise<{
+  errors: Issue[];
+  warnings: Issue[];
+  inherited: Map<string, readonly { ref: string; from: string }[]>;
+}> {
   const errors: Issue[] = [];
   const warnings: Issue[] = [];
-  let manifest: Awaited<ReturnType<typeof readDesignManifest>>;
-  try {
+  let manifest: Awaited<ReturnType<typeof readDesignManifest>>;  try {
     manifest = await readDesignManifest(paths);
   } catch (error) {
     if (!(error instanceof DesignLibraryError)) throw error;
@@ -110,7 +113,7 @@ async function designRefIssues(
         message: `设计库不可读（${error.message}），本轮无法校验 designRefs；修好库后重跑 \`dwguard_spec\` 复检。`
       });
     }
-    return { errors, warnings };
+    return { errors, warnings, inherited: new Map() };
   }
   if (manifest === null) {
     for (const criterion of pack.criteria) {
@@ -129,9 +132,10 @@ async function designRefIssues(
         });
       }
     }
-    return { errors, warnings };
+    return { errors, warnings, inherited: new Map() };
   }
   const cards = new Map(manifest.cards.map((card) => [card.id, card]));
+  const inherited = new Map<string, Array<{ ref: string; from: string }>>();
   for (const criterion of pack.criteria) {
     for (const ref of criterion.designRefs ?? []) {
       if (!isDesignRefId(ref)) continue; // format error already reported
@@ -173,6 +177,31 @@ async function designRefIssues(
         });
       }
     }
+    // 0.6.5: a referenced design card inherits its own antiPatterns.
+    const explicit = new Set(criterion.antiPatternRefs ?? []);
+    const inheritedRefs: Array<{ ref: string; from: string }> = [];
+    for (const designRef of criterion.designRefs ?? []) {
+      const card = cards.get(designRef);
+      for (const ref of inheritedAntiPatterns(card)) {
+        if (explicit.has(ref)) continue;
+        inheritedRefs.push({ ref, from: designRef });
+        const anti = cards.get(ref);
+        if (anti === undefined) {
+          errors.push({
+            code: 'E_ANTIPATTERN_INHERITED_UNKNOWN',
+            message: `判据 \`${criterion.id}\` 引用的设计参考 \`${designRef}\` 带有反模式 \`${ref}\`，但该反模式卡不存在；先 ingest 它。`,
+            criterionId: criterion.id
+          });
+        } else if (anti.status !== 'active') {
+          errors.push({
+            code: 'E_ANTIPATTERN_INHERITED_BLOCKED',
+            message: `判据 \`${criterion.id}\` 引用的设计参考 \`${designRef}\` 继承的反模式 \`${ref}\` 已被 block，不能作为验收依据。`,
+            criterionId: criterion.id
+          });
+        }
+      }
+    }
+    if (inheritedRefs.length > 0) inherited.set(criterion.id, inheritedRefs);
     if (
       manifest.cards.length > 0 &&
       criterion.dimension === 'aesthetic' &&
@@ -186,7 +215,7 @@ async function designRefIssues(
       });
     }
   }
-  return { errors, warnings };
+  return { errors, warnings, inherited };
 }
 
 /**
@@ -349,7 +378,7 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
 
         const created = await ensureShared(paths);
         await writeTextAtomic(paths.specJson, `${JSON.stringify(pack, null, 2)}\n`);
-        await writeTextAtomic(paths.specMd, renderSpecMarkdown(pack, paths));
+        await writeTextAtomic(paths.specMd, renderSpecMarkdown(pack, paths, design.inherited));
         await updateState(paths, now, (current) => ({
           ...current,
           specVersion,

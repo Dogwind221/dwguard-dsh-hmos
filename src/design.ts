@@ -18,17 +18,18 @@ import type { BaselineEntry } from './baseline.js';
 import { baselineDir, extractMetrics, findBaselineEntry, readBaselineIndex, readBoundsJson } from './baseline.js';
 import type { Options } from './config.js';
 import type { DecodedImage, ImageFeatures } from './image.js';
-import { decodePng, imageFeatures, imageSimilarity } from './image.js';
+import { createClipClient, decodePng, imageFeatures, imageSimilarity, type ClipConfig } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { RULES } from './rules.js';
 import { readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull, removeFile, sha256File, writeTextAtomic } from './util/fs.js';
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
-export const DESIGN_ENGINE_VERSION = '0.6.4';
+export const DESIGN_ENGINE_VERSION = '0.6.5';
 
 /** The card sections that become retrievable chunks. */
 export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand'] as const;
@@ -183,6 +184,12 @@ export interface DesignSearchFilters {
 export function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand' {
   if (card.source.kind === 'brand') return 'brand';
   return card.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern';
+}
+
+/** Anti-pattern ids a referenced design card contributes to an audit checklist (0.6.5). */
+export function inheritedAntiPatterns(card: DesignCard | undefined): string[] {
+  if (card === undefined) return [];
+  return [...(card.antiPatterns ?? [])];
 }
 
 const NORMALIZE_FILTER = (value: string): string => value.trim().toLowerCase();
@@ -1301,21 +1308,29 @@ export async function searchDesignWithRanker(
   }
 }
 
-/** One card matching a query image (0.6.4). */
+/** One card matching a query image/text (0.6.4/0.6.5). */
 export interface DesignImageHit {
   readonly cardId: string;
   readonly title: string;
   readonly score: number;
-  readonly hashDistance: number;
-  readonly hashSimilarity: number;
-  readonly histogramSimilarity: number;
+  /** pHash component (undefined for text→image). */
+  readonly hashDistance?: number;
+  readonly hashSimilarity?: number;
+  readonly histogramSimilarity?: number;
+  /** CLIP cosine normalized to 0–1 (undefined when CLIP is off). */
+  readonly clipScore?: number;
   readonly license: string;
   readonly imagePath: string;
 }
 
-/** Result of `search` with an `image` argument. */
+/** Result of `search` with an `image` or `imageText` argument. */
 export interface DesignImageSearchResult {
-  readonly query: { readonly width: number; readonly height: number; readonly phash: string };
+  readonly query: {
+    readonly width?: number;
+    readonly height?: number;
+    readonly phash?: string;
+    readonly text?: string;
+  };
   readonly results: readonly DesignImageHit[];
   readonly notes: readonly string[];
 }
@@ -1339,55 +1354,160 @@ async function loadImageFeatureCache(paths: SharedPaths): Promise<ImageFeatureCa
   }
 }
 
+interface ClipCache {
+  schemaVersion: 1;
+  model: string;
+  vectors: Record<string, readonly number[]>;
+}
+
+async function loadClipCache(paths: SharedPaths, model: string): Promise<ClipCache> {
+  const raw = await readTextOrNull(paths.designClipEmbeddings);
+  if (raw === null) return { schemaVersion: 1, model, vectors: {} };
+  try {
+    const parsed = JSON.parse(raw) as Partial<ClipCache>;
+    if (parsed.schemaVersion !== 1 || parsed.model !== model || typeof parsed.vectors !== 'object' || parsed.vectors === null) {
+      return { schemaVersion: 1, model, vectors: {} };
+    }
+    return { schemaVersion: 1, model, vectors: parsed.vectors as Record<string, readonly number[]> };
+  } catch {
+    return { schemaVersion: 1, model, vectors: {} };
+  }
+}
+
+async function saveClipCache(paths: SharedPaths, cache: ClipCache): Promise<void> {
+  await ensureDir(paths.designDir);
+  await writeTextAtomic(paths.designClipEmbeddings, `${JSON.stringify(cache)}\n`);
+}
+
+interface CardImageEntry {
+  readonly card: DesignCard;
+  readonly image: DesignCard['images'][number];
+  readonly file: string;
+  readonly sha: string;
+}
+
+async function collectCardImages(
+  paths: SharedPaths,
+  manifest: DesignManifest,
+  licenseRequired: boolean
+): Promise<CardImageEntry[]> {
+  const entries: CardImageEntry[] = [];
+  for (const card of manifest.cards) {
+    if (card.status !== 'active') continue;
+    if (designCardKind(card) === 'anti-pattern') continue;
+    if (licenseRequired && card.source.license.toLowerCase() === 'unknown') continue;
+    for (const image of card.images) {
+      const file = join(paths.designDir, image.path);
+      if (!(await fileExists(file))) continue;
+      entries.push({ card, image, file, sha: image.sha256 ?? (await sha256File(file)) });
+    }
+  }
+  return entries;
+}
+
+/** Embed missing card images in small batches (mutates the cache). */
+async function ensureClipVectors(
+  entries: readonly CardImageEntry[],
+  client: Awaited<ReturnType<typeof createClipClient>>,
+  cache: ClipCache
+): Promise<{ computed: number; cached: number }> {
+  let computed = 0;
+  let cached = 0;
+  const missing: CardImageEntry[] = [];
+  for (const entry of entries) {
+    if (cache.vectors[`img:${entry.sha}`] === undefined) missing.push(entry);
+    else cached += 1;
+  }
+  for (let start = 0; start < missing.length; start += 16) {
+    const batch = missing.slice(start, start + 16);
+    const buffers = await Promise.all(batch.map((entry) => readFile(entry.file)));
+    const response = await client({ images: buffers });
+    if (response.imageEmbeddings.length !== batch.length) throw new Error('CLIP 图片向量条数不一致');
+    batch.forEach((entry, index) => {
+      cache.vectors[`img:${entry.sha}`] = response.imageEmbeddings[index] ?? [];
+    });
+    computed += batch.length;
+  }
+  return { computed, cached };
+}
+
 /**
  * Rank cards by perceptual similarity to a query PNG (0.6.4).
- *
- * Card images are keyed by their sha256; features are cached in
- * `image-features.json` so repeated searches do not re-decode every image.
+ * With a CLIP config the final score blends pHash and multimodal similarity.
  */
 export async function searchDesignByImage(
   paths: SharedPaths,
   manifest: DesignManifest,
   queryPath: string,
   topK: number,
-  options: { readonly licenseRequired: boolean }
+  options: {
+    readonly licenseRequired: boolean;
+    readonly clip?: { readonly config: ClipConfig; readonly weight: number };
+  }
 ): Promise<DesignImageSearchResult> {
   const queryImage: DecodedImage = decodePng(await readFile(queryPath));
   const query = imageFeatures(queryImage);
   const cache = await loadImageFeatureCache(paths);
+  const entries = await collectCardImages(paths, manifest, options.licenseRequired);
   let computed = 0;
   let cached = 0;
   const perCard = new Map<string, DesignImageHit>();
-  for (const card of manifest.cards) {
-    if (card.status !== 'active') continue;
-    if (designCardKind(card) === 'anti-pattern') continue;
-    if (options.licenseRequired && card.source.license.toLowerCase() === 'unknown') continue;
-    for (const image of card.images) {
-      const file = join(paths.designDir, image.path);
-      if (!(await fileExists(file))) continue;
-      const sha = image.sha256 ?? (await sha256File(file));
-      let features = cache.features[sha];
-      if (features === undefined) {
-        features = imageFeatures(decodePng(await readFile(file)));
-        cache.features[sha] = features;
-        computed += 1;
-      } else {
-        cached += 1;
+
+  let clipVectors: { client: Awaited<ReturnType<typeof createClipClient>>; cache: ClipCache; query: readonly number[] } | undefined;
+  const clipNotes: string[] = [];
+  if (options.clip !== undefined) {
+    try {
+      const client = await createClipClient(options.clip.config);
+      const clipCache = await loadClipCache(paths, options.clip.config.model);
+      const stats = await ensureClipVectors(entries, client, clipCache);
+      const queryKey = `img:${await sha256File(queryPath)}`;
+      let queryVector = clipCache.vectors[queryKey];
+      if (queryVector === undefined) {
+        const response = await client({ images: [await readFile(queryPath)] });
+        queryVector = response.imageEmbeddings[0] ?? [];
+        clipCache.vectors[queryKey] = queryVector;
       }
-      const similarity = imageSimilarity(query, features);
-      const current = perCard.get(card.id);
-      if (current !== undefined && current.score >= similarity.score) continue;
-      perCard.set(card.id, {
-        cardId: card.id,
-        title: card.title,
-        score: similarity.score,
-        hashDistance: similarity.hashDistance,
-        hashSimilarity: similarity.hashSimilarity,
-        histogramSimilarity: similarity.histogramSimilarity,
-        license: card.source.license,
-        imagePath: image.path
-      });
+      await saveClipCache(paths, clipCache);
+      clipVectors = { client, cache: clipCache, query: queryVector };
+      clipNotes.push(
+        `多模态（CLIP）：${options.clip.config.model}，语义权重 ${options.clip.weight} · 图片向量 ${stats.computed} 新算 / ${stats.cached} 缓存`
+      );
+    } catch (error) {
+      clipNotes.push(`CLIP 不可用（${(error as Error).message}），回退 pHash + 直方图`);
     }
+  }
+
+  for (const entry of entries) {
+    let features = cache.features[entry.sha];
+    if (features === undefined) {
+      features = imageFeatures(decodePng(await readFile(entry.file)));
+      cache.features[entry.sha] = features;
+      computed += 1;
+    } else {
+      cached += 1;
+    }
+    const similarity = imageSimilarity(query, features);
+    let score = similarity.score;
+    let clipScore: number | undefined;
+    if (clipVectors !== undefined) {
+      const vector = clipVectors.cache.vectors[`img:${entry.sha}`] ?? [];
+      clipScore = (cosineSimilarity(clipVectors.query, vector) + 1) / 2;
+      const weight = Math.min(1, Math.max(0, options.clip?.weight ?? 0));
+      score = Number(((1 - weight) * similarity.score + weight * clipScore).toFixed(4));
+    }
+    const current = perCard.get(entry.card.id);
+    if (current !== undefined && current.score >= score) continue;
+    perCard.set(entry.card.id, {
+      cardId: entry.card.id,
+      title: entry.card.title,
+      score,
+      hashDistance: similarity.hashDistance,
+      hashSimilarity: similarity.hashSimilarity,
+      histogramSimilarity: similarity.histogramSimilarity,
+      ...(clipScore === undefined ? {} : { clipScore: Number(clipScore.toFixed(4)) }),
+      license: entry.card.source.license,
+      imagePath: entry.image.path
+    });
   }
   if (computed > 0) {
     await writeTextAtomic(paths.designImageFeatures, `${JSON.stringify(cache)}\n`);
@@ -1400,35 +1520,276 @@ export async function searchDesignByImage(
     results,
     notes: [
       `以图搜图：pHash ${query.phash} · 特征 ${computed} 新算 / ${cached} 缓存`,
-      '排序 = 60% pHash 汉明相似度 + 40% 颜色直方图交集；query.mjs 不支持以图搜图（仅 DSH 侧）'
+      ...clipNotes,
+      '排序 = pHash/直方图（CLIP 开启时再与语义相似度融合）；query.mjs 不支持以图搜图（仅 DSH 侧）'
     ]
   };
 }
 
-/** Render the image-search result table. */
+/** Text→image search via the CLIP endpoint (0.6.5). */
+export async function searchDesignByText(
+  paths: SharedPaths,
+  manifest: DesignManifest,
+  text: string,
+  topK: number,
+  options: {
+    readonly licenseRequired: boolean;
+    readonly clip: { readonly config: ClipConfig; readonly weight: number };
+  }
+): Promise<DesignImageSearchResult> {
+  const client = await createClipClient(options.clip.config);
+  const cache = await loadClipCache(paths, options.clip.config.model);
+  const entries = await collectCardImages(paths, manifest, options.licenseRequired);
+  const stats = await ensureClipVectors(entries, client, cache);
+  const textKey = `text:${sha256Text(`${options.clip.config.model}\u0000${text}`)}`;
+  let textVector = cache.vectors[textKey];
+  if (textVector === undefined) {
+    const response = await client({ texts: [text] });
+    textVector = response.textEmbeddings[0] ?? [];
+    cache.vectors[textKey] = textVector;
+  }
+  await saveClipCache(paths, cache);
+  const perCard = new Map<string, DesignImageHit>();
+  for (const entry of entries) {
+    const vector = cache.vectors[`img:${entry.sha}`] ?? [];
+    const clipScore = (cosineSimilarity(textVector, vector) + 1) / 2;
+    const current = perCard.get(entry.card.id);
+    if (current !== undefined && current.score >= clipScore) continue;
+    perCard.set(entry.card.id, {
+      cardId: entry.card.id,
+      title: entry.card.title,
+      score: Number(clipScore.toFixed(4)),
+      clipScore: Number(clipScore.toFixed(4)),
+      license: entry.card.source.license,
+      imagePath: entry.image.path
+    });
+  }
+  const results = [...perCard.values()]
+    .sort((left, right) => (right.score === left.score ? left.cardId.localeCompare(right.cardId) : right.score - left.score))
+    .slice(0, topK);
+  return {
+    query: { text },
+    results,
+    notes: [
+      `文本→图片：CLIP ${options.clip.config.model} · 图片向量 ${stats.computed} 新算 / ${stats.cached} 缓存`,
+      '只比对卡片图片的语义相似度，不替代词法检索；query.mjs 不支持（仅 DSH 侧）'
+    ]
+  };
+}
+
+/** Render the image/text-search result table. */
 export function renderDesignImageSearchMarkdown(result: DesignImageSearchResult): string {
   if (result.results.length === 0) {
-    return ['本轮没有与查询图相似的卡片。', ...result.notes.map((note) => `> ${note}`)].join('\n');
+    return ['本轮没有与查询相似的卡片。', ...result.notes.map((note) => `> ${note}`)].join('\n');
   }
   const rows = result.results.map((hit) => [
     `\`${hit.cardId}\``,
     hit.title,
     hit.score.toFixed(3),
-    hit.hashDistance === 0 ? '0（相同）' : String(hit.hashDistance),
-    hit.histogramSimilarity.toFixed(3),
+    hit.hashDistance === undefined ? '—' : hit.hashDistance === 0 ? '0（相同）' : String(hit.hashDistance),
+    hit.histogramSimilarity === undefined ? '—' : hit.histogramSimilarity.toFixed(3),
+    hit.clipScore === undefined ? '—' : hit.clipScore.toFixed(3),
     hit.license,
     `\`${hit.imagePath}\``
   ]);
   return [
-    '| ID | 标题 | 相似度 | pHash 距离 | 直方图 | license | 图片 |',
-    '| --- | --- | --- | --- | --- | --- | --- |',
+    '| ID | 标题 | 相似度 | pHash 距离 | 直方图 | CLIP | license | 图片 |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- |',
     ...rows.map((row) => `| ${row.join(' | ')} |`),
     '',
     ...result.notes.map((note) => `> ${note}`)
   ].join('\n');
 }
 
-/** One targeted suggestion for a failed aesthetic criterion (0.6.3 F). */
+/** Default global directory for cross-project design packs (0.6.5). */
+export function defaultDesignPacksDir(): string {
+  return join(homedir(), '.dsh', 'dwguard', 'design-packs');
+}
+
+/** One exported design pack. */
+export interface DesignPack {
+  readonly schemaVersion: 1;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly engineVersion: string;
+  readonly cards: readonly DesignCard[];
+}
+
+/** One row of `pack list`. */
+export interface DesignPackSummary {
+  readonly name: string;
+  readonly cards: number;
+  readonly createdAt: string;
+  readonly path: string;
+}
+
+/** Result of `pack export`. */
+export interface DesignPackExportResult {
+  readonly dir: string;
+  readonly pack: DesignPack;
+  readonly warnings: readonly string[];
+}
+
+/** Result of `pack import`. */
+export interface DesignPackImportResult {
+  readonly manifest: DesignManifest;
+  readonly imported: readonly DesignCard[];
+  readonly skipped: number;
+  readonly files: string[];
+  readonly changed: boolean;
+}
+
+const PACK_NAME = /^[a-z0-9][a-z0-9_-]{1,40}$/i;
+
+/** Validate a pack name (safe as a directory name). */
+export function isDesignPackName(value: string): boolean {
+  return PACK_NAME.test(value);
+}
+
+/** List packs in the global directory (invalid packs are skipped). */
+export async function listDesignPacks(dir: string): Promise<DesignPackSummary[]> {
+  const names = (await listDir(dir)).sort();
+  const summaries: DesignPackSummary[] = [];
+  for (const name of names) {
+    const raw = await readTextOrNull(join(dir, name, 'pack.json'));
+    if (raw === null) continue;
+    try {
+      const parsed = JSON.parse(raw) as Partial<DesignPack>;
+      if (parsed.schemaVersion !== 1 || typeof parsed.name !== 'string' || !Array.isArray(parsed.cards)) continue;
+      summaries.push({
+        name: parsed.name,
+        cards: parsed.cards.length,
+        createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : '',
+        path: join(dir, name)
+      });
+    } catch {
+      // A corrupt pack must not break the others.
+    }
+  }
+  return summaries;
+}
+
+/** Export active cards (and their images) into `<dir>/<name>/pack.json`. */
+export async function exportDesignPack(
+  paths: SharedPaths,
+  dir: string,
+  manifest: DesignManifest,
+  name: string,
+  now: string
+): Promise<DesignPackExportResult> {
+  if (!isDesignPackName(name)) {
+    throw new DesignLibraryError('包名只能使用字母、数字、`-`、`_`，长度 2–41，且以字母或数字开头。');
+  }
+  const active = manifest.cards.filter((card) => card.status === 'active');
+  if (active.length === 0) throw new DesignLibraryError('设计库里没有 active 卡片，无法导出。');
+  const packDir = join(dir, name);
+  const warnings: string[] = [];
+  const cards: DesignCard[] = [];
+  for (const card of active) {
+    const images: DesignCard['images'][number][] = [];
+    for (const image of card.images) {
+      const source = join(paths.designDir, image.path);
+      if (!(await fileExists(source))) {
+        warnings.push(`卡片 \`${card.id}\` 的图片 \`${image.path}\` 不存在，已跳过该图`);
+        continue;
+      }
+      const sha = image.sha256 ?? (await sha256File(source));
+      const ext = extname(image.path).toLowerCase() || '.png';
+      const storedAs = `refs/${sha}${ext}`;
+      await copyFileTo(source, join(packDir, storedAs));
+      images.push({ ...image, path: storedAs, sha256: sha });
+    }
+    cards.push({ ...card, images });
+  }
+  const pack: DesignPack = { schemaVersion: 1, name, createdAt: now, engineVersion: DESIGN_ENGINE_VERSION, cards };
+  await ensureDir(packDir);
+  await writeTextAtomic(join(packDir, 'pack.json'), `${JSON.stringify(pack, null, 2)}\n`);
+  return { dir: packDir, pack, warnings };
+}
+
+function packCardKey(name: string, card: DesignCard): string {
+  return sha256Text(
+    `pack|${name}|${card.title}|${card.source.kind}|${card.source.ref ?? ''}|${JSON.stringify(card.tokens)}|${card.rationale ?? ''}`
+  );
+}
+
+/** Read and validate a pack; returns null when missing/invalid. */
+export async function readDesignPack(dir: string, name: string): Promise<DesignPack | null> {
+  if (!isDesignPackName(name)) throw new DesignLibraryError('包名只能使用字母、数字、`-`、`_`，长度 2–41。');
+  const raw = await readTextOrNull(join(dir, name, 'pack.json'));
+  if (raw === null) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DesignPack>;
+    if (parsed.schemaVersion !== 1 || typeof parsed.name !== 'string' || !Array.isArray(parsed.cards)) return null;
+    const cards = parsed.cards.filter((card): card is DesignCard => {
+      if (typeof card !== 'object' || card === null) return false;
+      const record = card as Record<string, unknown>;
+      return typeof record['id'] === 'string' && typeof record['title'] === 'string';
+    });
+    return {
+      schemaVersion: 1,
+      name: parsed.name,
+      createdAt: parsed.createdAt ?? '',
+      engineVersion: parsed.engineVersion ?? '',
+      cards
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Import a pack into the local library (new ids, deduped by semantic key). */
+export async function importDesignPack(
+  paths: SharedPaths,
+  dir: string,
+  name: string,
+  now: string
+): Promise<DesignPackImportResult> {
+  const pack = await readDesignPack(dir, name);
+  if (pack === null) throw new DesignLibraryError(`设计包 \`${name}\` 不存在或格式不正确。`);
+  const manifest = (await readDesignManifest(paths)) ?? emptyManifest(now);
+  const knownKeys = new Set(manifest.cards.map((card) => card.ingestKey).filter((key): key is string => key !== undefined));
+  const cards: DesignCard[] = [...manifest.cards];
+  const imported: DesignCard[] = [];
+  const files: string[] = [];
+  let skipped = 0;
+  for (const sourceCard of pack.cards) {
+    const key = packCardKey(pack.name, sourceCard);
+    if (knownKeys.has(key)) {
+      skipped += 1;
+      continue;
+    }
+    knownKeys.add(key);
+    const images: DesignCard['images'][number][] = [];
+    for (const image of sourceCard.images) {
+      const from = join(dir, pack.name, image.path);
+      if (!(await fileExists(from))) continue;
+      const sha = image.sha256 ?? (await sha256File(from));
+      const ext = extname(image.path).toLowerCase() || '.png';
+      const storedAs = `refs/${sha}${ext}`;
+      await copyFileTo(from, join(paths.designDir, storedAs));
+      images.push({ ...image, path: storedAs, sha256: sha });
+    }
+    const kind = sourceCard.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern';
+    const id = nextDesignId(cards, kind);
+    const card: DesignCard = {
+      ...sourceCard,
+      id,
+      images,
+      status: 'active',
+      updatedAt: now,
+      ingestKey: key
+    };
+    cards.push(card);
+    imported.push(card);
+  }
+  if (imported.length === 0) {
+    return { manifest, imported, skipped, files, changed: false };
+  }
+  const next: DesignManifest = { ...manifest, updatedAt: now, cards };
+  files.push(...(await writeLibrary(paths, next)));
+  return { manifest: (await readDesignManifest(paths)) ?? next, imported, skipped, files, changed: true };
+}
 export interface DesignReworkSuggestion {
   readonly criterionId: string;
   /** The query the next brief should reuse. */

@@ -16,7 +16,7 @@ import type { PluginContext } from '../context.js';
 import type { AestheticProfile } from '../aesthetic.js';
 import { AREA_LABELS, findProfileEntry, readProfile, valueLabel } from '../aesthetic.js';
 import { readCompareResults } from '../baseline.js';
-import { DesignLibraryError, designCardTokenSummary, readDesignManifest } from '../design.js';
+import { DesignLibraryError, designCardTokenSummary, inheritedAntiPatterns, readDesignManifest } from '../design.js';
 import type { DesignCard, DesignReworkSuggestion } from '../design.js';
 import { clearDesignReworkQueue, writeDesignReworkQueue } from '../design.js';
 import { appendOutboxDsh } from '../dispatch.js';
@@ -181,28 +181,42 @@ function collectDesignRefs(
   return [...refs.values()];
 }
 
-/** Resolve every `antiPatternRef` named by the pack/checks into a report entry (0.6.4). */
+/** Resolve every effective anti-pattern ref into a report entry (0.6.4/0.6.5). */
 function collectAntiPatternRefs(
   pack: TaskPack,
   checks: readonly Check[],
   design: ReadonlyMap<string, DesignCard> | undefined
 ): DesignAntiPatternAuditRef[] {
   const refs = new Map<string, DesignAntiPatternAuditRef>();
-  const add = (criterionId: string, antiPatternRef: string): void => {
-    if (refs.has(antiPatternRef)) return;
+  const add = (
+    criterionId: string,
+    antiPatternRef: string,
+    source: 'explicit' | 'inherited',
+    inheritedFrom?: string
+  ): void => {
+    const current = refs.get(antiPatternRef);
+    if (current?.source === 'explicit' && source === 'inherited') return;
     const card = design?.get(antiPatternRef);
     refs.set(antiPatternRef, {
       criterionId,
       antiPatternRef,
       status: card === undefined ? 'missing' : card.status,
-      ...(card === undefined ? {} : { title: card.title })
+      ...(card === undefined ? {} : { title: card.title }),
+      source,
+      ...(inheritedFrom === undefined ? {} : { inheritedFrom })
     });
   };
   for (const criterion of pack.criteria) {
-    for (const ref of criterion.antiPatternRefs ?? []) add(criterion.id, ref);
+    for (const ref of criterion.antiPatternRefs ?? []) add(criterion.id, ref, 'explicit');
+    for (const designRef of criterion.designRefs ?? []) {
+      for (const ref of inheritedAntiPatterns(design?.get(designRef))) add(criterion.id, ref, 'inherited', designRef);
+    }
   }
   for (const check of checks) {
-    for (const ref of check.antiPatternRefs ?? []) add(check.criterionId, ref);
+    for (const ref of check.antiPatternRefs ?? []) add(check.criterionId, ref, 'explicit');
+    for (const designRef of check.designRefs ?? []) {
+      for (const ref of inheritedAntiPatterns(design?.get(designRef))) add(check.criterionId, ref, 'inherited', designRef);
+    }
   }
   return [...refs.values()];
 }

@@ -52,6 +52,8 @@ export interface SharedPaths {
     readonly designEmbeddings: string;
     /** Image feature cache for search-by-image (0.6.4). */
     readonly designImageFeatures: string;
+    /** CLIP/multimodal embedding cache (0.6.5). */
+    readonly designClipEmbeddings: string;
     readonly designRefsDir: string;
     readonly designInboxDir: string;
 }

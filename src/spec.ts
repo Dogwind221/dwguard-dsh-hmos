@@ -664,7 +664,11 @@ export function missingDimensions(pack: TaskPack): Dimension[] {
 }
 
 /** Render the human-readable `tasks/spec.md`. */
-export function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths): string {
+export function renderSpecMarkdown(
+  pack: TaskPack,
+  paths: SharedPaths,
+  inherited?: ReadonlyMap<string, readonly { readonly ref: string; readonly from: string }[]>
+): string {
   const grouped = criteriaByDimension(pack);
   const criteriaRows: string[][] = [];
   for (const dimension of DIMENSIONS) {
@@ -716,6 +720,18 @@ export function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths): string {
     '',
     table(['ID', '维度', '权重', '规则', '审美档案', '设计参考', '反模式', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
     '',
+    ...(inherited === undefined || inherited.size === 0
+      ? []
+      : [
+          '### 自动继承的反模式（0.6.5）',
+          '',
+          '> 引用了设计参考卡时，卡上的 `antiPatterns` 会自动进入审计清单；下面列出继承关系。',
+          '',
+          ...[...inherited.entries()].flatMap(([criterionId, refs]) =>
+            refs.map((item) => `- \`${criterionId}\` ← \`${item.from}\`：\`${item.ref}\``)
+          ),
+          ''
+        ]),
     '### 维度覆盖',
     '',
     table(['维度', '条数', '必须提供的证据'], coverage),

@@ -95,4 +95,7 @@ export declare function criteriaByDimension(pack: TaskPack): Record<Dimension, C
 /** Dimensions with no criterion at all. */
 export declare function missingDimensions(pack: TaskPack): Dimension[];
 /** Render the human-readable `tasks/spec.md`. */
-export declare function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths): string;
+export declare function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths, inherited?: ReadonlyMap<string, readonly {
+    readonly ref: string;
+    readonly from: string;
+}[]>): string;

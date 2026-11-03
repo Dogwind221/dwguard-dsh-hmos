@@ -105,7 +105,7 @@ DevEco 说「自认为达标」不等于达标。先做一次 30 秒的一致性
 6. **每回来一个维度就记一次** `dwguard_audit_dimension`（`dimension` / `passed` / `failed` / `note`）——DshHoms 面板上的四张卡会按返回顺序逐张落绿，而不是同时亮。
 7. 四维齐全后，再调 `dwguard_audit` 汇总全部 `checks` 过闸门（该调用完成时会清空进度文件，下一轮从零开始）。
 8. **审美档案与基线（可选，0.6.1）**：审美判据带 `profileRef` 时，审计前用 `dwguard_aesthetic`（`profile get`）确认档案存在且 active；用户确认过的审美取舍用 `learn` 提议、用户裁决后 `apply`（冲突必须给 `choice`/`choices`）；有通过审计 + 用户确认后可 `baseline save`，下一轮用 `compare` 做数值回归，差异自动进验收报告的「审美基线差异」。
-9. **设计参考（可选，0.6.2–0.6.4）**：`dwguard_design` 的 `brief` 会写 `tasks/design-brief.md`、强制注入品牌卡并回 `inspiration`；审美判据可带 `designRefs`（`DSG-*`）与 `antiPatternRefs`（`AP-*`，spec/audit 硬闸门），报告出「参考对照」「反模式对照」列。检索可用 `appType/platform/style/kind` 过滤，`hybrid` 可选接 embedding 端点做语义重排（失败回退），`image` 参数可做 PNG pHash + 颜色直方图以图搜图；DevEco 仍可用 `.shared/design-library/query.mjs` 做词法自服务（CLI 无 hybrid/以图搜图）。用户反馈用 `feedback`，通过确认后可用 `capture` 把基线存成项目卡；审计失败时 `rework-suggestions.json` 会被下一轮 brief 自动带入；审计/检索受预算硬停。跨项目偏好用 `dwguard_aesthetic template export/import`（import 需 `confirmed: true`）。参考是对照证据，不是判据。
+9. **设计参考（可选，0.6.2–0.6.5）**：`dwguard_design` 的 `brief` 会写 `tasks/design-brief.md`、强制注入品牌卡并回 `inspiration`；审美判据可带 `designRefs`（`DSG-*`）与 `antiPatternRefs`（`AP-*`），**引用 DSG 卡会自动继承卡上的 antiPatterns** 进 spec 校验/审计清单（报告标「继承 DSG-xxxx」）。检索支持 `appType/platform/style/kind` 过滤、`hybrid` 语义重排、`image` 以图搜图，配置 `designClipEndpoint` 后还可 `imageText` 文本→图并用 CLIP 融合 pHash；DevEco 仍可用 `query.mjs` 做词法自服务。`pack export/import` 可在项目间搬移卡片包（import 需 confirmed）；`feedback`/`capture`/返工建议/预算硬停与前几版一致；跨项目偏好用 `dwguard_aesthetic template export/import`。参考是对照证据，不是判据。
 
 > **证据要落盘**：`evidenceFiles` 写相对 `.shared/` 的路径（截图、布局树 JSON、hilog 片段），工具会校验存在、复制进 `artifacts/audit-<n>/evidence/` 并记 sha256。文件缺失会**整次拒绝**，不会"先记后补"。
 
