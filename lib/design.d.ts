@@ -13,9 +13,9 @@ import type { Options } from './config.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
-export declare const DESIGN_ENGINE_VERSION = "0.6.2-p0";
-/** The four card sections that become retrievable chunks. */
-export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts"];
+export declare const DESIGN_ENGINE_VERSION = "0.6.3";
+/** The card sections that become retrievable chunks. */
+export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand"];
 /** One retrievable section of a card. */
 export type DesignSection = (typeof DESIGN_SECTIONS)[number];
 /** A numeric token (spacing/radius/type/motion). */
@@ -39,9 +39,22 @@ export interface DesignTokens {
 }
 /** Where a card came from and under which license. */
 export interface DesignSource {
-    readonly kind: 'rule' | 'official' | 'user' | 'project';
+    readonly kind: 'rule' | 'official' | 'user' | 'project' | 'brand';
     readonly ref?: string;
     readonly license: string;
+}
+/** Retrieval dimensions used by `search` filters (0.6.3 A). */
+export interface DesignDimensions {
+    readonly appType?: string;
+    readonly platform?: string;
+    readonly style?: string;
+}
+/** Brand / business payload carried by `source.kind: brand` cards (0.6.3 B). */
+export interface DesignBrand {
+    readonly positioning?: string;
+    readonly audience: readonly string[];
+    readonly constraints: readonly string[];
+    readonly bannedStyles: readonly string[];
 }
 /** One design reference card. */
 export interface DesignCard {
@@ -65,6 +78,18 @@ export interface DesignCard {
     readonly updatedAt: string;
     /** sha256 of the inbox metadata this card was ingested from (idempotency). */
     readonly ingestKey?: string;
+    /** `pattern` (default) or `anti-pattern`; anti-pattern ids use the AP-* namespace. */
+    readonly kind?: 'pattern' | 'anti-pattern';
+    /** Optional ranked style preferences, e.g. `["极简主义", "玻璃拟态"]`. */
+    readonly stylePriority?: readonly string[];
+    /** Anti-pattern ids this pattern must avoid (`AP-0001`, …). */
+    readonly antiPatterns?: readonly string[];
+    /** Pre-delivery checklist items an auditor should verify. */
+    readonly checklist?: readonly string[];
+    /** App-type / platform / style indexes used by retrieval filters. */
+    readonly dimensions?: DesignDimensions;
+    /** Brand payload when `source.kind === 'brand'`. */
+    readonly brand?: DesignBrand;
 }
 /** `manifest.json`. */
 export interface DesignManifest {
@@ -105,6 +130,7 @@ export interface DesignIndex {
 export interface DesignSearchHit {
     readonly cardId: string;
     readonly title: string;
+    readonly kind: 'pattern' | 'anti-pattern' | 'brand';
     readonly score: number;
     readonly breakdown: {
         readonly bm25: number;
@@ -118,6 +144,16 @@ export interface DesignSearchHit {
     readonly source: DesignSource;
     readonly images: DesignCard['images'];
 }
+/** Retrieval filters applied before ranking (0.6.3 A/B). */
+export interface DesignSearchFilters {
+    readonly appType?: string;
+    readonly platform?: string;
+    readonly style?: string;
+    /** `pattern` (default) excludes anti-pattern and brand cards. */
+    readonly kind?: 'pattern' | 'anti-pattern' | 'brand';
+}
+/** The effective kind of a card, matching the `search` filter vocabulary. */
+export declare function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand';
 /** `search` output; the generated CLI prints the same shape. */
 export interface DesignSearchResult {
     readonly schemaVersion: 1;
@@ -161,8 +197,8 @@ export declare function readDesignIndex(paths: SharedPaths): Promise<{
     index: DesignIndex;
     chunks: readonly DesignChunk[];
 }>;
-/** Next free `DSG-nnnn` id. */
-export declare function nextDesignId(cards: readonly DesignCard[]): string;
+/** Next free id in the card's namespace (`DSG-*` patterns/brands, `AP-*` anti-patterns). */
+export declare function nextDesignId(cards: readonly DesignCard[], kind?: 'pattern' | 'anti-pattern'): string;
 /** Create the library skeleton (idempotent) and the read-only query CLI. */
 export declare function initDesignLibrary(paths: SharedPaths, now: string): Promise<{
     manifest: DesignManifest;
@@ -207,6 +243,8 @@ export declare function searchDesignLibrary(manifest: DesignManifest, index: Des
     readonly ranker: Options['designRanker'];
     readonly licenseRequired: boolean;
     readonly profileAreas?: ReadonlySet<AestheticArea>;
+    /** Retrieval filters (kind defaults to `pattern`). */
+    readonly filters?: DesignSearchFilters;
 }): DesignSearchResult;
 /** Render a design search result as markdown (used by the tool and the CLI). */
 export declare function renderDesignSearchMarkdown(result: DesignSearchResult): string;
@@ -214,15 +252,48 @@ export declare function renderDesignSearchMarkdown(result: DesignSearchResult): 
 export declare function renderDesignCardsMarkdown(manifest: DesignManifest): string;
 /** One-line token summary used by spec/audit reports (0.6.2 P2). */
 export declare function designCardTokenSummary(card: DesignCard): string;
+/** One targeted suggestion for a failed aesthetic criterion (0.6.3 F). */
+export interface DesignReworkSuggestion {
+    readonly criterionId: string;
+    /** The query the next brief should reuse. */
+    readonly query: string;
+    /** Design cards already referenced by the criterion. */
+    readonly refs: readonly string[];
+    readonly reason?: string;
+}
+/** Persisted between a failed audit and the next design brief. */
+export interface DesignReworkQueue {
+    readonly schemaVersion: 1;
+    readonly specVersion: number;
+    readonly auditId: number;
+    readonly createdAt: string;
+    readonly suggestions: readonly DesignReworkSuggestion[];
+}
+/** Persist the rework suggestions for the next brief. */
+export declare function writeDesignReworkQueue(paths: SharedPaths, queue: DesignReworkQueue): Promise<string>;
+/** Read rework suggestions, scoped to the current pack version. */
+export declare function readDesignReworkQueue(paths: SharedPaths, specVersion: number): Promise<DesignReworkQueue | null>;
+/** Drop rework suggestions once the round passes or a new pack starts. */
+export declare function clearDesignReworkQueue(paths: SharedPaths): Promise<void>;
 /** Result of generating a design brief. */
 export interface DesignBriefResult {
     readonly file: string;
     readonly query: string;
     readonly hits: readonly DesignSearchHit[];
+    readonly brands: readonly DesignCard[];
     readonly result: DesignSearchResult;
+    /** Targeted retrieval driven by the previous failed aesthetic audit. */
+    readonly rework?: {
+        readonly suggestions: readonly DesignReworkSuggestion[];
+        readonly hits: readonly DesignSearchHit[];
+        readonly cards: readonly DesignCard[];
+    };
 }
 /** Render `tasks/design-brief.md`. */
-export declare function renderDesignBriefMarkdown(pack: TaskPack, result: DesignSearchResult, cards: readonly DesignCard[], now: string): string;
+export declare function renderDesignBriefMarkdown(pack: TaskPack, result: DesignSearchResult, cards: readonly DesignCard[], brands: readonly DesignCard[], now: string, rework?: {
+    readonly suggestions: readonly DesignReworkSuggestion[];
+    readonly cards: readonly DesignCard[];
+}): string;
 /**
  * Generate the design brief for the current pack and write it to disk.
  * Throws {@link DesignLibraryError} when the library is missing.

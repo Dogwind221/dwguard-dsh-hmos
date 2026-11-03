@@ -66,6 +66,12 @@ export const Config = z.object({
   designRanker: z.string().default('lexical'),
   /** Cards per design brief handed to DevEco (0.6.2 P1). */
   designBriefCards: z.number().default(5),
+  /** Brand cards force-injected into every brief (0.6.3 B). */
+  designBrandCards: z.number().default(3),
+  /** Hard stop: audits allowed in one round before the orchestrator must ask the user (0.6.3 C). */
+  maxAuditRounds: z.number().default(5),
+  /** Hard stop: design searches allowed in one round (0.6.3 C). */
+  maxDesignSearches: z.number().default(12),
   /** Exclude cards whose license is unknown from search results. */
   designLicenseRequired: z.boolean().default(true)
 });
@@ -97,6 +103,12 @@ export interface Options {
   readonly designRanker: 'lexical' | 'hybrid';
   /** Cards included in `tasks/design-brief.md`. */
   readonly designBriefCards: number;
+  /** Brand cards force-injected into every brief. */
+  readonly designBrandCards: number;
+  /** Audit rounds allowed per round (hard stop). */
+  readonly maxAuditRounds: number;
+  /** Design searches allowed per round (hard stop). */
+  readonly maxDesignSearches: number;
   readonly designLicenseRequired: boolean;
 }
 
@@ -118,6 +130,9 @@ const DEFAULTS: Options = {
   designMaxChunks: 2000,
   designRanker: 'lexical',
   designBriefCards: 5,
+  designBrandCards: 3,
+  maxAuditRounds: 5,
+  maxDesignSearches: 12,
   designLicenseRequired: true
 };
 
@@ -169,6 +184,9 @@ export function resolveOptions(raw: unknown): Options {
     designMaxChunks: positiveInt(input['designMaxChunks'], DEFAULTS.designMaxChunks, 1),
     designRanker: input['designRanker'] === 'hybrid' ? 'hybrid' : 'lexical',
     designBriefCards: positiveInt(input['designBriefCards'], DEFAULTS.designBriefCards, 1),
+    designBrandCards: positiveInt(input['designBrandCards'], DEFAULTS.designBrandCards, 0),
+    maxAuditRounds: positiveInt(input['maxAuditRounds'], DEFAULTS.maxAuditRounds, 1),
+    maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
     designLicenseRequired: bool(input['designLicenseRequired'], DEFAULTS.designLicenseRequired)
   };
 }

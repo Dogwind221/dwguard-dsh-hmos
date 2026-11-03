@@ -322,6 +322,7 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
           specVersion,
           roundDispatches: 0,
           roundAudits: 0,
+          roundDesignSearches: 0,
           phase: 'spec'
         }));
 

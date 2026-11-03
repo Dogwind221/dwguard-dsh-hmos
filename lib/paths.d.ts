@@ -46,6 +46,8 @@ export interface SharedPaths {
     readonly designQueryScript: string;
     /** Design brief handed to DevEco (`tasks/design-brief.md`). */
     readonly designBriefMd: string;
+    /** Suggestions from the last failed aesthetic audit (0.6.3 F). */
+    readonly designReworkQueue: string;
     readonly designRefsDir: string;
     readonly designInboxDir: string;
 }

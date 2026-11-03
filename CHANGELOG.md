@@ -4,6 +4,45 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.3 — 2026-11-03
+
+The structured-knowledge release: design cards get business dimensions and
+anti-pattern references, brand constraints are injected into every brief, the
+round has hard retrieval/audit budgets, and a failed aesthetic audit now feeds
+the next brief's retrieval instead of only listing what went wrong.
+
+### Added
+
+- **Structured cards (A)**: `DesignCard` accepts `stylePriority`,
+  `antiPatterns` (`AP-*` refs), `checklist` and `dimensions`
+  (`appType` / `platform` / `style`); `search`/`query.mjs` gain matching
+  filters (`appType`, `platform`, `style`, `kind`), with `kind: anti-pattern`
+  cards in the `AP-*` namespace and the default search restricted to patterns.
+- **Brand / business cards (B)**: `source.kind: brand` cards carry
+  `positioning`, `audience`, `constraints`, `bannedStyles`; `generateDesignBrief`
+  force-injects up to `designBrandCards` active brand cards into a
+  「品牌与业务约束（强制注入）」 section, regardless of retrieval score. Brand
+  cards are excluded from normal pattern search and queried explicitly with
+  `kind: brand`.
+- **Orchestration budgets (C)**: `maxAuditRounds` (default 5) and
+  `maxDesignSearches` (default 12); state tracks `roundAudits`,
+  `roundDesignSearches` and lifetime `designSearches`; `dwguard_spec` resets the
+  per-round counters, `dwguard_audit`/`dwguard_design` refuse past the cap, and
+  `dwguard_status` shows 「本轮预算：审计 N/M · 设计检索 N/M」 plus a stop action.
+- **Rework → retrieval bridge (F)**: a failed audit writes
+  `design-library/rework-suggestions.json` (one query + refs per failed
+  aesthetic criterion), the rework order gets a 「2.5 设计参考建议」 section, and
+  the next `brief` renders 「0.5 上一轮返工定向参考」 with targeted top-2 hits;
+  a passing audit clears the queue.
+- `DESIGN_ENGINE_VERSION` → `0.6.3`; card chunks include the title, and search
+  results/list/stats expose the effective card kind.
+
+### Tests
+
+- `tests/design.test.mjs` gains five 0.6.3 cases (A schema+filters+CLI parity,
+  B brand validation/forced brief injection, C search budget + reset, C audit
+  budget + status, F rework queue → brief → clear); suite is now 116/116.
+
 ## 0.6.2 — 2026-11-03
 
 The design-reference release: "what should it look like" becomes a shared,

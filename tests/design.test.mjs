@@ -672,3 +672,227 @@ test('P3: capture requires confirmation + passing audit + baseline, then dedupes
   const after = await readDesignManifest(paths(cwd));
   assert.equal(after?.cards.length, manifest.cards.length);
 });
+
+// ── 0.6.3 A/B/C/F ───────────────────────────────────────────────────────────
+
+async function buildStructuredFixture(cwd) {
+  const init = await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+  assert.equal(init.ok, true, init.detail);
+  await writeMeta(cwd, 'a-anti.meta.json', {
+    title: '紫粉渐变',
+    kind: 'anti-pattern',
+    summary: '禁止大面积紫粉渐变，廉价且与严肃业务冲突',
+    rationale: '紫粉渐变在金融/工具类界面里显得廉价，禁止使用。',
+    tags: ['渐变', '反模式'],
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, 'b-brand.meta.json', {
+    title: '古茗品牌',
+    summary: '年轻化茶饮品牌',
+    source: { kind: 'brand', license: 'internal' },
+    brand: {
+      positioning: '年轻化茶饮，强调新鲜与日常陪伴',
+      audience: ['18-25 学生与白领'],
+      constraints: ['会员中心必须突出积分与优惠券', '首屏只放一个主操作'],
+      bannedStyles: ['紫粉渐变', '无意义粒子动画']
+    }
+  });
+  await writeMeta(cwd, 'c-finance.meta.json', {
+    title: '金融后台数据看板',
+    summary: '侧边导航 + 卡片式数据看板，高对比度与极简主义',
+    rationale: '金融后台 严肃 高对比度 侧边导航 卡片式数据看板 极简主义',
+    tags: ['金融后台', '数据看板'],
+    stylePriority: ['极简主义', '玻璃拟态'],
+    antiPatterns: ['AP-0001'],
+    checklist: ['主色不超过两种', '关键数字必须有大字号层级'],
+    dimensions: { appType: '金融后台', platform: 'harmonyos', style: '极简主义' },
+    tokens: { palette: [{ name: 'primary', value: '#1E3A5F' }], radius: [{ name: 'card', value: 8, unit: 'vp' }] },
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, 'd-fitness.meta.json', {
+    title: '运动数据卡片',
+    summary: '高能量运动数据卡片，强调动效与渐变',
+    rationale: '运动 健身 高能量 渐变 动效 数据卡片',
+    tags: ['运动', '数据卡片'],
+    dimensions: { appType: '运动', platform: 'harmonyos', style: '高对比' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  const ingested = await ingest(cwd, ['inbox']);
+  assert.equal(ingested.ok, true, ingested.detail);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const byTitle = new Map(manifest.cards.map((card) => [card.title, card]));
+  return { manifest, byTitle };
+}
+
+test('0.6.3 A: structured card fields round-trip and retrieval filters work', async () => {
+  const cwd = await workspace();
+  const { byTitle } = await buildStructuredFixture(cwd);
+  const finance = byTitle.get('金融后台数据看板');
+  const anti = byTitle.get('紫粉渐变');
+  const brand = byTitle.get('古茗品牌');
+  assert.ok(finance !== undefined && anti !== undefined && brand !== undefined);
+  assert.deepEqual(finance.stylePriority, ['极简主义', '玻璃拟态']);
+  assert.deepEqual(finance.antiPatterns, ['AP-0001']);
+  assert.deepEqual(finance.checklist, ['主色不超过两种', '关键数字必须有大字号层级']);
+  assert.equal(finance.dimensions?.appType, '金融后台');
+  assert.match(anti.id, /^AP-0001$/);
+  assert.equal(anti.kind, 'anti-pattern');
+  assert.equal(brand.brand?.positioning, '年轻化茶饮，强调新鲜与日常陪伴');
+
+  const filtered = await tool.execute(
+    { action: 'search', query: '数据看板 极简主义', topK: 5, appType: '金融后台' },
+    exec(cwd)
+  );
+  assert.equal(filtered.ok, true, filtered.detail);
+  const topIds = filtered.detail.split('\n').filter((line) => line.startsWith('| `'));
+  assert.ok(topIds.some((line) => line.includes(finance.id)));
+  assert.ok(topIds.every((line) => !line.includes(byTitle.get('运动数据卡片')?.id)));
+
+  const byStyle = await tool.execute({ action: 'search', query: '卡片', topK: 5, style: '极简主义' }, exec(cwd));
+  assert.ok(byStyle.detail.includes(finance.id));
+  assert.ok(!byStyle.detail.includes(byTitle.get('运动数据卡片')?.id));
+
+  const antiSearch = await tool.execute(
+    { action: 'search', query: '紫粉渐变', topK: 5, kind: 'anti-pattern' },
+    exec(cwd)
+  );
+  assert.ok(antiSearch.detail.includes(anti.id));
+  assert.ok(!antiSearch.detail.includes(finance.id), 'anti-pattern 检索不应该混入 pattern');
+
+  const brandDefault = await tool.execute({ action: 'search', query: '古茗', topK: 5 }, exec(cwd));
+  assert.ok(!brandDefault.detail.includes(brand.id), '品牌卡默认不进 pattern 检索');
+  const brandSearch = await tool.execute({ action: 'search', query: '古茗', topK: 5, kind: 'brand' }, exec(cwd));
+  assert.ok(brandSearch.detail.includes(brand.id));
+
+  // CLI must apply the same filters.
+  const script = paths(cwd).designQueryScript;
+  const output = await run(
+    process.execPath,
+    [script, '数据看板 极简主义', '--app-type', '金融后台', '--top', '5', '--json'],
+    { cwd }
+  );
+  const cli = JSON.parse(output.stdout);
+  assert.deepEqual(cli.results.map((hit) => hit.cardId), [finance.id]);
+});
+
+test('0.6.3 B: brand cards are validated and force-injected into the brief', async () => {
+  const cwd = await workspace();
+  const { byTitle } = await buildStructuredFixture(cwd);
+  const brand = byTitle.get('古茗品牌');
+  assert.ok(brand !== undefined);
+  await writeSpec(cwd);
+  const brief = await tool.execute({ action: 'brief' }, exec(cwd));
+  assert.equal(brief.ok, true, brief.detail);
+  const markdown = await readFile(paths(cwd).designBriefMd, 'utf8');
+  assert.match(markdown, /品牌与业务约束（强制注入）/);
+  assert.match(markdown, /年轻化茶饮/);
+  assert.match(markdown, /会员中心必须突出积分与优惠券/);
+  assert.match(markdown, /禁用风格：紫粉渐变、无意义粒子动画/);
+
+  // A brand card without any brand payload is rejected at ingest.
+  const invalid = await workspace();
+  await tool.execute({ action: 'library', op: 'init' }, exec(invalid));
+  await writeMeta(invalid, 'bad-brand.meta.json', {
+    title: '空品牌卡',
+    source: { kind: 'brand', license: 'internal' },
+    brand: {}
+  });
+  const result = await ingest(invalid, ['inbox']);
+  assert.match(result.detail, /brand\.positioning|已跳过/);
+  const manifest = await readDesignManifest(paths(invalid));
+  assert.equal(manifest?.cards.length, 0);
+});
+
+test('0.6.3 C: per-round design-search budget stops and resets on a new spec', async () => {
+  const cwd = await workspace();
+  const limited = createDesignTool(resolveOptions({ maxDesignSearches: 2 }));
+  const limitedSpec = createSpecTool(resolveOptions({ maxDesignSearches: 2 }));
+  await limited.execute({ action: 'library', op: 'init' }, exec(cwd));
+  await writeMeta(cwd, 'c.meta.json', {
+    title: '圆角卡片',
+    summary: '圆角 16vp 卡片',
+    rationale: '卡片 圆角 间距',
+    source: { kind: 'user', license: 'internal' }
+  });
+  await limited.execute({ action: 'library', op: 'ingest' }, exec(cwd));
+  const first = await limited.execute({ action: 'search', query: '卡片' }, exec(cwd));
+  const second = await limited.execute({ action: 'search', query: '圆角' }, exec(cwd));
+  assert.equal(first.ok, true, first.detail);
+  assert.equal(second.ok, true, second.detail);
+  const blocked = await limited.execute({ action: 'search', query: '间距' }, exec(cwd));
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.summary, /预算|上限/);
+  const state = JSON.parse(await readFile(join(paths(cwd).shared, 'state.json'), 'utf8'));
+  assert.equal(state.roundDesignSearches, 2);
+
+  const spec = await limitedSpec.execute(
+    {
+      action: 'write',
+      title: '预算测试',
+      requirement: '用户需要看到首页卡片列表、圆角与间距的具体数值。',
+      spec: '首页展示卡片列表；卡片圆角 16vp，页面间距 12vp，遵循任务包里的验收标准。',
+      criteria
+    },
+    exec(cwd)
+  );
+  assert.equal(spec.ok, true, spec.detail);
+  const resetState = JSON.parse(await readFile(join(paths(cwd).shared, 'state.json'), 'utf8'));
+  assert.equal(resetState.roundDesignSearches, 0);
+  const afterReset = await limited.execute({ action: 'search', query: '卡片' }, exec(cwd));
+  assert.equal(afterReset.ok, true, afterReset.detail);
+});
+
+test('0.6.3 C: per-round audit budget hard-stops and status exposes it', async () => {
+  const cwd = await workspace();
+  const opts = resolveOptions({ maxAuditRounds: 1 });
+  const limitedAudit = createAuditTool(opts);
+  const limitedSpec = createSpecTool(opts);
+  await writeSpec(cwd);
+  const failing = checks.map((check) =>
+    check.criterionId === 'A-01' ? { ...check, result: 'fail', evidence: '实测 20vp，与参考 16vp 不一致' } : check
+  );
+  const first = await limitedAudit.execute({ checks: failing }, exec(cwd));
+  assert.equal(first.ok, false, first.detail);
+  assert.match(first.detail, /返工单/);
+  const second = await limitedAudit.execute({ checks: failing }, exec(cwd));
+  assert.equal(second.ok, false);
+  assert.match(second.summary, /上限|用尽/);
+
+  const status = await createStatusTool(opts).execute({}, exec(cwd));
+  assert.match(status.detail, /本轮预算：审计 1\/1/);
+  assert.match(status.next, /上限|maxAuditRounds/);
+});
+
+test('0.6.3 F: failed aesthetic audit feeds the next brief, passing clears it', async () => {
+  const cwd = await workspace();
+  const { byTitle } = await buildStructuredFixture(cwd);
+  const finance = byTitle.get('金融后台数据看板');
+  assert.ok(finance !== undefined);
+  const spec = await writeSpec(cwd, { designRefs: [finance.id] });
+  assert.equal(spec.ok, true, spec.detail);
+
+  const failing = checks.map((check) =>
+    check.criterionId === 'A-01' ? { ...check, result: 'fail', evidence: '实测 20vp，与参考 8vp 不一致' } : check
+  );
+  const audit = await auditTool.execute({ checks: failing }, exec(cwd));
+  assert.equal(audit.ok, false, audit.detail);
+  const rework = await readFile(join(paths(cwd).shared, 'tasks', 'rework-1.md'), 'utf8');
+  assert.match(rework, /设计参考建议（0\.6\.3）/);
+  assert.match(rework, /建议检索/);
+  assert.match(rework, new RegExp(finance.id));
+  const queue = JSON.parse(await readFile(paths(cwd).designReworkQueue, 'utf8'));
+  assert.equal(queue.suggestions[0].criterionId, 'A-01');
+  assert.match(queue.suggestions[0].query, /深色模式卡片/);
+
+  const brief = await tool.execute({ action: 'brief' }, exec(cwd));
+  assert.equal(brief.ok, true, brief.detail);
+  assert.match(brief.detail, /返工定向/);
+  const markdown = await readFile(paths(cwd).designBriefMd, 'utf8');
+  assert.match(markdown, /上一轮返工定向参考/);
+  assert.match(markdown, /建议检索/);
+
+  const passing = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(passing.ok, true, passing.detail);
+  await assert.rejects(readFile(paths(cwd).designReworkQueue, 'utf8'));
+});

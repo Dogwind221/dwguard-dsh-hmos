@@ -35,7 +35,7 @@ import type { AestheticProfile } from './aesthetic.js';
 import { AREA_LABELS, findProfileEntry, valueLabel } from './aesthetic.js';
 import type { BaselineCompareResult } from './baseline.js';
 import { renderCompareMarkdown } from './baseline.js';
-import type { DesignCard } from './design.js';
+import type { DesignCard, DesignReworkSuggestion } from './design.js';
 import { designCardTokenSummary } from './design.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
@@ -829,7 +829,13 @@ export function renderAuditMarkdown(
 }
 
 /** Render `tasks/rework-<n>.md` from a failed audit. */
-export function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string {
+export function renderReworkMarkdown(
+  report: AuditReport,
+  pack: TaskPack,
+  paths: SharedPaths,
+  design?: ReadonlyMap<string, DesignCard>,
+  suggestions?: readonly DesignReworkSuggestion[]
+): string {
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const failed = report.checks.filter((check) => check.result === 'fail');
   const unverified = report.checks.filter((check) => check.result === 'unverified');
@@ -884,6 +890,24 @@ export function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths:
           )
           .join('\n\n'),
     '',
+    ...(suggestions === undefined || suggestions.length === 0
+      ? []
+      : [
+          '## 2.5 设计参考建议（0.6.3）',
+          '',
+          '> 下一轮 `dwguard_design brief` 会自动带入这些检索词与参考卡；先对照它们再改代码。',
+          '',
+          ...suggestions.map((suggestion) => {
+            const refs = suggestion.refs.map((ref) => {
+              const card = design?.get(ref);
+              if (card === undefined) return `\`${ref}\`（未找到）`;
+              const tokens = designCardTokenSummary(card);
+              return `\`${ref}\` ${card.title}${tokens.length === 0 ? '' : `（${tokens}）`}`;
+            });
+            return `- \`${suggestion.criterionId}\`：建议检索 \`${suggestion.query}\`${refs.length === 0 ? '' : `；已有参考：${refs.join('、')}`}`;
+          }),
+          ''
+        ]),
     '## 3. 返工要求',
     '',
     bullets([

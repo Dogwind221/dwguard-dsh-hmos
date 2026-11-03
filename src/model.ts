@@ -197,6 +197,10 @@ export interface SharedState {
   readonly roundDispatches?: number;
   /** Audits that belong to the current task-pack version. */
   readonly roundAudits?: number;
+  /** Design-library searches performed in this round (0.6.3 budget). */
+  readonly roundDesignSearches?: number;
+  /** Total design-library searches (cumulative). */
+  readonly designSearches?: number;
   /** Number of DevEco outbox entries already consumed by `dwguard_status`. */
   readonly inboxCursor: number;
   /** Shadow-review rounds recorded during execution. */
@@ -235,6 +239,8 @@ export function emptyState(now: string): SharedState {
     prereviews: 0,
     dispatches: 0,
     audits: 0,
+    roundDesignSearches: 0,
+    designSearches: 0,
     inboxCursor: 0,
     shadowRuns: 0,
     confirmations: 0,

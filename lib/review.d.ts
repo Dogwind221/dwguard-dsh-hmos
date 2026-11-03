@@ -14,7 +14,7 @@ import type { Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence,
 import type { DeviceConfig } from './device.js';
 import type { AestheticProfile } from './aesthetic.js';
 import type { BaselineCompareResult } from './baseline.js';
-import type { DesignCard } from './design.js';
+import type { DesignCard, DesignReworkSuggestion } from './design.js';
 import type { SharedPaths } from './paths.js';
 /** Model-supplied finding. */
 export interface FindingInput {
@@ -175,7 +175,7 @@ export declare function renderDeviceMatrix(pack: TaskPack, checks: readonly Chec
 /** Render `artifacts/audit-<n>.md`. */
 export declare function renderAuditMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>): string;
 /** Render `tasks/rework-<n>.md` from a failed audit. */
-export declare function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths): string;
+export declare function renderReworkMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, design?: ReadonlyMap<string, DesignCard>, suggestions?: readonly DesignReworkSuggestion[]): string;
 /** Render `artifacts/acceptance-report.md` from a passing audit. */
 export declare function renderAcceptanceMarkdown(report: AuditReport, pack: TaskPack, paths: SharedPaths, policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>): string;
 /** One criterion as a bullet line, used by briefs and gap reports. */

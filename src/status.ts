@@ -169,6 +169,17 @@ export async function collectSnapshot(paths: SharedPaths, options: Options, now:
     action += `（${designRequests.length} 个设计请求待应答：用 \`dwguard_design\` 的 \`brief\` 带 \`request: "${designRequests[0]?.id ?? 'q-1'}"\` 回答）`;
     actionEn += ` (${designRequests.length} design request(s) pending: answer with dwguard_design brief --request "${designRequests[0]?.id ?? 'q-1'}")`;
   }
+  // 0.6.3 C: budget hard stops are surfaced as the one next action.
+  const auditsUsed = state.roundAudits ?? 0;
+  const searchesUsed = state.roundDesignSearches ?? 0;
+  if (auditsUsed >= options.maxAuditRounds) {
+    action += `（审计轮次已达上限 ${auditsUsed}/${options.maxAuditRounds}：停线，先与用户确认方向或调整 maxAuditRounds 开新轮）`;
+    actionEn += ` (audit rounds at the cap ${auditsUsed}/${options.maxAuditRounds}: stop and check with the user, or raise maxAuditRounds for a new round)`;
+  }
+  if (searchesUsed >= options.maxDesignSearches) {
+    action += `（设计检索预算已用尽 ${searchesUsed}/${options.maxDesignSearches}：停止继续检索，改用已有参考）`;
+    actionEn += ` (design search budget exhausted ${searchesUsed}/${options.maxDesignSearches}: stop searching and use what you have)`;
+  }
   // Shadow review goes stale while the executor codes: surface it in the one next action.
   if (phase === 'dispatched' || phase === 'rework') {
     const last = state.lastShadowAt === undefined ? null : Date.parse(state.lastShadowAt);
@@ -279,6 +290,7 @@ export function renderStatusMarkdown(snapshot: Snapshot): string {
     `- 未读交付：${unread.length} 条（共 ${snapshot.outboxEntries.length} 条）`,
     `- 未回执派发：${snapshot.unacked.length} 条${snapshot.unacked.length === 0 ? '' : `（${snapshot.unacked.map((entry) => `#${entry.id ?? '?'}`).join('、')}）`}`,
     `- 设计请求：${snapshot.designRequests.length} 条待应答${snapshot.designRequests.length === 0 ? '' : `（${snapshot.designRequests.map((entry) => `#${entry.id ?? '?'}`).join('、')}）`}`,
+    `- 本轮预算：审计 ${state.roundAudits ?? 0}/${snapshot.options.maxAuditRounds} 轮 · 设计检索 ${state.roundDesignSearches ?? 0}/${snapshot.options.maxDesignSearches} 次`,
     `- 影子审查：${(state.shadowRuns ?? 0)} 次${state.lastShadowAt === undefined ? '' : `（最近 ${state.lastShadowAt}）`}`,
     `- 用户确认：${(state.confirmations ?? 0) > 0 ? `${state.confirmations} 次${state.confirmedAt === undefined ? '' : `（最近 ${state.confirmedAt}）`}` : '（未确认）'}`
   ];

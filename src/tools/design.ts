@@ -20,6 +20,7 @@ import {
   DesignLibraryError,
   DESIGN_ENGINE_VERSION,
   DESIGN_FEEDBACK_VERDICTS,
+  designCardKind,
   generateDesignBrief,
   ingestDesignLibrary,
   initDesignLibrary,
@@ -34,13 +35,14 @@ import { appendOutboxDsh, parseOutbox } from '../dispatch.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { ensureShared } from '../scaffold.js';
-import { readLatestJson } from '../state.js';
+import { readLatestJson, readState, updateState } from '../state.js';
 import { readTextOrNull } from '../util/fs.js';
 import { nowIso } from '../util/md.js';
 import {
   arrayOfRecords,
   asRecord,
   optionalBoolean,
+  optionalEnum,
   optionalInt,
   optionalString,
   optionalStringArray,
@@ -67,6 +69,35 @@ async function nextInspirationId(paths: Awaited<ReturnType<typeof pathsOf>>): Pr
   return `i-${max + 1}`;
 }
 
+/** Refuse a design search once the round's retrieval budget is exhausted (0.6.3 C). */
+async function searchBudgetGuard(
+  paths: Awaited<ReturnType<typeof pathsOf>>,
+  options: Options,
+  now: string
+): Promise<ToolResult | null> {
+  const state = await readState(paths, now);
+  const used = state.roundDesignSearches ?? 0;
+  if (used >= options.maxDesignSearches) {
+    return fail(`设计检索预算已用尽（本轮 ${used}/${options.maxDesignSearches}）。`, {
+      detail: '同一轮继续检索通常不会带来新信息；先用已有简报/参考实现，或与用户确认后调整 maxDesignSearches 并开新轮。',
+      next: '停线：把已有检索结果写进 `tasks/design-brief.md`，或调整配置后重新 `dwguard_spec` 开新轮。'
+    });
+  }
+  return null;
+}
+
+/** Count one design search against the round and lifetime budgets. */
+async function consumeSearchBudget(
+  paths: Awaited<ReturnType<typeof pathsOf>>,
+  now: string
+): Promise<void> {
+  await updateState(paths, now, (current) => ({
+    ...current,
+    designSearches: (current.designSearches ?? 0) + 1,
+    roundDesignSearches: (current.roundDesignSearches ?? 0) + 1
+  }));
+}
+
 function statsDetail(manifest: DesignManifest): string {
   const cards = manifest.cards;
   const active = cards.filter((card) => card.status === 'active');
@@ -80,6 +111,7 @@ function statsDetail(manifest: DesignManifest): string {
   }
   return [
     `- 卡片：${cards.length}（active ${active.length} / blocked ${cards.length - active.length}）`,
+    `- 类型：pattern ${cards.filter((card) => designCardKind(card) === 'pattern').length} / anti-pattern ${cards.filter((card) => designCardKind(card) === 'anti-pattern').length} / brand ${cards.filter((card) => designCardKind(card) === 'brand').length}`,
     `- 块：${manifest.counts.chunks}`,
     `- 引擎：${manifest.engineVersion}`,
     `- 更新时间：${manifest.updatedAt}`,
@@ -129,6 +161,14 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
       },
       query: { type: 'string', description: 'search 的查询词，如「深色 卡片 间距」。' },
       topK: { type: 'number', description: 'search/brief 返回条数（search 默认 designTopK，brief 默认 designBriefCards，1–50）。' },
+      appType: { type: 'string', description: 'search 过滤：App 类型（如 `金融后台`），命中 dimensions.appType。' },
+      platform: { type: 'string', description: 'search 过滤：平台（如 `harmonyos`），命中 dimensions.platform。' },
+      style: { type: 'string', description: 'search 过滤：风格（命中 dimensions.style 或 stylePriority）。' },
+      kind: {
+        type: 'string',
+        enum: ['pattern', 'anti-pattern', 'brand'],
+        description: 'search 过滤：默认 pattern；anti-pattern 查禁止项，brand 查品牌卡。'
+      },
       request: {
         type: 'string',
         description: 'brief 的应答对象：DevEco 写下的 `design-request` id（如 `q-1`）；省略则回指最近一次 dispatch。'
@@ -233,6 +273,8 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
 
         if (action === 'brief') {
           const pack = await requireSpec(paths, options, TOOL);
+          const budget = await searchBudgetGuard(paths, options, now);
+          if (budget !== null) return budget;
           const topK = optionalInt(args, 'topK', options.designBriefCards, TOOL, 1, 50);
           const request = optionalString(args, 'request', TOOL, 40)?.replace(/^#/, '');
           const brief = await generateDesignBrief(
@@ -272,12 +314,17 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
             hit.source.license,
             hit.score.toFixed(2)
           ]);
+          await consumeSearchBudget(paths, now);
           return ok(
             `已生成设计参考简报：命中 ${brief.hits.length} 张卡，写入 \`${displayPath(paths, brief.file)}\`。`,
             {
               detail: [
                 `- 查询：\`${brief.query}\``,
                 `- 简报：\`${displayPath(paths, brief.file)}\``,
+                `- 品牌卡：${brief.brands.length} 张（强制注入）`,
+                ...(brief.rework === undefined
+                  ? []
+                  : [`- 返工定向：${brief.rework.suggestions.length} 条建议、${brief.rework.hits.length} 张补充卡片`]),
                 `- 排序：${brief.result.ranker}${brief.result.notes.length === 0 ? '' : `（${brief.result.notes.join('；')}）`}`,
                 target === undefined ? '- 回执对象：无（还没有 dispatch）' : `- 回执对象：#${target}`,
                 `- outbox：\`inspiration · #${inspirationId}\``,
@@ -397,8 +444,14 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
         }
 
         // action === 'search'
+        const searchBudget = await searchBudgetGuard(paths, options, now);
+        if (searchBudget !== null) return searchBudget;
         const query = requiredString(args, 'query', TOOL, 200);
         const topK = optionalInt(args, 'topK', options.designTopK, TOOL, 1, 50);
+        const appType = optionalString(args, 'appType', TOOL, 40);
+        const platform = optionalString(args, 'platform', TOOL, 40);
+        const style = optionalString(args, 'style', TOOL, 40);
+        const kind = optionalEnum(args, 'kind', ['pattern', 'anti-pattern', 'brand'] as const, TOOL);
         const manifest = await readDesignManifest(paths);
         if (manifest === null) return fail('还没有设计库。', { next: '先运行 `library init` + `library ingest`。' });
         const { index, chunks } = await readDesignIndex(paths);
@@ -410,15 +463,22 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
           topK,
           ranker: options.designRanker,
           licenseRequired: options.designLicenseRequired,
-          ...(profileAreas.size === 0 ? {} : { profileAreas })
+          ...(profileAreas.size === 0 ? {} : { profileAreas }),
+          filters: {
+            kind: kind ?? 'pattern',
+            ...(appType === undefined ? {} : { appType }),
+            ...(platform === undefined ? {} : { platform }),
+            ...(style === undefined ? {} : { style })
+          }
         });
+        await consumeSearchBudget(paths, now);
         return ok(
           result.results.length === 0
-            ? `没有命中「${query}」。`
-            : `「${query}」命中 ${result.results.length} 张卡（库内 ${result.totalChunks} 个块，${result.ranker} 排序）。`,
+            ? `没有命中「${query}」（kind=${kind ?? 'pattern'}）。`
+            : `「${query}」命中 ${result.results.length} 张卡（kind=${kind ?? 'pattern'}，库内 ${result.totalChunks} 个块，${result.ranker} 排序）。`,
           {
             detail: renderDesignSearchMarkdown(result),
-            next: 'P1 会把命中的卡片写进 `tasks/design-brief.md` 并下发给 DevEco；当前可直接把 refId 交给用户挑选。'
+            next: '用 `brief` 把命中结果写进 `tasks/design-brief.md` 并下发给 DevEco；或把 refId 交给用户挑选。'
           }
         );
       } catch (error) {

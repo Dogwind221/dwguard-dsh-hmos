@@ -37,6 +37,12 @@ export interface Options {
     readonly designRanker: 'lexical' | 'hybrid';
     /** Cards included in `tasks/design-brief.md`. */
     readonly designBriefCards: number;
+    /** Brand cards force-injected into every brief. */
+    readonly designBrandCards: number;
+    /** Audit rounds allowed per round (hard stop). */
+    readonly maxAuditRounds: number;
+    /** Design searches allowed per round (hard stop). */
+    readonly maxDesignSearches: number;
     readonly designLicenseRequired: boolean;
 }
 /**

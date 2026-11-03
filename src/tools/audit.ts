@@ -17,7 +17,8 @@ import type { AestheticProfile } from '../aesthetic.js';
 import { AREA_LABELS, findProfileEntry, readProfile, valueLabel } from '../aesthetic.js';
 import { readCompareResults } from '../baseline.js';
 import { DesignLibraryError, designCardTokenSummary, readDesignManifest } from '../design.js';
-import type { DesignCard } from '../design.js';
+import type { DesignCard, DesignReworkSuggestion } from '../design.js';
+import { clearDesignReworkQueue, writeDesignReworkQueue } from '../design.js';
 import { appendOutboxDsh } from '../dispatch.js';
 import { appendCalibration, dimensionVerdicts } from '../calibration.js';
 import { collectDeviceEvidence } from '../device.js';
@@ -48,9 +49,10 @@ import {
   summarizeDimensions
 } from '../review.js';
 import { ensureShared } from '../scaffold.js';
-import { nextIndex, updateState } from '../state.js';
+import { nextIndex, readState, updateState } from '../state.js';
 import { writeTextAtomic } from '../util/fs.js';
 import { nowIso, table } from '../util/md.js';
+import { inline, truncate } from '../util/md.js';
 import {
   arrayOfRecords,
   asRecord,
@@ -178,6 +180,27 @@ function collectDesignRefs(
 }
 
 /**
+ * Targeted retrieval suggestions for the next brief: one per failed aesthetic
+ * criterion (0.6.3 F). This is what turns B's rejection into A's next query.
+ */
+function buildReworkSuggestions(pack: TaskPack, checks: readonly Check[]): DesignReworkSuggestion[] {
+  const suggestions: DesignReworkSuggestion[] = [];
+  for (const criterion of pack.criteria) {
+    if (criterion.dimension !== 'aesthetic') continue;
+    const own = checks.filter((check) => check.criterionId === criterion.id);
+    const failed = own.length === 0 || own.some((check) => check.result !== 'pass');
+    if (!failed) continue;
+    suggestions.push({
+      criterionId: criterion.id,
+      query: truncate(inline(criterion.statement), 60),
+      refs: criterion.designRefs ?? []
+    });
+    if (suggestions.length >= 3) break;
+  }
+  return suggestions;
+}
+
+/**
  * Create the `dwguard_audit` tool.
  * @param options - resolved plugin options.
  * @param ctx - plugin context (used to resolve the session working directory).
@@ -289,6 +312,15 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       const findings = normalizeFindings(parseFindings(args));
       const note = optionalString(args, 'note', TOOL, 2000) ?? '';
       const now = nowIso();
+      // 0.6.3 C: hard stop when the round's audit budget is exhausted.
+      const budgetState = await readState(paths, now);
+      const auditsUsed = budgetState.roundAudits ?? 0;
+      if (auditsUsed >= options.maxAuditRounds) {
+        return fail(`本轮审计轮次已用尽（${auditsUsed}/${options.maxAuditRounds}），停止继续审计。`, {
+          detail: '继续提交审计不会自动产生新证据；请先与用户确认方向，或调整 `maxAuditRounds` 后开新轮。',
+          next: '停线：把未解决的问题交给用户拍板，或修完返工项后调整配置重开一轮。'
+        });
+      }
       const id = await nextIndex(paths.artifactsDir, 'audit');
       const devices = collectDeviceEvidence(checks).map((device) => {
         const pooled = policy.pool.find((entry) => entry.sn === device.sn);
@@ -395,6 +427,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       if (gate.pass) {
         const acceptance = renderAcceptanceMarkdown(report, pack, paths, policy, profile, designCards);
         await writeTextAtomic(`${paths.artifactsDir}/acceptance-report.md`, acceptance);
+        await clearDesignReworkQueue(paths);
         await clearAuditProgress(paths);
         await updateState(paths, now, (current) => ({
           ...current,
@@ -410,12 +443,32 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       }
 
       const reworkPath = `${paths.tasksDir}/rework-${id}.md`;
-      const rework = renderReworkMarkdown(report, pack, paths);
+      const suggestions = buildReworkSuggestions(pack, checks);
+      if (suggestions.length === 0) {
+        await clearDesignReworkQueue(paths);
+      } else {
+        await writeDesignReworkQueue(paths, {
+          schemaVersion: 1,
+          specVersion: pack.specVersion,
+          auditId: id,
+          createdAt: now,
+          suggestions
+        });
+      }
+      const rework = renderReworkMarkdown(report, pack, paths, designCards, suggestions);
       await writeTextAtomic(reworkPath, rework);
       await appendOutboxDsh(
         paths,
         `rework #${id} · 审计未通过`,
-        `${gate.errors.map((error) => `- ${error}`).join('\n')}\n\n返工单：\`${displayPath(paths, reworkPath)}\``,
+        [
+          `${gate.errors.map((error) => `- ${error}`).join('\n')}`,
+          '',
+          `返工单：\`${displayPath(paths, reworkPath)}\``,
+          ...(suggestions.length === 0
+            ? []
+            : ['', '**下一轮设计检索建议**', ...suggestions.map((suggestion) => `- \`${suggestion.criterionId}\`：\`${suggestion.query}\``)]),
+          ...(suggestions.length === 0 ? [] : ['', `参考队列：\`${displayPath(paths, paths.designReworkQueue)}\`（下一轮 brief 自动带入）`])
+        ].join('\n'),
         now,
         { kind: 'rework', id: `r-${id}`, from: 'dsh', to: 'deveco' }
       );

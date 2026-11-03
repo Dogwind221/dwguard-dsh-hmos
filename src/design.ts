@@ -21,14 +21,14 @@ import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { RULES } from './rules.js';
-import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull, sha256File, writeTextAtomic } from './util/fs.js';
+import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull, removeFile, sha256File, writeTextAtomic } from './util/fs.js';
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
-export const DESIGN_ENGINE_VERSION = '0.6.2-p0';
+export const DESIGN_ENGINE_VERSION = '0.6.3';
 
-/** The four card sections that become retrievable chunks. */
-export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts'] as const;
+/** The card sections that become retrievable chunks. */
+export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand'] as const;
 
 /** One retrievable section of a card. */
 export type DesignSection = (typeof DESIGN_SECTIONS)[number];
@@ -57,9 +57,24 @@ export interface DesignTokens {
 
 /** Where a card came from and under which license. */
 export interface DesignSource {
-  readonly kind: 'rule' | 'official' | 'user' | 'project';
+  readonly kind: 'rule' | 'official' | 'user' | 'project' | 'brand';
   readonly ref?: string;
   readonly license: string;
+}
+
+/** Retrieval dimensions used by `search` filters (0.6.3 A). */
+export interface DesignDimensions {
+  readonly appType?: string;
+  readonly platform?: string;
+  readonly style?: string;
+}
+
+/** Brand / business payload carried by `source.kind: brand` cards (0.6.3 B). */
+export interface DesignBrand {
+  readonly positioning?: string;
+  readonly audience: readonly string[];
+  readonly constraints: readonly string[];
+  readonly bannedStyles: readonly string[];
 }
 
 /** One design reference card. */
@@ -80,6 +95,18 @@ export interface DesignCard {
   readonly updatedAt: string;
   /** sha256 of the inbox metadata this card was ingested from (idempotency). */
   readonly ingestKey?: string;
+  /** `pattern` (default) or `anti-pattern`; anti-pattern ids use the AP-* namespace. */
+  readonly kind?: 'pattern' | 'anti-pattern';
+  /** Optional ranked style preferences, e.g. `["极简主义", "玻璃拟态"]`. */
+  readonly stylePriority?: readonly string[];
+  /** Anti-pattern ids this pattern must avoid (`AP-0001`, …). */
+  readonly antiPatterns?: readonly string[];
+  /** Pre-delivery checklist items an auditor should verify. */
+  readonly checklist?: readonly string[];
+  /** App-type / platform / style indexes used by retrieval filters. */
+  readonly dimensions?: DesignDimensions;
+  /** Brand payload when `source.kind === 'brand'`. */
+  readonly brand?: DesignBrand;
 }
 
 /** `manifest.json`. */
@@ -121,6 +148,7 @@ export interface DesignIndex {
 export interface DesignSearchHit {
   readonly cardId: string;
   readonly title: string;
+  readonly kind: 'pattern' | 'anti-pattern' | 'brand';
   readonly score: number;
   readonly breakdown: {
     readonly bm25: number;
@@ -133,6 +161,43 @@ export interface DesignSearchHit {
   readonly tokens: DesignTokens;
   readonly source: DesignSource;
   readonly images: DesignCard['images'];
+}
+
+/** Retrieval filters applied before ranking (0.6.3 A/B). */
+export interface DesignSearchFilters {
+  readonly appType?: string;
+  readonly platform?: string;
+  readonly style?: string;
+  /** `pattern` (default) excludes anti-pattern and brand cards. */
+  readonly kind?: 'pattern' | 'anti-pattern' | 'brand';
+}
+
+/** The effective kind of a card, matching the `search` filter vocabulary. */
+export function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand' {
+  if (card.source.kind === 'brand') return 'brand';
+  return card.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern';
+}
+
+const NORMALIZE_FILTER = (value: string): string => value.trim().toLowerCase();
+
+function matchesDesignFilters(card: DesignCard, filters: DesignSearchFilters): boolean {
+  const kind = filters.kind ?? 'pattern';
+  if (designCardKind(card) !== kind) return false;
+  if (filters.appType !== undefined) {
+    const value = card.dimensions?.appType;
+    if (value === undefined || NORMALIZE_FILTER(value) !== NORMALIZE_FILTER(filters.appType)) return false;
+  }
+  if (filters.platform !== undefined) {
+    const value = card.dimensions?.platform;
+    if (value === undefined || NORMALIZE_FILTER(value) !== NORMALIZE_FILTER(filters.platform)) return false;
+  }
+  if (filters.style !== undefined) {
+    const wanted = NORMALIZE_FILTER(filters.style);
+    const dimension = card.dimensions?.style;
+    const ranked = (card.stylePriority ?? []).some((style) => NORMALIZE_FILTER(style) === wanted);
+    if ((dimension === undefined || NORMALIZE_FILTER(dimension) !== wanted) && !ranked) return false;
+  }
+  return true;
 }
 
 /** `search` output; the generated CLI prints the same shape. */
@@ -281,11 +346,26 @@ function tokensText(tokens: DesignTokens): string {
 
 /** Build the retrievable chunks for one card, in deterministic section order. */
 export function cardChunks(card: DesignCard): DesignChunk[] {
+  const brandText =
+    card.brand === undefined
+      ? ''
+      : [
+          card.brand.positioning ?? '',
+          `目标用户：${card.brand.audience.join('、')}`,
+          `业务约束：${card.brand.constraints.join('、')}`,
+          `禁用风格：${card.brand.bannedStyles.join('、')}`
+        ]
+          .filter((line) => line.trim().length > 0)
+          .join('\n');
   const sections: Array<{ section: DesignSection; text: string }> = [
     { section: 'tokens', text: tokensText(card.tokens) },
-    { section: 'rationale', text: card.rationale ?? card.summary },
+    { section: 'rationale', text: [card.title, card.rationale ?? card.summary].join('\n') },
     { section: 'dos', text: card.dos.join('\n') },
-    { section: 'donts', text: card.donts.join('\n') }
+    { section: 'donts', text: card.donts.join('\n') },
+    { section: 'style', text: (card.stylePriority ?? []).join('\n') },
+    { section: 'antiPatterns', text: (card.antiPatterns ?? []).join('\n') },
+    { section: 'checklist', text: (card.checklist ?? []).join('\n') },
+    { section: 'brand', text: brandText }
   ];
   const chunks: DesignChunk[] = [];
   for (const { section, text } of sections) {
@@ -425,16 +505,17 @@ async function writeLibrary(paths: SharedPaths, manifest: DesignManifest): Promi
   return [displayPath(paths, paths.designManifest), displayPath(paths, paths.designChunks), displayPath(paths, paths.designIndex)];
 }
 
-/** Next free `DSG-nnnn` id. */
-export function nextDesignId(cards: readonly DesignCard[]): string {
+/** Next free id in the card's namespace (`DSG-*` patterns/brands, `AP-*` anti-patterns). */
+export function nextDesignId(cards: readonly DesignCard[], kind: 'pattern' | 'anti-pattern' = 'pattern'): string {
+  const prefix = kind === 'anti-pattern' ? 'AP' : 'DSG';
   let max = 0;
   for (const card of cards) {
-    const match = /^DSG-(\d+)$/.exec(card.id);
+    const match = new RegExp(`^${prefix}-(\\d+)$`).exec(card.id);
     if (match?.[1] === undefined) continue;
     const value = Number.parseInt(match[1], 10);
     if (Number.isFinite(value) && value > max) max = value;
   }
-  return `DSG-${String(max + 1).padStart(4, '0')}`;
+  return `${prefix}-${String(max + 1).padStart(4, '0')}`;
 }
 
 function emptyManifest(now: string): DesignManifest {
@@ -507,6 +588,51 @@ interface InboxMeta {
   readonly tokens?: unknown;
   readonly image?: unknown;
   readonly source?: unknown;
+  readonly kind?: unknown;
+  readonly stylePriority?: unknown;
+  readonly antiPatterns?: unknown;
+  readonly checklist?: unknown;
+  readonly dimensions?: unknown;
+  readonly brand?: unknown;
+}
+
+function dimensionsFrom(raw: unknown): DesignDimensions | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const record = raw as Record<string, unknown>;
+  const text = (key: string): string | undefined => {
+    const value = record[key];
+    return typeof value === 'string' && value.trim().length > 0 ? inline(value).slice(0, 40) : undefined;
+  };
+  const appType = text('appType');
+  const platform = text('platform');
+  const style = text('style');
+  if (appType === undefined && platform === undefined && style === undefined) return undefined;
+  return {
+    ...(appType === undefined ? {} : { appType }),
+    ...(platform === undefined ? {} : { platform }),
+    ...(style === undefined ? {} : { style })
+  };
+}
+
+function brandFrom(raw: unknown): DesignBrand | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const record = raw as Record<string, unknown>;
+  const positioning =
+    typeof record['positioning'] === 'string' && inline(record['positioning']).length > 0
+      ? inline(record['positioning']).slice(0, 240)
+      : undefined;
+  const audience = stringArray(record['audience'], 12);
+  const constraints = stringArray(record['constraints'], 12);
+  const bannedStyles = stringArray(record['bannedStyles'], 12);
+  if (positioning === undefined && audience.length === 0 && constraints.length === 0 && bannedStyles.length === 0) {
+    return undefined;
+  }
+  return {
+    ...(positioning === undefined ? {} : { positioning }),
+    audience,
+    constraints,
+    bannedStyles
+  };
 }
 
 function stringArray(raw: unknown, max: number): string[] {
@@ -603,11 +729,39 @@ export async function inboxCards(
     }
     const title = typeof meta.title === 'string' ? inline(meta.title) : '';
     const source = typeof meta.source === 'object' && meta.source !== null ? (meta.source as Record<string, unknown>) : {};
-    const kind = source['kind'] === undefined ? 'user' : source['kind'];
+    const sourceKind = source['kind'] === undefined ? 'user' : source['kind'];
     const license = typeof source['license'] === 'string' ? source['license'].trim() : '';
-    if (title.length === 0 || license.length === 0 || (kind !== 'official' && kind !== 'user' && kind !== 'project')) {
-      warnings.push(`${name}: 需要 title、source.license，且 source.kind ∈ official/user/project；已跳过`);
+    if (
+      title.length === 0 ||
+      license.length === 0 ||
+      (sourceKind !== 'official' && sourceKind !== 'user' && sourceKind !== 'project' && sourceKind !== 'brand')
+    ) {
+      warnings.push(`${name}: 需要 title、source.license，且 source.kind ∈ official/user/project/brand；已跳过`);
       continue;
+    }
+    if (meta.kind !== undefined && meta.kind !== 'pattern' && meta.kind !== 'anti-pattern') {
+      warnings.push(`${name}: kind 只能是 pattern / anti-pattern；已跳过`);
+      continue;
+    }
+    const cardKind: 'pattern' | 'anti-pattern' = meta.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern';
+    const rationale = typeof meta.rationale === 'string' && inline(meta.rationale).length > 0 ? inline(meta.rationale) : undefined;
+    const summary = typeof meta.summary === 'string' ? inline(meta.summary) : '';
+    if (cardKind === 'anti-pattern' && rationale === undefined && summary.length === 0) {
+      warnings.push(`${name}: anti-pattern 卡片需要 rationale 或 summary 描述禁止项；已跳过`);
+      continue;
+    }
+    let brand: DesignBrand | undefined;
+    if (sourceKind === 'brand') {
+      brand = brandFrom(meta.brand);
+      if (brand === undefined) {
+        warnings.push(`${name}: source.kind=brand 需要 brand.positioning / audience / constraints / bannedStyles 至少一项；已跳过`);
+        continue;
+      }
+    }
+    const antiPatterns = stringArray(meta.antiPatterns, 16);
+    const validAntiPatterns = antiPatterns.filter((id) => /^AP-\d{4}$/.test(id));
+    if (validAntiPatterns.length !== antiPatterns.length) {
+      warnings.push(`${name}: 部分 antiPatterns 不是 AP-<四位数字>，已忽略无效 id`);
     }
     const images: Array<{ path: string; sha256: string; alt: string }> = [];
     const imageName = sanitizeInboxFile(meta.image);
@@ -627,19 +781,22 @@ export async function inboxCards(
         files.push(displayPath(paths, join(paths.designDir, storedAs)));
       }
     }
-    const id = nextDesignId([...existing, ...cards]);
+    const id = nextDesignId([...existing, ...cards], cardKind);
+    const stylePriority = stringArray(meta.stylePriority, 12);
+    const checklist = stringArray(meta.checklist, 16);
+    const dimensions = dimensionsFrom(meta.dimensions);
     cards.push({
       id,
       title,
-      summary: typeof meta.summary === 'string' ? inline(meta.summary) : '',
+      summary,
       tags: stringArray(meta.tags, 12),
       source: {
-        kind,
+        kind: sourceKind,
         ...(typeof source['ref'] === 'string' && source['ref'].trim().length > 0 ? { ref: source['ref'].trim() } : {}),
         license
       },
       tokens: normalizeTokens(meta.tokens),
-      ...(typeof meta.rationale === 'string' && inline(meta.rationale).length > 0 ? { rationale: inline(meta.rationale) } : {}),
+      ...(rationale === undefined ? {} : { rationale }),
       dos: stringArray(meta.dos, 12),
       donts: stringArray(meta.donts, 12),
       images,
@@ -647,7 +804,13 @@ export async function inboxCards(
       weight: 1,
       createdAt: now,
       updatedAt: now,
-      ingestKey
+      ingestKey,
+      kind: cardKind,
+      ...(stylePriority.length === 0 ? {} : { stylePriority }),
+      ...(validAntiPatterns.length === 0 ? {} : { antiPatterns: validAntiPatterns }),
+      ...(checklist.length === 0 ? {} : { checklist }),
+      ...(dimensions === undefined ? {} : { dimensions }),
+      ...(brand === undefined ? {} : { brand })
     });
   }
   return { cards, skipped, warnings, files };
@@ -744,6 +907,8 @@ export function searchDesignLibrary(
     readonly ranker: Options['designRanker'];
     readonly licenseRequired: boolean;
     readonly profileAreas?: ReadonlySet<AestheticArea>;
+    /** Retrieval filters (kind defaults to `pattern`). */
+    readonly filters?: DesignSearchFilters;
   }
 ): DesignSearchResult {
   const notes: string[] = [];
@@ -784,6 +949,7 @@ export function searchDesignLibrary(
   for (const card of cards.values()) {
     if (card.status !== 'active') continue;
     if (options.licenseRequired && card.source.license.toLowerCase() === 'unknown') continue;
+    if (!matchesDesignFilters(card, options.filters ?? { kind: 'pattern' })) continue;
     const best = byCard.get(card.id);
     const bm25 = best?.score ?? 0;
     if (bm25 === 0 && queryTokens.length > 0) continue;
@@ -805,6 +971,7 @@ export function searchDesignLibrary(
     results.push({
       cardId: card.id,
       title: card.title,
+      kind: designCardKind(card),
       score,
       breakdown: {
         bm25: Number(bm25.toFixed(4)),
@@ -839,6 +1006,7 @@ export function renderDesignSearchMarkdown(result: DesignSearchResult): string {
   const rows = result.results.map((hit) => [
     `\`${hit.cardId}\``,
     hit.title,
+    hit.kind,
     hit.score.toFixed(2),
     hit.breakdown.bm25.toFixed(2),
     hit.breakdown.tokenBoost.toFixed(2),
@@ -846,7 +1014,7 @@ export function renderDesignSearchMarkdown(result: DesignSearchResult): string {
     hit.source.license,
     hit.snippet
   ]);
-  const header = ['ID', '标题', '总分', 'BM25', 'token', '档案', 'license', '片段'];
+  const header = ['ID', '标题', '类型', '总分', 'BM25', 'token', '档案', 'license', '片段'];
   const lines = [
     '| ' + header.join(' | ') + ' |',
     '| ' + header.map(() => '---').join(' | ') + ' |',
@@ -864,13 +1032,14 @@ export function renderDesignCardsMarkdown(manifest: DesignManifest): string {
     .map((card) => [
       `\`${card.id}\``,
       card.title,
+      designCardKind(card),
       card.source.kind,
       card.source.license,
       card.status,
       card.weight.toFixed(1),
       String(cardChunks(card).length)
     ]);
-  return ['| ID | 标题 | 来源 | license | 状态 | 权重 | 块数 |', '| --- | --- | --- | --- | --- | --- | --- |', ...rows.map((row) => `| ${row.join(' | ')} |`)].join('\n');
+  return ['| ID | 标题 | kind | 来源 | license | 状态 | 权重 | 块数 |', '| --- | --- | --- | --- | --- | --- | --- | --- |', ...rows.map((row) => `| ${row.join(' | ')} |`)].join('\n');
 }
 
 /** One-line token summary used by spec/audit reports (0.6.2 P2). */
@@ -878,12 +1047,91 @@ export function designCardTokenSummary(card: DesignCard): string {
   return tokensText(card.tokens).split('\n').join('；');
 }
 
+/** One targeted suggestion for a failed aesthetic criterion (0.6.3 F). */
+export interface DesignReworkSuggestion {
+  readonly criterionId: string;
+  /** The query the next brief should reuse. */
+  readonly query: string;
+  /** Design cards already referenced by the criterion. */
+  readonly refs: readonly string[];
+  readonly reason?: string;
+}
+
+/** Persisted between a failed audit and the next design brief. */
+export interface DesignReworkQueue {
+  readonly schemaVersion: 1;
+  readonly specVersion: number;
+  readonly auditId: number;
+  readonly createdAt: string;
+  readonly suggestions: readonly DesignReworkSuggestion[];
+}
+
+/** Persist the rework suggestions for the next brief. */
+export async function writeDesignReworkQueue(
+  paths: SharedPaths,
+  queue: DesignReworkQueue
+): Promise<string> {
+  await ensureDir(paths.designDir);
+  await writeTextAtomic(paths.designReworkQueue, `${JSON.stringify(queue, null, 2)}\n`);
+  return paths.designReworkQueue;
+}
+
+/** Read rework suggestions, scoped to the current pack version. */
+export async function readDesignReworkQueue(
+  paths: SharedPaths,
+  specVersion: number
+): Promise<DesignReworkQueue | null> {
+  const raw = await readTextOrNull(paths.designReworkQueue);
+  if (raw === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== 'object' || parsed === null) return null;
+    const record = parsed as Record<string, unknown>;
+    if (record['specVersion'] !== specVersion || !Array.isArray(record['suggestions'])) return null;
+    const suggestions: DesignReworkSuggestion[] = [];
+    for (const item of record['suggestions']) {
+      if (typeof item !== 'object' || item === null) continue;
+      const entry = item as Record<string, unknown>;
+      if (typeof entry['criterionId'] !== 'string' || typeof entry['query'] !== 'string') continue;
+      suggestions.push({
+        criterionId: entry['criterionId'],
+        query: entry['query'],
+        refs: Array.isArray(entry['refs'])
+          ? (entry['refs'] as unknown[]).filter((ref): ref is string => typeof ref === 'string')
+          : [],
+        ...(typeof entry['reason'] === 'string' ? { reason: entry['reason'] } : {})
+      });
+    }
+    return {
+      schemaVersion: 1,
+      specVersion,
+      auditId: typeof record['auditId'] === 'number' ? record['auditId'] : 0,
+      createdAt: typeof record['createdAt'] === 'string' ? record['createdAt'] : '',
+      suggestions
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Drop rework suggestions once the round passes or a new pack starts. */
+export async function clearDesignReworkQueue(paths: SharedPaths): Promise<void> {
+  await removeFile(paths.designReworkQueue);
+}
+
 /** Result of generating a design brief. */
 export interface DesignBriefResult {
   readonly file: string;
   readonly query: string;
   readonly hits: readonly DesignSearchHit[];
+  readonly brands: readonly DesignCard[];
   readonly result: DesignSearchResult;
+  /** Targeted retrieval driven by the previous failed aesthetic audit. */
+  readonly rework?: {
+    readonly suggestions: readonly DesignReworkSuggestion[];
+    readonly hits: readonly DesignSearchHit[];
+    readonly cards: readonly DesignCard[];
+  };
 }
 
 function buildBriefQuery(pack: TaskPack): string {
@@ -899,6 +1147,23 @@ function renderCardDetail(card: DesignCard): string[] {
   lines.push(`- 来源：${card.source.kind}${card.source.ref === undefined ? '' : `（${card.source.ref}）`} · license ${card.source.license}`);
   const tokens = tokensText(card.tokens);
   if (tokens.length > 0) lines.push(`- tokens：${tokens.split('\n').join('；')}`);
+  if (card.stylePriority !== undefined && card.stylePriority.length > 0) {
+    lines.push(`- 样式优先级：${card.stylePriority.join(' > ')}`);
+  }
+  if (card.antiPatterns !== undefined && card.antiPatterns.length > 0) {
+    lines.push(`- 禁止项：${card.antiPatterns.map((id) => `\`${id}\``).join('、')}`);
+  }
+  if (card.checklist !== undefined && card.checklist.length > 0) {
+    lines.push(`- 交付前检查：${card.checklist.join('；')}`);
+  }
+  if (card.dimensions !== undefined) {
+    const dims = [
+      card.dimensions.appType === undefined ? '' : `appType=${card.dimensions.appType}`,
+      card.dimensions.platform === undefined ? '' : `platform=${card.dimensions.platform}`,
+      card.dimensions.style === undefined ? '' : `style=${card.dimensions.style}`
+    ].filter((item) => item.length > 0);
+    if (dims.length > 0) lines.push(`- 维度：${dims.join(' · ')}`);
+  }
   if (card.rationale !== undefined) lines.push(`- 理由：${truncate(card.rationale, 240)}`);
   if (card.dos.length > 0) lines.push(`- Do：${card.dos.join('；')}`);
   if (card.donts.length > 0) lines.push(`- Don't：${card.donts.join('；')}`);
@@ -909,21 +1174,71 @@ function renderCardDetail(card: DesignCard): string[] {
   return lines;
 }
 
+function renderBrandSection(brands: readonly DesignCard[]): string[] {
+  if (brands.length === 0) return [];
+  const lines = [
+    '## 0. 品牌与业务约束（强制注入）',
+    '',
+    '> 以下约束优先于审美参考：参考可以取舍，品牌定位/业务约束不可违反。',
+    ''
+  ];
+  for (const brand of brands) {
+    lines.push(`### \`${brand.id}\` · ${brand.title}`, '');
+    if (brand.brand?.positioning !== undefined) lines.push(`- 定位：${brand.brand.positioning}`);
+    if ((brand.brand?.audience.length ?? 0) > 0) lines.push(`- 目标用户：${brand.brand?.audience.join('、') ?? ''}`);
+    if ((brand.brand?.constraints.length ?? 0) > 0) lines.push(`- 业务约束：${brand.brand?.constraints.join('、') ?? ''}`);
+    if ((brand.brand?.bannedStyles.length ?? 0) > 0) lines.push(`- 禁用风格：${brand.brand?.bannedStyles.join('、') ?? ''}`);
+    if (brand.brand?.positioning === undefined && (brand.brand?.audience.length ?? 0) === 0 && (brand.brand?.constraints.length ?? 0) === 0) {
+      lines.push(`- 参考：${brand.summary}`);
+    }
+    lines.push('');
+  }
+  return lines;
+}
+
 /** Render `tasks/design-brief.md`. */
 export function renderDesignBriefMarkdown(
   pack: TaskPack,
   result: DesignSearchResult,
   cards: readonly DesignCard[],
-  now: string
+  brands: readonly DesignCard[],
+  now: string,
+  rework?: { readonly suggestions: readonly DesignReworkSuggestion[]; readonly cards: readonly DesignCard[] }
 ): string {
   const lines = [
     `# 设计参考简报 · ${pack.title}`,
     '',
     `> 任务包 v${pack.specVersion} · ${now} · 查询：\`${result.query}\` · 排序 ${result.ranker} · 命中 ${result.results.length} 张`,
     '> **参考是证据不是判据**：DSH 仍然独立取证；参考卡片不能替代设备上的验收证据。',
-    ''
+    '',
+    ...renderBrandSection(brands)
   ];
   if (result.notes.length > 0) lines.push(...result.notes.map((note) => `> ${note}`), '');
+  const reworkLines =
+    rework === undefined || rework.suggestions.length === 0
+      ? []
+      : [
+          '## 0.5 上一轮返工定向参考',
+          '',
+          '> 这些检索词来自上一轮未通过的审美判据；实现时优先对照。',
+          '',
+          ...rework.suggestions.map(
+            (suggestion) =>
+              `- \`${suggestion.criterionId}\`：建议检索 \`${suggestion.query}\`${suggestion.refs.length === 0 ? '' : `；已有参考 ${suggestion.refs.map((ref) => `\`${ref}\``).join('、')}`}`
+          ),
+          '',
+          ...(rework.cards.length === 0
+            ? []
+            : [
+                '| ID | 标题 | 来源 | license |',
+                '| --- | --- | --- | --- |',
+                ...rework.cards.map(
+                  (card) => `| \`${card.id}\` | ${card.title} | ${card.source.kind} | ${card.source.license} |`
+                ),
+                ''
+              ])
+        ];
+  lines.push(...reworkLines);
   if (result.results.length === 0) {
     lines.push('本轮没有命中的参考卡片：按任务包与审美档案实现，不要自行发明风格。', '');
     return lines.join('\n');
@@ -974,13 +1289,49 @@ export async function generateDesignBrief(
   const result = searchDesignLibrary(manifest, index, chunks, query, {
     topK: options.designBriefCards,
     ranker: options.designRanker,
-    licenseRequired: options.designLicenseRequired
+    licenseRequired: options.designLicenseRequired,
+    filters: { kind: 'pattern' }
   });
   const cards = result.results
     .map((hit) => manifest.cards.find((card) => card.id === hit.cardId))
     .filter((card): card is DesignCard => card !== undefined);
-  await writeTextAtomic(paths.designBriefMd, renderDesignBriefMarkdown(pack, result, cards, now));
-  return { file: paths.designBriefMd, query, hits: result.results, result };
+  const brands = manifest.cards
+    .filter((card) => card.source.kind === 'brand' && card.status === 'active')
+    .slice(0, options.designBrandCards);
+  const queue = await readDesignReworkQueue(paths, pack.specVersion);
+  let rework: DesignBriefResult['rework'];
+  if (queue !== null && queue.suggestions.length > 0) {
+    const seen = new Set(result.results.map((hit) => hit.cardId));
+    const extraHits: DesignSearchHit[] = [];
+    for (const suggestion of queue.suggestions.slice(0, 3)) {
+      const extra = searchDesignLibrary(manifest, index, chunks, suggestion.query, {
+        topK: 2,
+        ranker: options.designRanker,
+        licenseRequired: options.designLicenseRequired,
+        filters: { kind: 'pattern' }
+      });
+      for (const hit of extra.results) {
+        if (seen.has(hit.cardId)) continue;
+        seen.add(hit.cardId);
+        extraHits.push(hit);
+        if (extraHits.length >= 4) break;
+      }
+      if (extraHits.length >= 4) break;
+    }
+    const reworkCards = extraHits
+      .map((hit) => manifest.cards.find((card) => card.id === hit.cardId))
+      .filter((card): card is DesignCard => card !== undefined);
+    rework = { suggestions: queue.suggestions, hits: extraHits, cards: reworkCards };
+  }
+  await writeTextAtomic(paths.designBriefMd, renderDesignBriefMarkdown(pack, result, cards, brands, now, rework));
+  return {
+    file: paths.designBriefMd,
+    query,
+    hits: result.results,
+    brands,
+    result,
+    ...(rework === undefined ? {} : { rework })
+  };
 }
 
 /** Feedback verdicts a card can receive (0.6.2 P3). */
@@ -1253,7 +1604,7 @@ export function renderQueryCli(): string {
     '  return { numbers, colors };',
     '}',
     '',
-    'function search(query, topK, licenseRequired) {',
+    'function search(query, topK, licenseRequired, filters) {',
     '  const qTokens = expand(tokenize(query));',
     '  const q = constraints(query);',
     '  const chunkScores = new Map();',
@@ -1284,6 +1635,22 @@ export function renderQueryCli(): string {
     '  for (const card of manifest.cards) {',
     "    if (card.status !== 'active') continue;",
     "    if (licenseRequired && card.source.license.toLowerCase() === 'unknown') continue;",
+    "    const cardKind = card.source.kind === 'brand' ? 'brand' : (card.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern');",
+    '    if (cardKind !== filters.kind) continue;',
+    '    if (filters.appType !== undefined) {',
+    '      const value = card.dimensions && card.dimensions.appType;',
+    '      if (value === undefined || String(value).trim().toLowerCase() !== String(filters.appType).trim().toLowerCase()) continue;',
+    '    }',
+    '    if (filters.platform !== undefined) {',
+    '      const value = card.dimensions && card.dimensions.platform;',
+    '      if (value === undefined || String(value).trim().toLowerCase() !== String(filters.platform).trim().toLowerCase()) continue;',
+    '    }',
+    '    if (filters.style !== undefined) {',
+    '      const wanted = String(filters.style).trim().toLowerCase();',
+    '      const dimension = card.dimensions && card.dimensions.style;',
+    '      const ranked = (card.stylePriority || []).some((style) => String(style).trim().toLowerCase() === wanted);',
+    '      if ((dimension === undefined || String(dimension).trim().toLowerCase() !== wanted) && !ranked) continue;',
+    '    }',
     '    const best = byCard.get(card.id);',
     '    const bm25 = best === undefined ? 0 : best.score;',
     '    if (bm25 === 0 && qTokens.length > 0) continue;',
@@ -1300,6 +1667,7 @@ export function renderQueryCli(): string {
     '    results.push({',
     '      cardId: card.id,',
     '      title: card.title,',
+    '      kind: cardKind,',
     '      score: Number(((bm25 + tokenBoost + tagBoost) * weight).toFixed(4)),',
     '      breakdown: { bm25: Number(bm25.toFixed(4)), tokenBoost: Number(tokenBoost.toFixed(4)), tagBoost: Number(tagBoost.toFixed(4)), profileBoost: 0, weight },',
     '      snippet: (chunk === undefined ? (card.summary || "") : chunk.text).slice(0, 160),',
@@ -1315,17 +1683,24 @@ export function renderQueryCli(): string {
     'const args = process.argv.slice(2);',
     'const flags = new Set();',
     'let top = 5;',
+    'let kind = "pattern";',
+    'let appType; let platform; let style;',
     'const words = [];',
     'for (let i = 0; i < args.length; i += 1) {',
     '  if (args[i] === "--top") { top = Number(args[i + 1]); i += 1; continue; }',
+    '  if (args[i] === "--kind") { kind = args[i + 1]; i += 1; continue; }',
+    '  if (args[i] === "--app-type") { appType = args[i + 1]; i += 1; continue; }',
+    '  if (args[i] === "--platform") { platform = args[i + 1]; i += 1; continue; }',
+    '  if (args[i] === "--style") { style = args[i + 1]; i += 1; continue; }',
     '  if (args[i] === "--json") { flags.add("json"); continue; }',
     '  if (args[i] === "--markdown") { flags.add("markdown"); continue; }',
     '  if (args[i] === "--include-unknown-license") { flags.add("all-licenses"); continue; }',
     '  words.push(args[i]);',
     '}',
     'const query = words.join(" ").trim();',
-    'if (query.length === 0) { console.error("usage: node query.mjs \\"<query>\\" [--top N] [--json]"); process.exit(2); }',
+    'if (query.length === 0) { console.error("usage: node query.mjs \\"<query>\\" [--top N] [--kind pattern|anti-pattern|brand] [--app-type X] [--platform X] [--style X] [--json]"); process.exit(2); }',
     'if (!Number.isFinite(top) || top < 1) { console.error("invalid --top"); process.exit(2); }',
+    'if (kind !== "pattern" && kind !== "anti-pattern" && kind !== "brand") { console.error("invalid --kind"); process.exit(2); }',
     'let manifest; let index; let chunks;',
     'try {',
     '  manifest = JSON.parse(await readFile(join(DIR, "manifest.json"), "utf8"));',
@@ -1336,7 +1711,7 @@ export function renderQueryCli(): string {
     '  process.exit(2);',
     '}',
     'const licenseRequired = !flags.has("all-licenses");',
-    'const results = search(query, top, licenseRequired);',
+    'const results = search(query, top, licenseRequired, { kind, appType, platform, style });',
     'const output = { schemaVersion: 1, query, ranker: "lexical", requestedRanker: "lexical", totalChunks: index.totalChunks, notes: [], results };',
     'if (flags.has("json")) {',
     '  console.log(JSON.stringify(output, null, 2));',

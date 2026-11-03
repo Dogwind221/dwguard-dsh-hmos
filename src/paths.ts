@@ -49,6 +49,8 @@ export interface SharedPaths {
   readonly designQueryScript: string;
   /** Design brief handed to DevEco (`tasks/design-brief.md`). */
   readonly designBriefMd: string;
+  /** Suggestions from the last failed aesthetic audit (0.6.3 F). */
+  readonly designReworkQueue: string;
   readonly designRefsDir: string;
   readonly designInboxDir: string;
 }
@@ -89,6 +91,7 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     designFeedback: resolve(shared, 'design-library', 'feedback.jsonl'),
     designQueryScript: resolve(shared, 'design-library', 'query.mjs'),
     designBriefMd: resolve(shared, 'tasks', 'design-brief.md'),
+    designReworkQueue: resolve(shared, 'design-library', 'rework-suggestions.json'),
     designRefsDir: resolve(shared, 'design-library', 'refs'),
     designInboxDir: resolve(shared, 'design-library', 'inbox')
   };
