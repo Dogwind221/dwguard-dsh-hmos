@@ -49,6 +49,10 @@ chooses; only then is the profile written.
 - `tests/version.test.mjs` + `tests/release.test.mjs`: release hygiene — README
   version pins and package-name spelling must track `package.json`, and a bump
   must find a CHANGELOG section for the target version.
+- `npm test` is now self-contained: the host test packages are devDependencies,
+  a committed `package-lock.json` pins the tree (`npm ci` in CI), and the
+  `pretest` preflight prints the exact install command instead of an
+  `ERR_MODULE_NOT_FOUND` stack when they are missing.
 
 ### Changed
 

@@ -396,30 +396,23 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
 `lib/` 是随仓库提交的构建产物，**使用插件不需要编译**。只有改 `src/` 时才需要重新构建并一起提交：
 
 ```powershell
+# 一次装齐编译与测试依赖（typescript、@types/node、@deepseek-ai/dsh-tools、@deepseek-ai/schemastery）
+npm install
+
 # 编译（src → lib，strict TS）
 npm run build
 
-# 单元 + 集成测试（node:test）
+# 单元 + 集成测试（node:test；会自动先跑 scripts/preflight.mjs 检查宿主测试依赖）
 npm test
 ```
 
-编译只需要 `typescript` 与 `@types/node`（`src/dsh.d.ts` 自带 DSH 模块声明，不依赖 DSH 的类型包）：
+`src/dsh.d.ts` 自带 DSH 模块声明，编译不依赖 DSH 的类型包；测试会调用**真实的** `defineTool`，所以需要能解析 `@deepseek-ai/dsh-tools` 与 `@deepseek-ai/schemastery`——两者已列在 `devDependencies`，`npm install` 即可。想跳过 `devDependencies` 时也可以单独装：
 
 ```powershell
-npm install --no-save typescript @types/node
+npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
 ```
 
-测试会调用**真实的** `defineTool` 校验每个工具定义，所以还需要能解析 `@deepseek-ai/dsh-tools`。两种可选做法：
-
-```powershell
-# a) 从 npm 装同版本（需网络）
-npm install --no-save @deepseek-ai/dsh-tools@0.2.1-rc.5 @deepseek-ai/schemastery@3.18.5
-
-# b) 或 junction 到本机已有的 DSH node_modules（路径按实际安装调整）
-New-Item -ItemType Directory -Force node_modules | Out-Null
-New-Item -ItemType Junction -Path node_modules\@deepseek-ai `
-  -Target "$env:LOCALAPPDATA\Programs\nodejs\node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai"
-```
+`npm test` 前的 preflight 在缺包时会直接给出上面这条命令，而不是抛一个 `ERR_MODULE_NOT_FOUND`。
 
 > 注意：以 link 方式装进 profile 时，**不要**在包内保留 `node_modules`——否则包内会解析到另一份 `@deepseek-ai/dsh-tools`，与宿主运行时混版本。测试完可以删掉。
 
