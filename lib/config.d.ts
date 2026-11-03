@@ -31,6 +31,11 @@ export interface Options {
     readonly devecocliPath: string;
     /** Effective device policy (host memory, mode, matrix scope, pool, lock timeout). */
     readonly device: DeviceConfig;
+    /** Design RAG (0.6.2) settings. */
+    readonly designTopK: number;
+    readonly designMaxChunks: number;
+    readonly designRanker: 'lexical' | 'hybrid';
+    readonly designLicenseRequired: boolean;
 }
 /**
  * Normalize whatever the loader passed into complete options.

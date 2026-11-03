@@ -61,7 +61,7 @@ dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
 
 Verify: `dsh --profile web --dump-config` should show `# == dwguard-dsh-hmos`.
 
-Every **new** session then gets 14 tools, 3 skills and a policy prompt. Sessions
+Every **new** session then gets 15 tools, 3 skills and a policy prompt. Sessions
 opened before the install keep their old tool table — open a new one.
 
 ## The `DshHoms` entry
@@ -109,6 +109,7 @@ self-report never becomes a `pass`.
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
 | `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
 | `dwguard_aesthetic` | Aesthetic learning (0.6.1): `profile` (list/get/write/remove), `baseline` (save/list), `compare` (numeric layout diff) and `learn` (propose preferences from confirmations, rejections, audit findings and project resources). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; multiple conflicts need per-area `choices` (an ambiguous single `choice` is refused); `baseline save` needs a passing audit + user confirmation; `compare` is unit-aware (±2vp spacing/radius, zero tolerance for font size and colours) |
+| `dwguard_design` | Design reference library (0.6.2 P0): `library init` (skeleton + generated read-only `query.mjs`), `library ingest` (aesthetic rule catalog and `inbox/` metadata + images), `library list`, `search` (deterministic BM25 + token/tag/profile boosts), `stats`. Lexical only; `hybrid` is reserved and falls back explicitly; references are evidence, not criteria; `license: unknown` cards are excluded by default |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
@@ -121,6 +122,16 @@ conflicting values, and only then is it written to
 you save a visual baseline; `compare` then turns the next layout dump into
 numeric diffs (±2vp for spacing/radius, zero tolerance for font size and
 colours) that appear in the acceptance report.
+
+`dwguard_design` (0.6.2 P0) turns "what should it look like" into a shared,
+retrievable asset: `library init` writes `.shared/design-library/` and a
+dependency-free read-only `query.mjs`; `library ingest` seeds cards from the
+aesthetic rule catalog and `inbox/*.meta.json` (images are copied into `refs/` by
+sha256); `search` ranks with deterministic BM25 plus token/tag/profile boosts.
+DSH uses the tool, DevEco runs
+`node .shared/design-library/query.mjs "dark card spacing" --top 5 --json` on the
+same index (parity-tested). The design brief, request/answer channel and
+`designRefs` gate are P1/P2 of the 0.6.2 plan.
 
 ## Protocol (`.shared/`)
 
@@ -143,6 +154,14 @@ colours) that appear in the acceptance report.
 │  ├─ visual-baseline/<specVersion>/  # bounds JSON + screenshots (sha256 each)
 │  ├─ aesthetic/compare-latest.json   # latest baseline diff (referenced by the report)
 │  └─ acceptance-report.md
+├─ design-library/            # 0.6.2 P0: design references
+│  ├─ manifest.json           # cards (DSG-*) + counts
+│  ├─ chunks.jsonl            # section text + sha256
+│  ├─ index.json              # BM25 postings/df (rebuildable cache)
+│  ├─ query.mjs               # dependency-free read-only CLI (DevEco)
+│  ├─ feedback.jsonl          # P3: useful / off / block
+│  ├─ refs/                   # images named by sha256
+│  └─ inbox/                  # user drops <name>.png + <name>.meta.json
 └─ knowledge/
    ├─ index.json
    ├─ calibration.jsonl       # gate ledger
@@ -203,6 +222,10 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     devicePool: []         # { sn, family, apiLevel, kind: emulator|real }
     maxConcurrency: 0      # 0 = auto by host memory (32GB -> 2, 64GB -> 4)
     deviceLockTimeoutMs: 600000
+    designTopK: 5          # default design search size
+    designMaxChunks: 2000  # warn above this chunk count
+    designRanker: lexical  # lexical (default) | hybrid (reserved, explicit fallback)
+    designLicenseRequired: true  # true = licence-unknown cards are excluded from search
 ```
 
 **Device matrix (0.6.0)**: memory is auto-detected; `< 32GB` stays single-device
@@ -228,7 +251,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 93 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 102 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

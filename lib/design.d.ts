@@ -1,0 +1,215 @@
+/**
+ * Design reference library (0.6.2 P0): cards → chunks → a deterministic BM25
+ * index, plus the dependency-free `query.mjs` that lets DevEco read the same
+ * index DSH uses.
+ *
+ * No model calls, no network, no extra dependencies: the same input must always
+ * produce the same cards, the same index bytes and the same ranking.
+ *
+ * @module dwguard-dsh-hmos/design
+ */
+import type { AestheticArea } from './aesthetic.js';
+import type { Options } from './config.js';
+import type { SharedPaths } from './paths.js';
+/** Version stamped into the manifest/index so a future format change is visible. */
+export declare const DESIGN_ENGINE_VERSION = "0.6.2-p0";
+/** The four card sections that become retrievable chunks. */
+export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts"];
+/** One retrievable section of a card. */
+export type DesignSection = (typeof DESIGN_SECTIONS)[number];
+/** A numeric token (spacing/radius/type/motion). */
+export interface DesignNumberToken {
+    readonly name?: string;
+    readonly value: number;
+    readonly unit: string;
+}
+/** A colour token. */
+export interface DesignColorToken {
+    readonly name?: string;
+    readonly value: string;
+}
+/** Structured design tokens extracted from a card. */
+export interface DesignTokens {
+    readonly palette: readonly DesignColorToken[];
+    readonly spacing: readonly DesignNumberToken[];
+    readonly radius: readonly DesignNumberToken[];
+    readonly type: readonly DesignNumberToken[];
+    readonly motion: readonly DesignNumberToken[];
+}
+/** Where a card came from and under which license. */
+export interface DesignSource {
+    readonly kind: 'rule' | 'official' | 'user' | 'project';
+    readonly ref?: string;
+    readonly license: string;
+}
+/** One design reference card. */
+export interface DesignCard {
+    readonly id: string;
+    readonly title: string;
+    readonly summary: string;
+    readonly tags: readonly string[];
+    readonly source: DesignSource;
+    readonly tokens: DesignTokens;
+    readonly rationale?: string;
+    readonly dos: readonly string[];
+    readonly donts: readonly string[];
+    readonly images: ReadonlyArray<{
+        readonly path: string;
+        readonly sha256?: string;
+        readonly alt?: string;
+    }>;
+    readonly status: 'active' | 'blocked';
+    readonly weight: number;
+    readonly createdAt: string;
+    readonly updatedAt: string;
+    /** sha256 of the inbox metadata this card was ingested from (idempotency). */
+    readonly ingestKey?: string;
+}
+/** `manifest.json`. */
+export interface DesignManifest {
+    readonly schemaVersion: 1;
+    readonly engineVersion: string;
+    readonly updatedAt: string;
+    readonly counts: {
+        readonly cards: number;
+        readonly chunks: number;
+    };
+    readonly cards: readonly DesignCard[];
+}
+/** One chunk line in `chunks.jsonl`. */
+export interface DesignChunk {
+    readonly chunkId: string;
+    readonly cardId: string;
+    readonly section: DesignSection;
+    readonly text: string;
+    readonly sha: string;
+}
+/** `index.json` — deterministic, rebuildable cache over the chunks. */
+export interface DesignIndex {
+    readonly schemaVersion: 1;
+    readonly engineVersion: string;
+    readonly builtAt: string;
+    readonly totalChunks: number;
+    readonly avgLen: number;
+    readonly chunks: ReadonlyArray<{
+        readonly chunkId: string;
+        readonly cardId: string;
+        readonly section: DesignSection;
+        readonly len: number;
+    }>;
+    readonly postings: Readonly<Record<string, ReadonlyArray<readonly [string, number]>>>;
+    readonly df: Readonly<Record<string, number>>;
+}
+/** One ranked result. */
+export interface DesignSearchHit {
+    readonly cardId: string;
+    readonly title: string;
+    readonly score: number;
+    readonly breakdown: {
+        readonly bm25: number;
+        readonly tokenBoost: number;
+        readonly tagBoost: number;
+        readonly profileBoost: number;
+        readonly weight: number;
+    };
+    readonly snippet: string;
+    readonly tokens: DesignTokens;
+    readonly source: DesignSource;
+    readonly images: DesignCard['images'];
+}
+/** `search` output; the generated CLI prints the same shape. */
+export interface DesignSearchResult {
+    readonly schemaVersion: 1;
+    readonly query: string;
+    readonly ranker: 'lexical' | 'hybrid';
+    readonly requestedRanker: 'lexical' | 'hybrid';
+    readonly totalChunks: number;
+    readonly notes: readonly string[];
+    readonly results: readonly DesignSearchHit[];
+}
+/** Raised when the library on disk cannot be read or is inconsistent. */
+export declare class DesignLibraryError extends Error {
+}
+/** Collapse whitespace and lowercase for stable hashing and indexing. */
+export declare function normalizeDesignText(text: string): string;
+/**
+ * Tokenize English/number spans as words and CJK spans as bigrams.
+ * @param text - query or chunk text.
+ */
+export declare function tokenizeDesignText(text: string): string[];
+/** Expand query tokens with the curated design-vocabulary synonyms. */
+export declare function expandDesignQuery(tokens: readonly string[]): string[];
+/** The query's numeric/colour constraints (used for the token boost). */
+export declare function designQueryConstraints(query: string): {
+    readonly numbers: ReadonlyArray<{
+        value: number;
+        unit: string;
+    }>;
+    readonly colors: readonly string[];
+};
+/** Build the retrievable chunks for one card, in deterministic section order. */
+export declare function cardChunks(card: DesignCard): DesignChunk[];
+/** Flatten every card into chunks, ordered by card id then section order. */
+export declare function buildDesignChunks(manifest: DesignManifest): DesignChunk[];
+/** Build the deterministic BM25 index from chunks. */
+export declare function buildDesignIndex(chunks: readonly DesignChunk[], builtAt: string): DesignIndex;
+/** Read the manifest; a corrupt file is an error, never an empty library. */
+export declare function readDesignManifest(paths: SharedPaths): Promise<DesignManifest | null>;
+/** Read index + chunks for searching; both must exist. */
+export declare function readDesignIndex(paths: SharedPaths): Promise<{
+    index: DesignIndex;
+    chunks: readonly DesignChunk[];
+}>;
+/** Next free `DSG-nnnn` id. */
+export declare function nextDesignId(cards: readonly DesignCard[]): string;
+/** Create the library skeleton (idempotent) and the read-only query CLI. */
+export declare function initDesignLibrary(paths: SharedPaths, now: string): Promise<{
+    manifest: DesignManifest;
+    created: boolean;
+    files: string[];
+}>;
+/** Cards seeded from the rule catalog's aesthetic rules. */
+export declare function ruleCards(existing: readonly DesignCard[], now: string): DesignCard[];
+/** Normalize a model/user supplied token object. */
+export declare function normalizeTokens(raw: unknown): DesignTokens;
+/** Ingest `inbox/*.meta.json` into cards, copying referenced images into refs/. */
+export declare function inboxCards(paths: SharedPaths, existing: readonly DesignCard[], now: string): Promise<{
+    cards: DesignCard[];
+    skipped: number;
+    warnings: string[];
+    files: string[];
+}>;
+/** Result of `ingestDesignLibrary`. */
+export interface DesignIngestResult {
+    readonly manifest: DesignManifest;
+    readonly added: readonly DesignCard[];
+    readonly skipped: number;
+    readonly warnings: readonly string[];
+    readonly files: string[];
+    readonly changed: boolean;
+}
+/**
+ * Ingest rules and/or inbox cards, then rebuild chunks + index.
+ * A no-op ingest (nothing new) does not rewrite a single byte (RAG-A).
+ */
+export declare function ingestDesignLibrary(paths: SharedPaths, sources: ReadonlyArray<'rules' | 'inbox'>, now: string): Promise<DesignIngestResult>;
+/** Areas a card speaks to (token keys plus tag vocabulary). */
+export declare function cardAreas(card: DesignCard): Set<AestheticArea>;
+/**
+ * Rank cards for a query with BM25 + structured boosts.
+ *
+ * `hybrid` is accepted by the interface but falls back to lexical in 0.6.2 P0;
+ * the result records both so a report can say which ranking actually ran.
+ */
+export declare function searchDesignLibrary(manifest: DesignManifest, index: DesignIndex, chunks: readonly DesignChunk[], query: string, options: {
+    readonly topK: number;
+    readonly ranker: Options['designRanker'];
+    readonly licenseRequired: boolean;
+    readonly profileAreas?: ReadonlySet<AestheticArea>;
+}): DesignSearchResult;
+/** Render a design search result as markdown (used by the tool and the CLI). */
+export declare function renderDesignSearchMarkdown(result: DesignSearchResult): string;
+/** Render the full card table for `library list`. */
+export declare function renderDesignCardsMarkdown(manifest: DesignManifest): string;
+/** Generate the dependency-free read-only query CLI (same ranking as the tool). */
+export declare function renderQueryCli(): string;

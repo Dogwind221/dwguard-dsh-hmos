@@ -57,7 +57,15 @@ export const Config = z.object({
   /** Max concurrent devices; 0 = auto from host memory. */
   maxConcurrency: z.number().default(0),
   /** A lock older than this is treated as stale and stolen. */
-  deviceLockTimeoutMs: z.number().default(600000)
+  deviceLockTimeoutMs: z.number().default(600000),
+  /** Design RAG (0.6.2): default result count. */
+  designTopK: z.number().default(5),
+  /** Chunk cap before the library warns about index size. */
+  designMaxChunks: z.number().default(2000),
+  /** `lexical` (deterministic BM25) or `hybrid` (reserved; falls back to lexical). */
+  designRanker: z.string().default('lexical'),
+  /** Exclude cards whose license is unknown from search results. */
+  designLicenseRequired: z.boolean().default(true)
 });
 
 /** Fully resolved options used by every tool. */
@@ -81,6 +89,11 @@ export interface Options {
   readonly devecocliPath: string;
   /** Effective device policy (host memory, mode, matrix scope, pool, lock timeout). */
   readonly device: DeviceConfig;
+  /** Design RAG (0.6.2) settings. */
+  readonly designTopK: number;
+  readonly designMaxChunks: number;
+  readonly designRanker: 'lexical' | 'hybrid';
+  readonly designLicenseRequired: boolean;
 }
 
 const DEFAULTS: Options = {
@@ -96,7 +109,11 @@ const DEFAULTS: Options = {
   stallMinutes: 30,
   executor: 'auto',
   devecocliPath: '',
-  device: resolveDevicePolicy({})
+  device: resolveDevicePolicy({}),
+  designTopK: 5,
+  designMaxChunks: 2000,
+  designRanker: 'lexical',
+  designLicenseRequired: true
 };
 
 function bool(value: unknown, fallback: boolean): boolean {
@@ -142,6 +159,10 @@ export function resolveOptions(raw: unknown): Options {
       devicePool: input['devicePool'],
       maxConcurrency: input['maxConcurrency'],
       deviceLockTimeoutMs: input['deviceLockTimeoutMs']
-    })
+    }),
+    designTopK: positiveInt(input['designTopK'], DEFAULTS.designTopK, 1),
+    designMaxChunks: positiveInt(input['designMaxChunks'], DEFAULTS.designMaxChunks, 1),
+    designRanker: input['designRanker'] === 'hybrid' ? 'hybrid' : 'lexical',
+    designLicenseRequired: bool(input['designLicenseRequired'], DEFAULTS.designLicenseRequired)
   };
 }

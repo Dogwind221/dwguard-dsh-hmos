@@ -104,7 +104,8 @@ DevEco 说「自认为达标」不等于达标。先做一次 30 秒的一致性
 5. **DevEco CLI 证据（可选）**：装了 `devecocli` 时，用 `dwguard_deveco` 跑 `env` / `build` / `log` / `run`，把命令、退出码、输出落进 `artifacts/deveco-<n>/`；`checks[].evidenceFiles` 可直接引用这些文件。**它只是证据源，不替代判定**。
 6. **每回来一个维度就记一次** `dwguard_audit_dimension`（`dimension` / `passed` / `failed` / `note`）——DshHoms 面板上的四张卡会按返回顺序逐张落绿，而不是同时亮。
 7. 四维齐全后，再调 `dwguard_audit` 汇总全部 `checks` 过闸门（该调用完成时会清空进度文件，下一轮从零开始）。
-8. **审美档案与基线（可选，0.6.1）**：审美判据带 `profileRef` 时，审计前用 `dwguard_aesthetic`（`profile get`）确认档案存在且 active；用户确认过的审美取舍用 `learn` 提议、用户裁决后 `apply`（冲突必须给 `choice`）；有通过审计 + 用户确认后可 `baseline save`，下一轮用 `compare` 做数值回归，差异自动进验收报告的「审美基线差异」。
+8. **审美档案与基线（可选，0.6.1）**：审美判据带 `profileRef` 时，审计前用 `dwguard_aesthetic`（`profile get`）确认档案存在且 active；用户确认过的审美取舍用 `learn` 提议、用户裁决后 `apply`（冲突必须给 `choice`/`choices`）；有通过审计 + 用户确认后可 `baseline save`，下一轮用 `compare` 做数值回归，差异自动进验收报告的「审美基线差异」。
+9. **设计参考检索（可选，0.6.2 P0）**：`dwguard_design` 的 `search` 按需求/判据找参考卡（`DSG-*`）；实现前先看结果，报告里把采用的参考作为**对照证据**（参考不是判据）。DevEco 可在 IDE 终端跑 `.shared/design-library/query.mjs` 查同一个索引。
 
 > **证据要落盘**：`evidenceFiles` 写相对 `.shared/` 的路径（截图、布局树 JSON、hilog 片段），工具会校验存在、复制进 `artifacts/audit-<n>/evidence/` 并记 sha256。文件缺失会**整次拒绝**，不会"先记后补"。
 
