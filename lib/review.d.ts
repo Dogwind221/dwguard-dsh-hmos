@@ -87,8 +87,8 @@ export interface AestheticAuditRef {
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
     readonly profileRefs: readonly AestheticAuditRef[];
-    /** Latest baseline comparison, when one was run for this pack version. */
-    readonly compare?: BaselineCompareResult;
+    /** Baseline comparisons recorded for this pack version (one per page/state). */
+    readonly compares?: readonly BaselineCompareResult[];
 }
 /** A persisted delivery audit. */
 export interface AuditReport {

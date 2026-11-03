@@ -21,19 +21,21 @@ import {
   AREA_LABELS,
   appendAestheticHistory,
   applyAestheticProposals,
+  conflictsMatchingChoice,
   factsFromSources,
   findProfileEntry,
+  isAestheticArea,
   learnAesthetics,
   nextAestheticId,
   normalizeValue,
-  readProfile,
+  readProfileDocument,
   readProjectAestheticFacts,
   renderConflicts,
   renderProposals,
   valueLabel,
   writeProfile
 } from '../aesthetic.js';
-import type { AestheticFact, AestheticProfile, AestheticSourceKind, LearnSource } from '../aesthetic.js';
+import type { AestheticArea, AestheticFact, AestheticProfile, AestheticSourceKind, LearnSource } from '../aesthetic.js';
 import { isAestheticId } from '../aesthetic.js';
 import {
   baselineDir,
@@ -118,10 +120,39 @@ function profileDetail(profile: AestheticProfile): string {
   );
 }
 
+/** Write the profile, then append history; a history failure is reported, not hidden. */
+async function persistProfile(
+  paths: Deps['paths'],
+  profile: AestheticProfile,
+  events: Parameters<typeof appendAestheticHistory>[1]
+): Promise<{ history: string | null; warning?: string }> {
+  await writeProfile(paths, profile);
+  try {
+    return { history: await appendAestheticHistory(paths, events) };
+  } catch (error) {
+    return {
+      history: null,
+      warning: `档案已写入，但历史追加失败：${(error as Error).message}`
+    };
+  }
+}
+
+function invalidProfileResult(document: { error?: string }, paths: Deps['paths']): ToolResult {
+  return fail('审美档案已存在但无法解析，未做任何写入（不会覆盖坏档案）。', {
+    detail: [
+      `- 文件：\`${displayPath(paths, paths.aestheticProfileMd)}\``,
+      `- 原因：${document.error ?? '未知'}`
+    ].join('\n'),
+    next: '手工修好 JSON，或备份后删除该文件再重建；工具不会静默清空档案。'
+  });
+}
+
 async function runProfile(deps: Deps): Promise<ToolResult> {
   const { args, paths, now } = deps;
   const op = requiredEnum(args, 'op', PROFILE_OPS, TOOL);
-  const profile = await readProfile(paths);
+  const document = await readProfileDocument(paths);
+  if (document.status === 'invalid') return invalidProfileResult(document, paths);
+  const profile = document.profile;
   if (op === 'list') {
     return ok(`审美档案共 ${profile.entries.length} 条（active ${profile.entries.filter((entry) => entry.status === 'active').length}）。`, {
       detail: profileDetail(profile),
@@ -147,6 +178,7 @@ async function runProfile(deps: Deps): Promise<ToolResult> {
     const source = requiredString(args, 'source', TOOL, 120);
     const confidence = confidenceArg(args);
     const evidence = optionalStringArray(args, 'evidence', TOOL, 8);
+    const confirmed = optionalBoolean(args, 'confirmed', false);
     const normalized = normalizeValue(area, { number: args['number'], unit: args['unit'], color: args['color'] });
     if (normalized.value === undefined) {
       return fail(`取值无效：${normalized.error ?? '缺少 number 或 color'}`, { next: '给 `number`（可配 `unit`）或 `color`。' });
@@ -157,16 +189,27 @@ async function runProfile(deps: Deps): Promise<ToolResult> {
       return fail(`\`id\` 格式不对：${requestedId}（应为 \`AES-<领域>-<两位数字>\`）。`);
     }
     if (requestedId !== undefined && findProfileEntry(profile, requestedId) !== undefined) {
-      return fail(`\`${requestedId}\` 已存在；改档案请用 \`remove\` 或让 \`learn\` 产生冲突裁决。`);
+      return fail(`\`${requestedId}\` 已存在；换成新 ID，或先 \`remove\` 再写。`);
     }
     const id = requestedId ?? nextAestheticId(area, profile.entries);
     const activeInArea = profile.entries.filter((entry) => entry.status === 'active' && entry.area === area);
     const sameValue = activeInArea.find((entry) => valueLabel(entry.value) === valueLabel(value));
     if (sameValue !== undefined) {
-      return fail(`「${AREA_LABELS[area]}」已有相同取值 \`${valueLabel(value)}\`（\`${sameValue.id}\`）。`, {
-        detail: '重复证据应走 `learn`（置信度 +0.05），而不是重复写一条。',
-        next: '用 `learn` 记录这次重复证据。'
+      return fail(`「${AREA_LABELS[area]}」已存在相同取值 \`${valueLabel(value)}\`（\`${sameValue.id}\`）。`, {
+        detail: '相同取值若只是再次确认，应走 `learn`（重复证据 +0.05）；确实要新 ID 时先 `remove` 旧条目。',
+        next: '用 `learn` 记录这次重复证据，或先 remove 再写。'
       });
+    }
+    // Changing an active value replaces a user-confirmed preference, so it needs
+    // the same explicit confirmation as `learn apply` (review M2).
+    if (activeInArea.length > 0 && !confirmed) {
+      return fail(
+        `「${AREA_LABELS[area]}」已有 active 偏好 ${activeInArea.map((entry) => `\`${entry.id}\`（${valueLabel(entry.value)}）`).join('、')}；改值会取代它。`,
+        {
+          detail: '如果用户不是明确要改这个偏好，请走 `learn` 产生冲突、由用户用 `choice` 裁决；确认要改则带 `confirmed: true` 重试。',
+          next: '带 `confirmed: true` 重试，或改用 `learn` 走冲突裁决。'
+        }
+      );
     }
     const superseded = activeInArea.map((entry) => ({
       ...entry,
@@ -187,8 +230,7 @@ async function runProfile(deps: Deps): Promise<ToolResult> {
       updatedAt: now
     };
     const nextProfile: AestheticProfile = { schemaVersion: 1, entries: [...nextEntries, entry] };
-    await writeProfile(paths, nextProfile);
-    const history = await appendAestheticHistory(paths, [
+    const persisted = await persistProfile(paths, nextProfile, [
       ...superseded.map((old) => ({
         at: now,
         kind: 'superseded' as const,
@@ -208,13 +250,15 @@ async function runProfile(deps: Deps): Promise<ToolResult> {
         note: '手动写入'
       }
     ]);
+    const history = persisted.history;
     return ok(`已写入审美偏好 \`${id}\`：${AREA_LABELS[area]} ${valueLabel(value)}（置信度 ${confidence.toFixed(2)}）。`, {
       detail: [
         profileDetail({ schemaVersion: 1, entries: [entry] }),
         '',
         superseded.length > 0
           ? `原「${AREA_LABELS[area]}」条目已被取代：${superseded.map((old) => `\`${old.id}\``).join('、')}（历史可追溯）。`
-          : ''
+          : '',
+        ...(persisted.warning === undefined ? [] : ['', `⚠️ ${persisted.warning}`])
       ]
         .filter((line) => line.length > 0)
         .join('\n'),
@@ -229,23 +273,30 @@ async function runProfile(deps: Deps): Promise<ToolResult> {
   if (entry === undefined) return fail(`审美档案里没有 \`${id}\`。`);
   if (entry.status === 'superseded') return fail(`\`${id}\` 已是 superseded，不需要再移除。`);
   const retired = { ...entry, status: 'superseded' as const, updatedAt: now };
-  await writeProfile(paths, {
-    schemaVersion: 1,
-    entries: profile.entries.map((item) => (item.id === id ? retired : item))
-  });
-  const history = await appendAestheticHistory(paths, [
+  const persisted = await persistProfile(
+    paths,
     {
-      at: now,
-      kind: 'superseded',
-      id,
-      area: entry.area,
-      value: valueLabel(entry.value),
-      sources: [entry.source],
-      note: '手动标记 superseded（不删除）'
-    }
-  ]);
+      schemaVersion: 1,
+      entries: profile.entries.map((item) => (item.id === id ? retired : item))
+    },
+    [
+      {
+        at: now,
+        kind: 'superseded',
+        id,
+        area: entry.area,
+        value: valueLabel(entry.value),
+        sources: [entry.source],
+        note: '手动标记 superseded（不删除）'
+      }
+    ]
+  );
   return ok(`\`${id}\` 已标记 superseded（历史保留，可追溯）。`, {
-    files: [displayPath(paths, paths.aestheticProfileMd), ...(history === null ? [] : [displayPath(paths, history)])]
+    detail: persisted.warning === undefined ? undefined : `⚠️ ${persisted.warning}`,
+    files: [
+      displayPath(paths, paths.aestheticProfileMd),
+      ...(persisted.history === null ? [] : [displayPath(paths, persisted.history)])
+    ]
   });
 }
 
@@ -357,8 +408,16 @@ async function runCompare(deps: Deps): Promise<ToolResult> {
   const index = await readBaselineIndex(paths, pack.specVersion);
   const baseline = findBaselineEntry(index, page, state);
   if (baseline === undefined) {
-    return fail(`任务包 v${pack.specVersion} 里没有 ${page}/${state} 的视觉基线。`, {
-      next: '先用 `baseline save` 保存基线（需通过审计 + 用户确认）。'
+    const versions = (await listBaselineVersions(paths)).filter((version) => version !== pack.specVersion);
+    const hint =
+      versions.length === 0
+        ? ''
+        : ` 现有基线属于任务包 ${versions.map((version) => `v${version}`).join(' / ')}；设计没改时请确认 specVersion，改版后需重建基线。`;
+    return fail(`任务包 v${pack.specVersion} 里没有 ${page}/${state} 的视觉基线。${hint}`, {
+      next:
+        versions.length === 0
+          ? '先用 `baseline save` 保存基线（需通过审计 + 用户确认）。'
+          : '确认是否跨任务包版本比较；按当前版本重建基线后再 compare。'
     });
   }
   const baselineRead = await readBoundsJson(join(baselineDir(paths, pack.specVersion), baseline.boundsFile));
@@ -410,6 +469,20 @@ async function runLearn(deps: Deps): Promise<ToolResult> {
   const apply = optionalBoolean(args, 'apply', false);
   const confirmed = optionalBoolean(args, 'confirmed', false);
   const choice = optionalString(args, 'choice', TOOL, 120);
+  const choicesRaw = args['choices'] === undefined ? undefined : args['choices'];
+  if (choicesRaw !== undefined && (typeof choicesRaw !== 'object' || choicesRaw === null || Array.isArray(choicesRaw))) {
+    throw new ArgError(`${TOOL}: \`choices\` 必须是 { 领域: 取值 } 对象。`);
+  }
+  const choices: Partial<Record<AestheticArea, string>> = {};
+  if (typeof choicesRaw === 'object' && choicesRaw !== null && !Array.isArray(choicesRaw)) {
+    for (const [area, value] of Object.entries(choicesRaw as Record<string, unknown>)) {
+      if (!isAestheticArea(area)) throw new ArgError(`${TOOL}: \`choices\` 的键必须是审美领域（${AESTHETIC_AREAS.join(' / ')}）。`);
+      if (typeof value !== 'string' || value.trim().length === 0) {
+        throw new ArgError(`${TOOL}: \`choices.${area}\` 必须是非空字符串。`);
+      }
+      choices[area] = value.trim();
+    }
+  }
 
   const facts: AestheticFact[] = [];
   const sourcesByKey = new Map<string, string[]>();
@@ -420,9 +493,11 @@ async function runLearn(deps: Deps): Promise<ToolResult> {
   for (const [label, value] of fromText.startConfidence) startConfidence.set(label, value);
 
   const resourceFiles: string[] = [];
+  let searchedRoots: string[] = [];
   if (coldStart) {
     const resources = await readProjectAestheticFacts(paths.workspace);
     resourceFiles.push(...resources.files.map((file) => displayPath(paths, file)));
+    searchedRoots = resources.searched;
     for (const fact of resources.facts) {
       const key = `${fact.area}:${valueLabel(fact.value)}`;
       if (!facts.some((item) => `${item.area}:${valueLabel(item.value)}` === key)) facts.push(fact);
@@ -435,13 +510,19 @@ async function runLearn(deps: Deps): Promise<ToolResult> {
 
   if (facts.length === 0) {
     return fail('没有识别到可记录的审美数值。', {
-      detail:
-        '`learn` 只从文本里抽取数字/颜色 + 领域关键词（间距/圆角/字号/配色/动效/深色/图标/卡片），或用 `coldStart: true` 读取项目 `resources/base/element/color.json`、`float.json`。',
-      next: '给一段包含具体数值的用户原话（如「卡片圆角 20，间距保持 12」），或冷启动。'
+      detail: [
+        '`learn` 只从文本里抽取数字/颜色 + 领域关键词（间距/圆角/字号/配色/动效/深色/图标/卡片），或用 `coldStart: true` 读取项目的 `resources/base/element/color.json`、`float.json`。',
+        ...(coldStart && searchedRoots.length > 0
+          ? ['', '**已检查的资源目录**', '', ...searchedRoots.map((root) => `- \`${displayPath(paths, root)}\``)]
+          : [])
+      ].join('\n'),
+      next: '给一段包含具体数值的用户原话（如「卡片圆角 20，间距保持 12」），或把 HarmonyOS 资源放到 `<module>/src/main/resources/base/element/`。'
     });
   }
 
-  const profile = await readProfile(paths);
+  const document = await readProfileDocument(paths);
+  if (document.status === 'invalid') return invalidProfileResult(document, paths);
+  const profile = document.profile;
   const result = learnAesthetics(profile, facts, sourcesByKey, startConfidence);
   const proposalBlock = [
     '**提议**',
@@ -458,7 +539,7 @@ async function runLearn(deps: Deps): Promise<ToolResult> {
       detail: [
         proposalBlock,
         '',
-        '> `learn` 默认只提议不落盘（AEST-B）。用户确认后带 `apply: true` 与 `confirmed: true` 再调用；有冲突时用 `choice` 指定保留的值或 ID。'
+        '> `learn` 默认只提议不落盘（AEST-B）。用户确认后带 `apply: true` 与 `confirmed: true` 再调用；有冲突时用 `choice`（单个）或 `choices`（按领域逐个）指定保留的值或 ID。'
       ].join('\n'),
       files: [displayPath(paths, paths.aestheticProfileMd)],
       next: '把提议与冲突交给用户裁决，再 `apply`。'
@@ -468,20 +549,34 @@ async function runLearn(deps: Deps): Promise<ToolResult> {
   if (!confirmed) {
     return fail('`apply` 需要用户确认：先让用户看过提议，再带 `confirmed: true` 调用。', {
       detail: proposalBlock,
-      next: '确认后重试：`{ action: "learn", apply: true, confirmed: true, choice: "<值或ID>" }`。'
+      next: '确认后重试：`{ action: "learn", apply: true, confirmed: true, choices: { "radius": "20vp" } }`。'
     });
   }
 
-  const outcome = applyAestheticProposals(profile, result, { choice, now });
+  if (choice !== undefined && Object.keys(choices).length === 0) {
+    const matches = conflictsMatchingChoice(result.conflicts, choice);
+    if (matches.length > 1) {
+      return fail(`\`choice\`「${choice}」同时匹配 ${matches.length} 个冲突（${matches.map((conflict) => AREA_LABELS[conflict.area]).join('、')}），无法判断用户指的是哪个。`, {
+        detail: renderConflicts(matches),
+        next: '用 `choices: { "<领域>": "<取值>" }` 逐个指定，或分次 apply。'
+      });
+    }
+  }
+
+  const outcome = applyAestheticProposals(profile, result, { choice, choices, now });
   if (outcome.unresolved.length > 0) {
     return fail(`有 ${outcome.unresolved.length} 个冲突未裁决，档案未写入（AEST-E）。`, {
-      detail: [renderConflicts(outcome.unresolved), '', '用 `choice` 指定保留的值（如 `20vp`）或档案 ID（如 `AES-RADIUS-01`）。'].join('\n'),
+      detail: [
+        renderConflicts(outcome.unresolved),
+        '',
+        '用 `choice`（单个冲突）或 `choices: { "圆角": "20vp" }`（多个领域）指定保留值或档案 ID。'
+      ].join('\n'),
       next: '把冲突交给用户，拿到选择后重试 apply。'
     });
   }
 
-  await writeProfile(paths, outcome.profile);
-  const history = await appendAestheticHistory(paths, outcome.events);
+  const persisted = await persistProfile(paths, outcome.profile, outcome.events);
+  const history = persisted.history;
   return ok(
     `审美档案已更新：新增/更新 ${outcome.applied.length} 条，取代 ${outcome.superseded.length} 条。`,
     {
@@ -574,8 +669,22 @@ export function createAestheticTool(options: Options, ctx?: PluginContext): Tool
       },
       coldStart: { type: 'boolean', description: '从项目 `resources/base/element/color.json` / `float.json` 播种。' },
       apply: { type: 'boolean', description: 'true = 写入档案（默认只提议）。' },
-      confirmed: { type: 'boolean', description: '用户已确认提议；apply 必须为 true。' },
-      choice: { type: 'string', description: '冲突裁决：保留的值（如 `20vp`）或档案 ID。' }
+      confirmed: {
+        type: 'boolean',
+        description: '用户已确认。`learn` 的 apply、以及 `profile write` 改已有领域时必填。'
+      },
+      choice: { type: 'string', description: '单个冲突的裁决：保留的值（如 `20vp`）或档案 ID；同时匹配多个冲突会被拒绝。' },
+      choices: {
+        type: 'object',
+        additionalProperties: false,
+        properties: Object.fromEntries(
+          AESTHETIC_AREAS.map((area) => [
+            area,
+            { type: 'string', description: `「${AREA_LABELS[area]}」保留的取值或档案 ID。` }
+          ])
+        ),
+        description: '多个冲突按领域逐个裁决：`{ "radius": "20vp", "spacing": "12vp" }`。'
+      }
     },
     output: { schema: RESULT_SCHEMA, render: renderResult },
     async execute(rawArgs: unknown, exec: ToolRunContext): Promise<ToolResult> {

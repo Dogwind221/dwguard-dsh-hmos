@@ -75,6 +75,11 @@ export declare function findBaselineEntry(index: BaselineIndex, page: string, st
 /** Sanitize a page/state name into a file stem. */
 export declare function sanitizeBaselineKey(raw: string, fallback: string): string;
 /**
+ * File stem for a page/state pair. The short hash keeps `a.b` and `a_b` (which
+ * sanitize to the same text) from overwriting each other's baseline bytes.
+ */
+export declare function baselineFileStem(page: string, state: string): string;
+/**
  * Walk a layout-tree dump and collect the measurable fields per node.
  *
  * Nodes are keyed by their `id` when present (the stable name in a layout dump)
@@ -99,10 +104,10 @@ export declare function compareMetrics(baseline: MetricMap, current: MetricMap, 
     readonly boundsSha256?: string;
     readonly baselineBoundsSha256?: string;
 }): BaselineCompareResult;
-/** Persist the latest comparison so audit reports can render it. */
+/** Persist one comparison per page/state plus the latest copy. */
 export declare function writeCompareResult(paths: SharedPaths, result: BaselineCompareResult): Promise<string>;
-/** Read the latest comparison (or `null` when none exists for this pack version). */
-export declare function readCompareResult(paths: SharedPaths, specVersion: number): Promise<BaselineCompareResult | null>;
+/** Read every comparison recorded for one pack version, validated for shape. */
+export declare function readCompareResults(paths: SharedPaths, specVersion: number): Promise<BaselineCompareResult[]>;
 /** Read a bounds JSON file as parsed data. */
 export declare function readBoundsJson(file: string): Promise<{
     value: unknown;
@@ -120,7 +125,7 @@ export declare function saveBaselineFiles(paths: SharedPaths, specVersion: numbe
     readonly now: string;
 }): Promise<BaselineEntry>;
 /** Render the compare result as a markdown section. */
-export declare function renderCompareMarkdown(result: BaselineCompareResult, headingLevel?: string): string;
+export declare function renderCompareMarkdown(result: BaselineCompareResult, headingLevel?: string, includeTitle?: boolean): string;
 /** List all baseline versions present on disk. */
 export declare function listBaselineVersions(paths: SharedPaths): Promise<number[]>;
 /** Display path for one baseline entry's bounds file. */

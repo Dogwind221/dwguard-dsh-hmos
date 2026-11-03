@@ -158,10 +158,15 @@ export declare function factsFromSources(sources: readonly LearnSource[]): {
 export interface ProjectResourceResult {
     readonly facts: AestheticFact[];
     readonly files: string[];
+    /** Directories that were checked (useful when nothing was found). */
+    readonly searched: string[];
 }
 /**
  * Cold-start seeds from the project's own resource files.
- * @param workspace - session working directory.
+ *
+ * A HarmonyOS app usually keeps them under `<module>/src/main/resources/base/element`
+ * rather than `<workspace>/resources`, so several candidate roots are checked
+ * and the result reports which ones were searched.
  */
 export declare function readProjectAestheticFacts(workspace: string): Promise<ProjectResourceResult>;
 /** Result of applying proposals to the profile. */
@@ -176,15 +181,38 @@ export interface AestheticApplyOutcome {
  * Apply proposals and conflict choices to a profile in memory.
  *
  * Unresolved conflicts are returned instead of guessed: the tool refuses the
- * write and asks the user to pass `choice`.
+ * write and asks the user to pass `choice` (one conflict) or `choices` (one per
+ * area). A single `choice` that matches more than one conflict is ambiguous and
+ * leaves every matched conflict unresolved, so no preference is replaced by
+ * accident.
  */
+export declare function conflictsMatchingChoice(conflicts: readonly AestheticConflict[], choice: string): AestheticConflict[];
 export declare function applyAestheticProposals(profile: AestheticProfile, result: AestheticLearnResult, options: {
     readonly choice?: string;
+    readonly choices?: Readonly<Partial<Record<AestheticArea, string>>>;
     readonly now: string;
 }): AestheticApplyOutcome;
-/** Render the profile markdown (table + machine-readable JSON fence). */
+/** Render the profile markdown (human table + machine-readable JSON line). */
 export declare function renderProfileMarkdown(profile: AestheticProfile): string;
-/** Read the profile, tolerating a missing or corrupt document. */
+/** Whether the stored profile was readable. */
+export type ProfileStatus = 'missing' | 'ok' | 'invalid';
+/** Outcome of reading the profile document. */
+export interface ProfileReadResult {
+    readonly profile: AestheticProfile;
+    readonly status: ProfileStatus;
+    /** Set when status is `invalid`. */
+    readonly error?: string;
+}
+/**
+ * Read the profile with its parse state.
+ *
+ * A missing file is a normal empty profile; a file that exists but cannot be
+ * parsed is `invalid` and every write path must refuse instead of overwriting
+ * it (0.6.1 review M6). The reader understands both the current marker+line
+ * format and the legacy fenced-JSON format written by early 0.6.1 builds.
+ */
+export declare function readProfileDocument(paths: SharedPaths): Promise<ProfileReadResult>;
+/** Read the profile, tolerating a missing or corrupt document (read-only callers). */
 export declare function readProfile(paths: SharedPaths): Promise<AestheticProfile>;
 /** Write the profile markdown. */
 export declare function writeProfile(paths: SharedPaths, profile: AestheticProfile): Promise<void>;

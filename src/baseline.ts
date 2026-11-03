@@ -9,6 +9,7 @@
  * @module dwguard-dsh-hmos/baseline
  */
 
+import { createHash } from 'node:crypto';
 import { basename, join } from 'node:path';
 
 import { displayPath } from './paths.js';
@@ -115,9 +116,11 @@ export async function readBaselineIndex(paths: SharedPaths, specVersion: number)
       // The index is rewritten by the tool, but a hand-edited one must not be
       // able to point the reader outside the baseline directory.
       const boundsFile = record['boundsFile'];
-      if (!/^[A-Za-z0-9_.-]+$/.test(boundsFile)) continue;
+      if (!/^[A-Za-z0-9_.-]+$/.test(boundsFile) || /^\.+$/.test(boundsFile)) continue;
       const screenshotFile =
-        typeof record['screenshotFile'] === 'string' && /^[A-Za-z0-9_.-]+$/.test(record['screenshotFile'])
+        typeof record['screenshotFile'] === 'string' &&
+        /^[A-Za-z0-9_.-]+$/.test(record['screenshotFile']) &&
+        !/^\.+$/.test(record['screenshotFile'])
           ? record['screenshotFile']
           : undefined;
       valid.push({
@@ -163,11 +166,20 @@ export function sanitizeBaselineKey(raw: string, fallback: string): string {
   return cleaned.length > 0 ? cleaned.slice(0, 48) : fallback;
 }
 
+/**
+ * File stem for a page/state pair. The short hash keeps `a.b` and `a_b` (which
+ * sanitize to the same text) from overwriting each other's baseline bytes.
+ */
+export function baselineFileStem(page: string, state: string): string {
+  const hash = createHash('sha1').update(`${page}\u0000${state}`).digest('hex').slice(0, 8);
+  return `${sanitizeBaselineKey(page, 'page')}.${hash}.${sanitizeBaselineKey(state, 'default')}`;
+}
+
 /** Parse a measured number with an optional unit. */
 function parseMetricNumber(raw: unknown): { value: number; unit: string } | null {
   if (typeof raw === 'number' && Number.isFinite(raw)) return { value: raw, unit: '' };
   if (typeof raw === 'string') {
-    const match = /^(-?\d+(?:\.\d+)?)\s*(vp|dp|px|pt|%)?$/.exec(raw.trim());
+    const match = /^(-?\d+(?:\.\d+)?)\s*(vp|dp|px|pt|fp|%)?$/.exec(raw.trim());
     if (match !== null && match[1] !== undefined) return { value: Number(match[1]), unit: match[2] ?? '' };
   }
   return null;
@@ -316,6 +328,25 @@ export function compareMetrics(
         });
         continue;
       }
+      // Units are part of the measurement: 16px vs 16vp is not a match even
+      // though the numbers agree. vp and dp are the same density-independent
+      // unit; everything else (including fp for font size) must match exactly.
+      if (
+        baselineValue.unit.length > 0 &&
+        currentValue.unit.length > 0 &&
+        !unitsCompatible(baselineValue.unit, currentValue.unit)
+      ) {
+        rows.push({
+          node: nodeKey,
+          field,
+          baseline: metricLabel(baselineValue),
+          current: metricLabel(currentValue),
+          delta: '—',
+          verdict: 'fail',
+          reason: `单位不一致（${baselineValue.unit} vs ${currentValue.unit}）`
+        });
+        continue;
+      }
       const delta = currentValue.value - baselineValue.value;
       const within = Math.abs(delta) <= tolerance;
       rows.push({
@@ -331,6 +362,19 @@ export function compareMetrics(
   }
   let addedNodes = 0;
   for (const key of current.keys()) if (!baseline.has(key)) addedNodes += 1;
+  // A baseline with no measurable field must not read as "identical": an empty
+  // row set would otherwise satisfy every() and pass the whole comparison.
+  if (rows.length === 0) {
+    rows.push({
+      node: '（整个布局树）',
+      field: '—',
+      baseline: '—',
+      current: '—',
+      delta: '—',
+      verdict: 'fail',
+      reason: '基线没有可测量字段（fontSize/radius/padding/color 等），无法比较'
+    });
+  }
   rows.sort((left, right) => (left.node === right.node ? left.field.localeCompare(right.field) : left.node.localeCompare(right.node)));
   const pass = rows.every((row) => row.verdict === 'pass') && missingNodes.length === 0;
   return {
@@ -349,24 +393,54 @@ export function compareMetrics(
   };
 }
 
-/** Persist the latest comparison so audit reports can render it. */
+const LENGTH_UNITS = new Set(['vp', 'dp']);
+
+function unitsCompatible(left: string, right: string): boolean {
+  if (left === right) return true;
+  return LENGTH_UNITS.has(left) && LENGTH_UNITS.has(right);
+}
+
+/** Persist one comparison per page/state plus the latest copy. */
 export async function writeCompareResult(paths: SharedPaths, result: BaselineCompareResult): Promise<string> {
   await ensureDir(paths.aestheticDir);
-  await writeTextAtomic(paths.aestheticCompare, `${JSON.stringify(result, null, 2)}\n`);
+  const body = `${JSON.stringify(result, null, 2)}\n`;
+  await writeTextAtomic(join(paths.aestheticDir, `compare-${baselineFileStem(result.page, result.state)}.json`), body);
+  await writeTextAtomic(paths.aestheticCompare, body);
   return paths.aestheticCompare;
 }
 
-/** Read the latest comparison (or `null` when none exists for this pack version). */
-export async function readCompareResult(paths: SharedPaths, specVersion: number): Promise<BaselineCompareResult | null> {
-  const raw = await readTextOrNull(paths.aestheticCompare);
-  if (raw === null) return null;
-  try {
-    const parsed: unknown = JSON.parse(raw);
-    if (!isRecord(parsed) || parsed['specVersion'] !== specVersion) return null;
-    return parsed as unknown as BaselineCompareResult;
-  } catch {
-    return null;
+/** Read every comparison recorded for one pack version, validated for shape. */
+export async function readCompareResults(
+  paths: SharedPaths,
+  specVersion: number
+): Promise<BaselineCompareResult[]> {
+  const entries = await listDir(paths.aestheticDir);
+  const results = new Map<string, BaselineCompareResult>();
+  for (const entry of entries) {
+    if (!/^compare-.*\.json$/.test(entry)) continue;
+    const raw = await readTextOrNull(join(paths.aestheticDir, entry));
+    if (raw === null) continue;
+    try {
+      const parsed: unknown = JSON.parse(raw);
+      if (
+        !isRecord(parsed) ||
+        parsed['specVersion'] !== specVersion ||
+        typeof parsed['pass'] !== 'boolean' ||
+        typeof parsed['page'] !== 'string' ||
+        typeof parsed['state'] !== 'string' ||
+        !Array.isArray(parsed['rows'])
+      ) {
+        continue;
+      }
+      const result = parsed as unknown as BaselineCompareResult;
+      results.set(`${result.page}/${result.state}`, result);
+    } catch {
+      // A corrupt compare file is skipped; the audit still runs.
+    }
   }
+  return [...results.values()].sort((left, right) =>
+    `${left.page}/${left.state}`.localeCompare(`${right.page}/${right.state}`)
+  );
 }
 
 /** Read a bounds JSON file as parsed data. */
@@ -396,7 +470,7 @@ export async function saveBaselineFiles(
 ): Promise<BaselineEntry> {
   const dir = baselineDir(paths, specVersion);
   await ensureDir(dir);
-  const key = `${sanitizeBaselineKey(input.page, 'page')}.${sanitizeBaselineKey(input.state, 'default')}`;
+  const key = baselineFileStem(input.page, input.state);
   const boundsFile = `${key}.bounds.json`;
   await copyFileTo(input.boundsSource, join(dir, boundsFile));
   const boundsSha256 = await sha256File(join(dir, boundsFile));
@@ -421,12 +495,16 @@ export async function saveBaselineFiles(
 }
 
 /** Render the compare result as a markdown section. */
-export function renderCompareMarkdown(result: BaselineCompareResult, headingLevel = '##'): string {
+export function renderCompareMarkdown(
+  result: BaselineCompareResult,
+  headingLevel = '##',
+  includeTitle = true
+): string {
   const failed = result.rows.filter((row) => row.verdict === 'fail');
   const lines = [
-    `${headingLevel} 审美基线差异`,
-    '',
-    `> ${result.page} · ${result.state} · 任务包 v${result.specVersion} · ${result.pass ? '**通过**' : '**未通过**'} · 容差 ±${result.toleranceVp}vp（字号/颜色 0 容差）`,
+    ...(includeTitle ? [`${headingLevel} 审美基线差异`] : []),
+    ...(includeTitle ? [''] : []),
+    `> ${result.page} · ${result.state} · 任务包 v${result.specVersion} · ${result.pass ? '**通过**' : '**未通过**'} · 容差 ±${result.toleranceVp}vp（字号/颜色 0 容差；vp/dp 等价）`,
     ''
   ];
   if (result.rows.length === 0) {

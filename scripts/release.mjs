@@ -71,6 +71,21 @@ export function syncVersionText(text, version, lang) {
   return next;
 }
 
+/**
+ * Keep the lockfile's root version in sync with `package.json`.
+ * `npm ci` does not care about the metadata version, but stale values mislead
+ * anyone diffing a release commit.
+ */
+export function syncLockVersion(lock, version) {
+  if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`invalid version: ${version}`);
+  const next = JSON.parse(JSON.stringify(lock));
+  next.version = version;
+  if (typeof next.packages === 'object' && next.packages !== null && typeof next.packages[''] === 'object') {
+    next.packages[''].version = version;
+  }
+  return next;
+}
+
 function parseArgs(argv) {
   const options = {};
   for (const arg of argv) {
@@ -116,20 +131,30 @@ async function main(argv) {
   if (!/^\d+\.\d+\.\d+$/.test(next)) throw new Error(`invalid target version: ${next}`);
 
   // The changelog entry is written by hand before the release; refuse to bump
-  // when the heading is missing so a release can never ship notes-less.
+  // when the heading is missing so a release can never ship notes-less. A dry
+  // run still prints the computed version and warns instead of failing.
   const changelogPath = join(ROOT, 'CHANGELOG.md');
   const changelog = await readFile(changelogPath, 'utf8');
-  if (!new RegExp(`^## ${next.replace(/\./g, '\\.')} — `, 'm').test(changelog)) {
-    throw new Error(
-      `CHANGELOG.md 缺少 \`## ${next} — <date>\` 小节；先写变更记录，再跑 release。`
-    );
-  }
+  const hasChangelogSection = new RegExp(`^## ${next.replace(/\./g, '\\.')} — `, 'm').test(changelog);
 
   console.log(`version: ${current} -> ${next}${options['dry-run'] === 'true' ? ' (dry run)' : ''}`);
+  if (!hasChangelogSection) {
+    if (options['dry-run'] === 'true') {
+      console.warn(`warning: CHANGELOG.md 缺少 \`## ${next} — <date>\` 小节；正式发布会被拒绝。`);
+      console.log('would update: package.json, README.md, README.en.md, package-lock.json');
+      return;
+    }
+    throw new Error(`CHANGELOG.md 缺少 \`## ${next} — <date>\` 小节；先写变更记录，再跑 release。`);
+  }
   if (options['dry-run'] === 'true') {
-    console.log('would update: package.json, README.md, README.en.md');
+    console.log('would update: package.json, README.md, README.en.md, package-lock.json');
     return;
   }
+
+  // Build before touching the versioned files: a compile failure leaves the
+  // tree exactly as it was instead of half-bumped.
+  console.log('rebuilding lib/ ...');
+  runNpm(['run', 'build']);
 
   pkg.version = next;
   await writeFile(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`, 'utf8');
@@ -146,8 +171,18 @@ async function main(argv) {
     }
   }
 
-  console.log('rebuilding lib/ ...');
-  runNpm(['run', 'build']);
+  const lockPath = join(ROOT, 'package-lock.json');
+  try {
+    const lock = JSON.parse(await readFile(lockPath, 'utf8'));
+    const synced = syncLockVersion(lock, next);
+    if (JSON.stringify(lock) !== JSON.stringify(synced)) {
+      await writeFile(lockPath, `${JSON.stringify(synced, null, 2)}\n`, 'utf8');
+      console.log('updated package-lock.json version');
+    }
+  } catch (error) {
+    if (!(error instanceof Error && error.code === 'ENOENT')) throw error;
+  }
+
   console.log('packing ...');
   runNpm(['pack']);
   console.log(`\ndone: ${pkg.name}@${next}`);

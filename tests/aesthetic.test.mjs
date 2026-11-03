@@ -10,7 +10,7 @@ import { after, test } from 'node:test';
 process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dwguard-home-'));
 
 import { adjustConfidence, extractAestheticFacts, learnAesthetics, readProfile } from '../lib/aesthetic.js';
-import { compareMetrics, extractMetrics } from '../lib/baseline.js';
+import { baselineFileStem, compareMetrics, extractMetrics, readBaselineIndex } from '../lib/baseline.js';
 import { resolveOptions } from '../lib/config.js';
 import { resolvePaths } from '../lib/paths.js';
 import { createAestheticTool } from '../lib/tools/aesthetic.js';
@@ -403,7 +403,30 @@ test('AEST-J: reports render the profileRef column and the baseline diff section
   const auditJson = JSON.parse(await readFile(join(paths(cwd).shared, 'artifacts', 'audit-2.json'), 'utf8'));
   assert.equal(auditJson.aesthetic.profileRefs[0].profileRef, 'AES-RADIUS-01');
   assert.equal(auditJson.aesthetic.profileRefs[0].status, 'active');
-  assert.equal(auditJson.aesthetic.compare.pass, false);
+  assert.equal(auditJson.aesthetic.compares[0].pass, false);
+  assert.match(report, /审美基线未通过/);
+  assert.equal((report.match(/审美基线差异/g) ?? []).length, 1, '基线小节标题不应重复');
+
+  // Two pages must both survive; the audit attaches every compare, not just the last one.
+  await writeBounds(cwd, 'artifacts/evidence/detail-v1.json', boundsV1);
+  const secondBaseline = await aestheticTool.execute(
+    { action: 'baseline', op: 'save', page: 'detail', state: 'default', bounds: 'artifacts/evidence/detail-v1.json' },
+    exec(cwd)
+  );
+  assert.equal(secondBaseline.ok, true, secondBaseline.detail);
+  await writeBounds(cwd, 'artifacts/evidence/detail-v2.json', boundsV2);
+  const secondCompare = await aestheticTool.execute(
+    { action: 'compare', page: 'detail', state: 'default', bounds: 'artifacts/evidence/detail-v2.json' },
+    exec(cwd)
+  );
+  assert.equal(secondCompare.ok, false);
+  const thirdAudit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(thirdAudit.ok, true, thirdAudit.detail);
+  const thirdJson = JSON.parse(await readFile(join(paths(cwd).shared, 'artifacts', 'audit-3.json'), 'utf8'));
+  assert.equal(thirdJson.aesthetic.compares.length, 2);
+  const thirdReport = await readFile(join(paths(cwd).shared, 'artifacts', 'acceptance-report.md'), 'utf8');
+  assert.match(thirdReport, /home/);
+  assert.match(thirdReport, /detail/);
 });
 
 test('AEST-K: a profile write without a source is rejected', async () => {
@@ -452,4 +475,315 @@ test('extraction is deterministic: clauses, keywords, numbers and colours', () =
   assert.equal(ambiguous.proposals.length, 0);
   assert.equal(ambiguous.conflicts.length, 1);
   assert.equal(ambiguous.conflicts[0]?.candidates.length, 2);
+
+  // M1: `、` and ASCII commas are clause separators; each number maps to its
+  // own keyword, not to whichever keyword appears furthest right.
+  const listSeparated = extractAestheticFacts('卡片圆角 20、间距 12');
+  assert.deepEqual(
+    listSeparated.map((fact) => `${fact.area}:${fact.value.number}${fact.value.unit}`),
+    ['radius:20vp', 'spacing:12vp']
+  );
+  const commaSeparated = extractAestheticFacts('圆角 20, 间距 12');
+  assert.deepEqual(
+    commaSeparated.map((fact) => `${fact.area}:${fact.value.number}${fact.value.unit}`),
+    ['radius:20vp', 'spacing:12vp']
+  );
+  const numberFirst = extractAestheticFacts('20vp 圆角');
+  assert.deepEqual(numberFirst.map((fact) => fact.area), ['radius']);
+});
+
+test('M2: multiple conflicts need per-area choices; an ambiguous single choice is refused', async () => {
+  const cwd = await workspace();
+  await writeProfileEntry(cwd);
+  await writeProfileEntry(cwd, {
+    area: 'spacing',
+    decision: '间距 12vp',
+    number: 12,
+    source: 'confirmation-2'
+  });
+  const apply = (extra) =>
+    aestheticTool.execute(
+      {
+        action: 'learn',
+        sources: [{ kind: 'confirmation', text: '圆角改成 24vp，间距改成 16vp' }],
+        apply: true,
+        confirmed: true,
+        ...extra
+      },
+      exec(cwd)
+    );
+
+  const partial = await apply({ choice: '24vp' });
+  assert.equal(partial.ok, false, '一个 choice 不能同时裁决两个领域');
+  assert.match(partial.detail, /间距|冲突/);
+
+  const ambiguous = await apply({
+    choice: '16vp',
+    sources: [{ kind: 'confirmation', text: '圆角改成 16vp，间距改成 16vp' }]
+  });
+  assert.equal(ambiguous.ok, false);
+  assert.match(ambiguous.summary + ambiguous.detail, /同时匹配|歧义|冲突/);
+
+  const resolved = await apply({ choices: { radius: '24vp', spacing: '16vp' } });
+  assert.equal(resolved.ok, true, resolved.detail);
+  const profile = await readProfile(paths(cwd));
+  const active = profile.entries.filter((entry) => entry.status === 'active');
+  assert.deepEqual(active.map((entry) => `${entry.area}:${entry.value.number}`).sort(), ['radius:24', 'spacing:16']);
+  assert.ok(profile.entries.some((entry) => entry.status === 'superseded' && entry.area === 'radius'));
+  assert.ok(profile.entries.some((entry) => entry.status === 'superseded' && entry.area === 'spacing'));
+});
+
+test('M3: rejection evidence of the held value lowers confidence instead of raising it', async () => {
+  const cwd = await workspace();
+  await writeProfileEntry(cwd, {
+    area: 'spacing',
+    decision: '间距 12vp',
+    number: 12,
+    source: 'confirmation-1',
+    confidence: 0.7
+  });
+  const applied = await aestheticTool.execute(
+    {
+      action: 'learn',
+      sources: [{ kind: 'rejection', text: '间距 12 太挤了' }],
+      apply: true,
+      confirmed: true
+    },
+    exec(cwd)
+  );
+  assert.equal(applied.ok, true, applied.detail);
+  const profile = await readProfile(paths(cwd));
+  const entry = profile.entries.find((item) => item.area === 'spacing');
+  assert.equal(entry?.confidence, 0.5, '0.7 - 0.2');
+  assert.equal(profile.entries.filter((item) => item.status === 'active').length, 1, '不应新增条目');
+});
+
+test('M4: baseline save passes only after a passing audit and a user confirmation', async () => {
+  const cwd = await workspace();
+  await writeSpec(cwd);
+  await writeBounds(cwd, 'artifacts/evidence/bounds-v1.json', boundsV1);
+  const audit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audit.ok, true, audit.detail);
+  const beforeConfirm = await aestheticTool.execute(
+    { action: 'baseline', op: 'save', page: 'home', state: 'default', bounds: 'artifacts/evidence/bounds-v1.json' },
+    exec(cwd)
+  );
+  assert.equal(beforeConfirm.ok, false);
+  assert.match(beforeConfirm.summary + beforeConfirm.detail, /确认/);
+
+  const confirmed = await confirmTool.execute({ decision: 'accept' }, exec(cwd));
+  assert.equal(confirmed.ok, true, confirmed.detail);
+  const afterConfirm = await aestheticTool.execute(
+    { action: 'baseline', op: 'save', page: 'home', state: 'default', bounds: 'artifacts/evidence/bounds-v1.json' },
+    exec(cwd)
+  );
+  assert.equal(afterConfirm.ok, true, afterConfirm.detail);
+});
+
+test('M5/G: units are part of the comparison and an empty baseline cannot pass', () => {
+  const fpBaseline = extractMetrics({ id: 'card', fontSize: '14fp', radius: '16vp' });
+  const sameFp = compareMetrics(fpBaseline, extractMetrics({ id: 'card', fontSize: '14fp', radius: '16vp' }), {
+    at: '2026-11-03T00:00:00.000Z',
+    specVersion: 1,
+    page: 'home',
+    state: 'default'
+  });
+  assert.equal(sameFp.pass, true);
+  const wrongUnit = compareMetrics(fpBaseline, extractMetrics({ id: 'card', fontSize: '14vp', radius: '16vp' }), {
+    at: '2026-11-03T00:00:00.000Z',
+    specVersion: 1,
+    page: 'home',
+    state: 'default'
+  });
+  assert.equal(wrongUnit.pass, false);
+  assert.match(wrongUnit.rows.find((row) => row.field === 'fontSize')?.reason ?? '', /单位不一致/);
+
+  const boundary = compareMetrics(extractMetrics({ id: 'card', radius: '16vp' }), extractMetrics({ id: 'card', radius: '18vp' }), {
+    at: '2026-11-03T00:00:00.000Z',
+    specVersion: 1,
+    page: 'home',
+    state: 'default'
+  });
+  assert.equal(boundary.pass, true, '±2vp 边界应通过');
+  const beyond = compareMetrics(extractMetrics({ id: 'card', radius: '16vp' }), extractMetrics({ id: 'card', radius: '18.5vp' }), {
+    at: '2026-11-03T00:00:00.000Z',
+    specVersion: 1,
+    page: 'home',
+    state: 'default'
+  });
+  assert.equal(beyond.pass, false);
+
+  const missingNode = compareMetrics(extractMetrics({ id: 'card', radius: '16vp' }), extractMetrics({ id: 'other', radius: '16vp' }), {
+    at: '2026-11-03T00:00:00.000Z',
+    specVersion: 1,
+    page: 'home',
+    state: 'default'
+  });
+  assert.equal(missingNode.pass, false);
+  const missingField = compareMetrics(extractMetrics({ id: 'card', radius: '16vp' }), extractMetrics({ id: 'card' }), {
+    at: '2026-11-03T00:00:00.000Z',
+    specVersion: 1,
+    page: 'home',
+    state: 'default'
+  });
+  assert.equal(missingField.pass, false);
+
+  const empty = compareMetrics(extractMetrics({ id: 'page' }), extractMetrics({ id: 'page' }), {
+    at: '2026-11-03T00:00:00.000Z',
+    specVersion: 1,
+    page: 'home',
+    state: 'default'
+  });
+  assert.equal(empty.pass, false, '没有可测量字段不能判为一致');
+});
+
+test('M6: an unparseable profile is never overwritten, and backticks round-trip', async () => {
+  const cwd = await workspace();
+  const written = await writeProfileEntry(cwd, { decision: '圆角 like ```inline``` 20vp' });
+  assert.equal(written.ok, true, written.detail);
+  const roundTrip = await readProfile(paths(cwd));
+  assert.equal(roundTrip.entries.length, 1);
+  assert.match(roundTrip.entries[0]?.decision ?? '', /```inline```/);
+
+  const profileFile = join(paths(cwd).shared, 'knowledge', 'aesthetic-profile.md');
+  const before = await readFile(profileFile, 'utf8');
+  await writeFile(profileFile, `${before.split('<!-- aesthetic-profile:json -->')[0]}<!-- aesthetic-profile:json -->\n\n{ broken`, 'utf8');
+  const corrupted = await aestheticTool.execute(
+    {
+      action: 'profile',
+      op: 'write',
+      area: 'spacing',
+      decision: '间距 12vp',
+      number: 12,
+      source: 'confirmation-2',
+      confidence: 0.7
+    },
+    exec(cwd)
+  );
+  assert.equal(corrupted.ok, false);
+  assert.match(corrupted.summary + corrupted.detail, /无法解析|JSON/);
+  assert.match(await readFile(profileFile, 'utf8'), /\{ broken/, '坏档案必须保持原样');
+});
+
+test('M2b: profile write that replaces an active value needs confirmed: true', async () => {
+  const cwd = await workspace();
+  await writeProfileEntry(cwd);
+  const blocked = await aestheticTool.execute(
+    {
+      action: 'profile',
+      op: 'write',
+      area: 'radius',
+      decision: '圆角改成 24vp',
+      number: 24,
+      source: 'design-review',
+      confidence: 0.8
+    },
+    exec(cwd)
+  );
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.summary + blocked.detail, /confirmed|取代/);
+
+  const confirmed = await aestheticTool.execute(
+    {
+      action: 'profile',
+      op: 'write',
+      area: 'radius',
+      decision: '圆角改成 24vp',
+      number: 24,
+      source: 'design-review',
+      confidence: 0.8,
+      confirmed: true
+    },
+    exec(cwd)
+  );
+  assert.equal(confirmed.ok, true, confirmed.detail);
+  const profile = await readProfile(paths(cwd));
+  assert.equal(profile.entries.find((entry) => entry.status === 'active')?.value.number, 24);
+  assert.ok(profile.entries.some((entry) => entry.status === 'superseded' && entry.value.number === 20));
+});
+
+test('m3: cold start also finds <module>/src/main/resources/base/element', async () => {
+  const cwd = await workspace();
+  const elementDir = join(cwd, 'entry', 'src', 'main', 'resources', 'base', 'element');
+  await mkdir(elementDir, { recursive: true });
+  await writeFile(
+    join(elementDir, 'color.json'),
+    JSON.stringify({ color: [{ name: 'brand', value: '#123456' }] }),
+    'utf8'
+  );
+  await writeFile(
+    join(elementDir, 'float.json'),
+    JSON.stringify({ float: [{ name: 'corner_card', value: '18vp' }] }),
+    'utf8'
+  );
+  const result = await aestheticTool.execute({ action: 'learn', coldStart: true }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  assert.match(result.detail, /#123456/);
+  assert.match(result.detail, /18vp/);
+});
+
+test('AEST-Hb: a superseded profileRef is rejected by the audit gate', async () => {
+  const cwd = await workspace();
+  await writeProfileEntry(cwd);
+  const removed = await aestheticTool.execute({ action: 'profile', op: 'remove', id: 'AES-RADIUS-01' }, exec(cwd));
+  assert.equal(removed.ok, true, removed.detail);
+  await writeSpec(cwd, { profileRef: 'AES-RADIUS-01' });
+  const audit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audit.ok, false);
+  assert.match(audit.detail, /superseded/);
+});
+
+test('AEST-Eb: choosing the existing value raises confidence without a new entry', async () => {
+  const cwd = await workspace();
+  await writeProfileEntry(cwd);
+  const applied = await aestheticTool.execute(
+    {
+      action: 'learn',
+      sources: [{ kind: 'confirmation', text: '圆角改成 24vp' }],
+      apply: true,
+      confirmed: true,
+      choice: '20vp'
+    },
+    exec(cwd)
+  );
+  assert.equal(applied.ok, true, applied.detail);
+  const profile = await readProfile(paths(cwd));
+  const entry = profile.entries.find((item) => item.id === 'AES-RADIUS-01');
+  assert.equal(entry?.status, 'active');
+  assert.equal(entry?.confidence, 0.8, '确认 +0.1');
+  assert.equal(profile.entries.length, 1, '选择保留时不应新增条目');
+});
+
+test('AEST-Bb: apply without confirmed: true is refused and writes nothing', async () => {
+  const cwd = await workspace();
+  const result = await aestheticTool.execute(
+    { action: 'learn', sources: [{ kind: 'confirmation', text: '间距保持 12vp' }], apply: true },
+    exec(cwd)
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.summary, /确认/);
+  await assert.rejects(readFile(join(paths(cwd).shared, 'knowledge', 'aesthetic-profile.md'), 'utf8'));
+});
+
+test('n4/n6: baseline keys stay unique and the index refuses path-like file names', async () => {
+  const cwd = await workspace();
+  const p = paths(cwd);
+  const dir = join(p.visualBaselineDir, '1');
+  await mkdir(dir, { recursive: true });
+  await writeFile(
+    join(dir, 'index.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      specVersion: 1,
+      entries: [
+        { page: 'home', state: 'a', boundsFile: '..', boundsSha256: 'x', savedAt: '', auditId: 1, confirmationId: 1 },
+        { page: 'home', state: 'b', boundsFile: '.', boundsSha256: 'x', savedAt: '', auditId: 1, confirmationId: 1 }
+      ]
+    }),
+    'utf8'
+  );
+  const index = await readBaselineIndex(p, 1);
+  assert.equal(index.entries.length, 0, '`..` / `.` 不能进入索引');
+  assert.notEqual(baselineFileStem('a.b', 'default'), baselineFileStem('a_b', 'default'));
+  assert.equal(baselineFileStem('a.b', 'default'), baselineFileStem('a.b', 'default'));
 });

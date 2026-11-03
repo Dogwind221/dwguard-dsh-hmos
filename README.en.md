@@ -108,7 +108,7 @@ self-report never becomes a `pass`.
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
 | `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
-| `dwguard_aesthetic` | Aesthetic learning (0.6.1): `profile` (list/get/write/remove), `baseline` (save/list), `compare` (numeric layout diff) and `learn` (propose preferences from confirmations, rejections, audit findings and project resources). Writes need `source` + `confidence`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; conflicts need `choice`; `baseline save` needs a passing audit + user confirmation |
+| `dwguard_aesthetic` | Aesthetic learning (0.6.1): `profile` (list/get/write/remove), `baseline` (save/list), `compare` (numeric layout diff) and `learn` (propose preferences from confirmations, rejections, audit findings and project resources). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; multiple conflicts need per-area `choices` (an ambiguous single `choice` is refused); `baseline save` needs a passing audit + user confirmation; `compare` is unit-aware (±2vp spacing/radius, zero tolerance for font size and colours) |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
@@ -140,10 +140,14 @@ colours) that appear in the acceptance report.
 │  ├─ scan-<n>.json           # static scan
 │  ├─ shadow-<n>.json         # shadow review
 │  ├─ confirmation-<n>.json   # user decision
+│  ├─ visual-baseline/<specVersion>/  # bounds JSON + screenshots (sha256 each)
+│  ├─ aesthetic/compare-latest.json   # latest baseline diff (referenced by the report)
 │  └─ acceptance-report.md
 └─ knowledge/
    ├─ index.json
    ├─ calibration.jsonl       # gate ledger
+   ├─ aesthetic-profile.md    # aesthetic profile (table + JSON line)
+   ├─ aesthetic-history.jsonl # append-only applied / superseded / conflict
    └─ <topic>.md
 ```
 
@@ -160,7 +164,7 @@ un-acked dispatches for the current round.
 
 ## Rules and official docs
 
-The catalog (`src/rules.ts`) has 41 rules with stable IDs and, where possible, a
+The catalog (`src/rules.ts`) has 75 rules with stable IDs and, where possible, a
 `citation` pointing at the official page/section (Huawei UX standards, OpenHarmony
 guides, AGC rejection checklist). `dwguard_spec` rejects unknown `ruleId`s;
 findings cite the same IDs.
@@ -224,7 +228,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 81 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 93 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

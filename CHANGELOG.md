@@ -39,6 +39,38 @@ chooses; only then is the profile written.
 - **Cold start**: `learn` (`coldStart: true`) seeds palette / spacing / radius /
   type from the project's `resources/base/element/color.json` and `float.json`.
 
+### Fixed
+
+- `learn` no longer mis-assigns numbers when a sentence mixes areas with `、`
+  or an ASCII comma: the clause splitter handles those separators and each
+  number binds to the nearest preceding keyword (falling back to the nearest
+  following one), not to whichever keyword sits furthest right.
+- Conflicts are resolved per area: `choices: { radius: "20vp", spacing: "12vp" }`
+  resolves several conflicts in one confirmed call, while a single `choice` that
+  matches more than one conflict is refused instead of silently replacing a
+  preference the user never chose.
+- Rejection evidence naming the value the profile already holds now lowers
+  confidence (−0.2) instead of raising it (+0.05); `AEST-C`'s negative delta is
+  reachable from product code.
+- `profile write` refuses to overwrite an unparseable profile, requires
+  `confirmed: true` when it would replace an active value, and the JSON block is
+  written as marker + single line so backticks in a decision can no longer close
+  the fence early and silently empty the profile.
+- `compare` is unit-aware: `vp` and `dp` are equivalent, any other mismatch
+  (`px`/`pt`/`fp` vs `vp`) fails with 「单位不一致」; a baseline with no
+  measurable fields fails instead of passing zero rows; results are kept per
+  page/state and every comparison is attached to the audit, whose report now
+  states failed compares in the conclusion and the residual-risk section
+  (no more “通过 + 未通过” contradiction, no duplicated heading).
+- Baseline index entries with `.` / `..` names are rejected, and file stems carry
+  a short hash so `a.b` and `a_b` cannot overwrite each other.
+- Cold start scans `<module>/src/main/resources/base/element`,
+  `entry/src/main/resources/...` and `AppScope/resources/...`, and lists the
+  searched roots when nothing is found.
+- Release helper: syncs the lockfile's version fields, builds before writing the
+  bumped version files, and a dry run prints the computed version even when the
+  CHANGELOG section is missing (`npm run release:dry` no longer always exits 1).
+
 ### Tests
 
 - `tests/aesthetic.test.mjs`: all eleven acceptance criteria (AEST-A … AEST-K)

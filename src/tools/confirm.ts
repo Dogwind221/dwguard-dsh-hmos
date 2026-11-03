@@ -117,8 +117,8 @@ export function createConfirmTool(options: Options, ctx?: PluginContext): ToolDe
           files: [displayPath(paths, file), displayPath(paths, report)],
           next:
             decision === 'accept'
-              ? '本轮结束；下一轮（或新需求）用 `dwguard_spec` 写新任务包。'
-              : `用 \`dwguard_spec\` 写第 ${nextIteration} 轮任务包（迭代号已自动 +1）。`
+              ? '本轮结束；如本轮有用户确认过的审美取舍，用 `dwguard_aesthetic` 的 `learn` 记录（用户确认后再 apply），下一轮用 `profileRef` 引用。'
+              : `用 \`dwguard_spec\` 写第 ${nextIteration} 轮任务包（迭代号已自动 +1）；本轮审美取舍可先 \`learn\` 记账。`
         }
       );
     },

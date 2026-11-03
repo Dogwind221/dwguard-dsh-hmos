@@ -12,7 +12,7 @@ import { join } from 'node:path';
 
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
-import { appendText, readTextOrNull, writeTextAtomic } from './util/fs.js';
+import { appendText, listDir, readTextOrNull, writeTextAtomic } from './util/fs.js';
 import { inline, table, truncate } from './util/md.js';
 
 /** Preference areas an entry can belong to. */
@@ -163,7 +163,7 @@ export function normalizeValue(
   if (!Number.isFinite(numeric) || numeric < 0) return { error: '`number` 必须是非负数值。' };
   const rawUnit = typeof raw.unit === 'string' ? raw.unit.trim() : '';
   const unit = rawUnit.length > 0 ? rawUnit : area === 'motion' ? 'ms' : 'vp';
-  if (!/^(vp|dp|px|pt|ms|%|deg)$/.test(unit)) return { error: `单位 \`${unit}\` 不支持（vp / dp / px / pt / ms / % / deg）。` };
+  if (!/^(vp|dp|px|pt|fp|ms|%|deg)$/.test(unit)) return { error: `单位 \`${unit}\` 不支持（vp / dp / px / pt / fp / ms / % / deg）。` };
   return { value: { number: numeric, unit } };
 }
 
@@ -216,9 +216,9 @@ export interface AestheticFact {
   readonly decision: string;
 }
 
-const CLAUSE_SPLIT = /[，。；;！？!?\n]+/;
+const CLAUSE_SPLIT = /[\n，。；;、,：:！？!?]+/;
 const HEX_COLOR = /#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?/g;
-const NUMERIC = /(\d+(?:\.\d+)?)\s*(vp|dp|px|pt|ms|%|deg)?/g;
+const NUMERIC = /(\d+(?:\.\d+)?)\s*(vp|dp|px|pt|fp|ms|%|deg)?/g;
 
 /**
  * Extract measurable aesthetic facts from free text.
@@ -255,18 +255,25 @@ export function extractAestheticFacts(text: string): AestheticFact[] {
       const numeric = Number(match[1]);
       if (!Number.isFinite(numeric)) continue;
       const unit = match[2];
-      // Pick the closest area keyword at or before the number; fall back to the
-      // first area when the number precedes every keyword ("20vp 圆角").
+      // The area keyword before the number wins ("圆角 20、间距 12" splits into
+      // clauses anyway); when the number comes first ("20vp 圆角") fall back to
+      // the nearest keyword after it. Never pick a keyword merely because it
+      // appears furthest right.
       const lower = clause.toLowerCase();
-      let best: { area: AestheticArea; index: number } | undefined;
+      let preceding: { area: AestheticArea; index: number } | undefined;
+      let following: { area: AestheticArea; index: number } | undefined;
       for (const { area, words } of AREA_KEYWORDS) {
         for (const word of words) {
           const at = lower.indexOf(word.toLowerCase());
           if (at < 0) continue;
-          if (best === undefined || at > best.index) best = { area, index: at };
+          if (at <= index) {
+            if (preceding === undefined || at > preceding.index) preceding = { area, index: at };
+            break;
+          }
+          if (following === undefined || at < following.index) following = { area, index: at };
         }
       }
-      const area = areas.length === 1 ? areas[0] : best === undefined ? areas[0] : best.area;
+      const area = areas.length === 1 ? areas[0] : preceding?.area ?? following?.area ?? areas[0];
       if (area === undefined) continue;
       const value: AestheticValue = { number: numeric, unit: unit ?? (area === 'motion' ? 'ms' : 'vp') };
       const key = `${area}:${valueLabel(value)}`;
@@ -388,13 +395,17 @@ export function learnAesthetics(
       for (const value of candidatesForNew) {
         const entry = activeByValue.get(valueLabel(value.fact.value));
         if (entry === undefined) continue;
+        // A rejection naming the value the profile already holds is negative
+        // evidence: lower confidence instead of treating it as reinforcement.
+        const rejectionOnly =
+          value.sources.length > 0 && value.sources.every((source) => source.startsWith('learn:rejection'));
         proposals.push({
           id: entry.id,
           area,
           decision: entry.decision,
           value: entry.value,
-          confidence: adjustConfidence(entry.confidence, 'repeat'),
-          reason: '与现有偏好一致（重复证据 +0.05）',
+          confidence: adjustConfidence(entry.confidence, rejectionOnly ? 'reject' : 'repeat'),
+          reason: rejectionOnly ? '驳回证据（−0.2）' : '与现有偏好一致（重复证据 +0.05）',
           sources: value.sources,
           mergeId: entry.id
         });
@@ -490,11 +501,30 @@ export function factsFromSources(sources: readonly LearnSource[]): {
 export interface ProjectResourceResult {
   readonly facts: AestheticFact[];
   readonly files: string[];
+  /** Directories that were checked (useful when nothing was found). */
+  readonly searched: string[];
 }
 
 interface ResourceItem {
   readonly name?: string;
   readonly value?: string;
+}
+
+const SKIP_MODULE_DIRS = new Set(['node_modules', '.git', '.shared', 'oh_modules', 'build', 'dist', '.hvigor', '.idea']);
+
+/** Candidate `resources/base/element` directories for a HarmonyOS project. */
+async function resourceRoots(workspace: string): Promise<string[]> {
+  const roots = new Set<string>([
+    join(workspace, 'resources', 'base', 'element'),
+    join(workspace, 'entry', 'src', 'main', 'resources', 'base', 'element'),
+    join(workspace, 'AppScope', 'resources', 'base', 'element')
+  ]);
+  for (const child of await listDir(workspace)) {
+    if (child.startsWith('.') || SKIP_MODULE_DIRS.has(child)) continue;
+    roots.add(join(workspace, child, 'src', 'main', 'resources', 'base', 'element'));
+    roots.add(join(workspace, child, 'resources', 'base', 'element'));
+  }
+  return [...roots];
 }
 
 function readResourceItems(raw: string | null, kind: 'color' | 'float'): ResourceItem[] {
@@ -521,50 +551,62 @@ function readResourceItems(raw: string | null, kind: 'color' | 'float'): Resourc
 
 /**
  * Cold-start seeds from the project's own resource files.
- * @param workspace - session working directory.
+ *
+ * A HarmonyOS app usually keeps them under `<module>/src/main/resources/base/element`
+ * rather than `<workspace>/resources`, so several candidate roots are checked
+ * and the result reports which ones were searched.
  */
 export async function readProjectAestheticFacts(workspace: string): Promise<ProjectResourceResult> {
   const facts: AestheticFact[] = [];
   const files: string[] = [];
-  const elementDir = join(workspace, 'resources', 'base', 'element');
-  const colorFile = join(elementDir, 'color.json');
-  const floatFile = join(elementDir, 'float.json');
-  const colors = readResourceItems(await readTextOrNull(colorFile), 'color');
-  if (colors.length > 0) files.push(colorFile);
-  for (const item of colors) {
-    const name = item.name ?? 'color';
-    const value = item.value ?? '';
-    const match = /^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$/.exec(value.trim());
-    if (match === null) continue;
-    facts.push({
-      area: 'palette',
-      value: { color: value.toUpperCase().slice(0, 7) },
-      decision: `配色 ${name} = ${value.toUpperCase()}`
-    });
+  const roots = await resourceRoots(workspace);
+  const seen = new Set<string>();
+  const push = (fact: AestheticFact): void => {
+    const key = `${fact.area}:${valueLabel(fact.value)}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    facts.push(fact);
+  };
+  for (const elementDir of roots) {
+    const colorFile = join(elementDir, 'color.json');
+    const colors = readResourceItems(await readTextOrNull(colorFile), 'color');
+    if (colors.length > 0) files.push(colorFile);
+    for (const item of colors) {
+      const name = item.name ?? 'color';
+      const value = item.value ?? '';
+      const match = /^#[0-9A-Fa-f]{6}(?:[0-9A-Fa-f]{2})?$/.exec(value.trim());
+      if (match === null) continue;
+      push({
+        area: 'palette',
+        value: { color: value.toUpperCase().slice(0, 7) },
+        decision: `配色 ${name} = ${value.toUpperCase()}`
+      });
+    }
+    const floatFile = join(elementDir, 'float.json');
+    const floats = readResourceItems(await readTextOrNull(floatFile), 'float');
+    if (floats.length > 0) files.push(floatFile);
+    for (const item of floats) {
+      const name = item.name ?? 'float';
+      const lower = name.toLowerCase();
+      const area: AestheticArea | undefined = /space|padding|margin|gap|gutter|offset/.test(lower)
+        ? 'spacing'
+        : /radius|corner/.test(lower)
+          ? 'radius'
+          : /font|text|line/.test(lower)
+            ? 'type'
+            : undefined;
+      if (area === undefined) continue;
+      const value = item.value ?? '';
+      const match = /^(\d+(?:\.\d+)?)\s*(vp|dp|px|pt|fp)?$/.exec(value.trim());
+      if (match === null) continue;
+      push({
+        area,
+        value: { number: Number(match[1]), unit: match[2] ?? 'vp' },
+        decision: `${AREA_LABELS[area]} ${name} = ${value.trim()}`
+      });
+    }
   }
-  const floats = readResourceItems(await readTextOrNull(floatFile), 'float');
-  if (floats.length > 0) files.push(floatFile);
-  for (const item of floats) {
-    const name = item.name ?? 'float';
-    const lower = name.toLowerCase();
-    const area: AestheticArea | undefined = /space|padding|margin|gap|gutter|offset/.test(lower)
-      ? 'spacing'
-      : /radius|corner/.test(lower)
-        ? 'radius'
-        : /font|text|line/.test(lower)
-          ? 'type'
-          : undefined;
-    if (area === undefined) continue;
-    const value = item.value ?? '';
-    const match = /^(\d+(?:\.\d+)?)\s*(vp|dp|px|pt)?$/.exec(value.trim());
-    if (match === null) continue;
-    facts.push({
-      area,
-      value: { number: Number(match[1]), unit: match[2] ?? 'vp' },
-      decision: `${AREA_LABELS[area]} ${name} = ${value.trim()}`
-    });
-  }
-  return { facts, files };
+  return { facts, files, searched: roots };
 }
 
 /** Result of applying proposals to the profile. */
@@ -580,26 +622,57 @@ export interface AestheticApplyOutcome {
  * Apply proposals and conflict choices to a profile in memory.
  *
  * Unresolved conflicts are returned instead of guessed: the tool refuses the
- * write and asks the user to pass `choice`.
+ * write and asks the user to pass `choice` (one conflict) or `choices` (one per
+ * area). A single `choice` that matches more than one conflict is ambiguous and
+ * leaves every matched conflict unresolved, so no preference is replaced by
+ * accident.
  */
+export function conflictsMatchingChoice(
+  conflicts: readonly AestheticConflict[],
+  choice: string
+): AestheticConflict[] {
+  const value = choice.trim();
+  if (value.length === 0) return [];
+  return conflicts.filter((conflict) =>
+    conflict.candidates.some(
+      (candidate) => candidate.value === value || candidate.id === value || candidate.decision === value
+    )
+  );
+}
+
 export function applyAestheticProposals(
   profile: AestheticProfile,
   result: AestheticLearnResult,
-  options: { readonly choice?: string; readonly now: string }
+  options: {
+    readonly choice?: string;
+    readonly choices?: Readonly<Partial<Record<AestheticArea, string>>>;
+    readonly now: string;
+  }
 ): AestheticApplyOutcome {
   const events: AestheticHistoryEvent[] = [];
   const applied: AestheticEntry[] = [];
   const superseded: AestheticEntry[] = [];
   const unresolved: AestheticConflict[] = [];
   let entries = [...profile.entries];
+  const singleChoice = options.choice?.trim();
+  const ambiguous =
+    singleChoice !== undefined &&
+    singleChoice.length > 0 &&
+    options.choices === undefined &&
+    conflictsMatchingChoice(result.conflicts, singleChoice).length > 1;
 
   const upsert = (entry: AestheticEntry): void => {
     entries = entries.map((item) => (item.id === entry.id ? entry : item));
   };
 
   for (const conflict of result.conflicts) {
-    const choice = options.choice?.trim();
+    const perArea = options.choices?.[conflict.area]?.trim();
+    const choice = perArea !== undefined && perArea.length > 0 ? perArea : singleChoice;
     if (choice === undefined || choice.length === 0) {
+      unresolved.push(conflict);
+      continue;
+    }
+    if (ambiguous && perArea === undefined) {
       unresolved.push(conflict);
       continue;
     }
@@ -686,7 +759,7 @@ export function applyAestheticProposals(
       if (existing === undefined) continue;
       const updated: AestheticEntry = {
         ...existing,
-        confidence: adjustConfidence(existing.confidence, 'repeat'),
+        confidence: proposal.confidence,
         evidence: [...new Set([...existing.evidence, ...proposal.sources])],
         updatedAt: options.now
       };
@@ -699,7 +772,7 @@ export function applyAestheticProposals(
         area: updated.area,
         value: valueLabel(updated.value),
         sources: proposal.sources,
-        note: '重复证据 +0.05'
+        note: proposal.reason
       });
       continue;
     }
@@ -738,13 +811,13 @@ export function applyAestheticProposals(
 function parseValueFromLabel(label: string): AestheticValue | undefined {
   const color = /^#([0-9A-Fa-f]{6})/.exec(label.trim());
   if (color !== null) return { color: `#${color[1]?.toUpperCase() ?? ''}`.slice(0, 7) };
-  const numeric = /^(-?\d+(?:\.\d+)?)\s*(vp|dp|px|pt|ms|%|deg)?$/.exec(label.trim());
+  const numeric = /^(-?\d+(?:\.\d+)?)\s*(vp|dp|px|pt|fp|ms|%|deg)?$/.exec(label.trim());
   if (numeric === null) return undefined;
   const unit = numeric[2] ?? 'vp';
   return { number: Number(numeric[1]), unit };
 }
 
-/** Render the profile markdown (table + machine-readable JSON fence). */
+/** Render the profile markdown (human table + machine-readable JSON line). */
 export function renderProfileMarkdown(profile: AestheticProfile): string {
   const rows = profile.entries.map((entry) => [
     `\`${entry.id}\``,
@@ -760,72 +833,118 @@ export function renderProfileMarkdown(profile: AestheticProfile): string {
     '# 审美档案',
     '',
     '> 由 `dwguard_aesthetic` 维护：只记录有来源的偏好；被取代的条目标 `superseded`，不删除。',
-    '> 机器可读的 JSON 在同一文件的末尾（marker 下方），不要手改表与 JSON 的对应关系。',
+    '> 机器可读的 JSON 是 marker 下方的那一行；不要手改表与 JSON 的对应关系。',
     '',
     table(['ID', '领域', '决策', '取值', '置信度', '来源', '状态', '更新时间'], rows),
     '',
     '<!-- aesthetic-profile:json -->',
     '',
-    '```json',
-    JSON.stringify(profile, null, 2),
-    '```',
+    JSON.stringify(profile),
     ''
   ].join('\n');
 }
 
-/** Read the profile, tolerating a missing or corrupt document. */
-export async function readProfile(paths: SharedPaths): Promise<AestheticProfile> {
-  const raw = await readTextOrNull(paths.aestheticProfileMd);
-  if (raw === null) return emptyProfile();
-  const marker = raw.indexOf('<!-- aesthetic-profile:json -->');
-  if (marker < 0) return emptyProfile();
-  const fence = /```json\s*([\s\S]*?)```/.exec(raw.slice(marker));
-  if (fence === null || fence[1] === undefined) return emptyProfile();
+/** Whether the stored profile was readable. */
+export type ProfileStatus = 'missing' | 'ok' | 'invalid';
+
+/** Outcome of reading the profile document. */
+export interface ProfileReadResult {
+  readonly profile: AestheticProfile;
+  readonly status: ProfileStatus;
+  /** Set when status is `invalid`. */
+  readonly error?: string;
+}
+
+const PROFILE_MARKER = '<!-- aesthetic-profile:json -->';
+
+function invalidProfile(error: string): ProfileReadResult {
+  return { profile: emptyProfile(), status: 'invalid', error };
+}
+
+function parseProfileEntries(raw: string): ProfileReadResult {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(fence[1]);
-    if (typeof parsed !== 'object' || parsed === null) return emptyProfile();
-    const entries = (parsed as Record<string, unknown>)['entries'];
-    if (!Array.isArray(entries)) return emptyProfile();
-    const valid: AestheticEntry[] = [];
-    for (const item of entries) {
-      if (typeof item !== 'object' || item === null) continue;
-      const record = item as Record<string, unknown>;
-      if (
-        typeof record['id'] !== 'string' ||
-        !isAestheticArea(record['area']) ||
-        typeof record['decision'] !== 'string' ||
-        typeof record['source'] !== 'string' ||
-        typeof record['confidence'] !== 'number' ||
-        typeof record['value'] !== 'object' ||
-        record['value'] === null
-      ) {
-        continue;
-      }
-      const valueRecord = record['value'] as Record<string, unknown>;
-      const value: AestheticValue = {
-        ...(typeof valueRecord['number'] === 'number' ? { number: valueRecord['number'] } : {}),
-        ...(typeof valueRecord['unit'] === 'string' ? { unit: valueRecord['unit'] } : {}),
-        ...(typeof valueRecord['color'] === 'string' ? { color: valueRecord['color'] } : {})
-      };
-      valid.push({
-        id: record['id'],
-        area: record['area'],
-        decision: record['decision'],
-        value,
-        source: record['source'],
-        evidence: Array.isArray(record['evidence'])
-          ? (record['evidence'] as unknown[]).filter((item2): item2 is string => typeof item2 === 'string')
-          : [],
-        confidence: record['confidence'],
-        status: record['status'] === 'superseded' ? 'superseded' : 'active',
-        updatedAt: typeof record['updatedAt'] === 'string' ? record['updatedAt'] : '',
-        ...(typeof record['supersededBy'] === 'string' ? { supersededBy: record['supersededBy'] } : {})
-      });
-    }
-    return { schemaVersion: 1, entries: valid };
-  } catch {
-    return emptyProfile();
+    parsed = JSON.parse(raw);
+  } catch (error) {
+    return invalidProfile(`JSON 解析失败：${(error as Error).message}`);
   }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return invalidProfile('JSON 顶层必须是对象');
+  }
+  const entries = (parsed as Record<string, unknown>)['entries'];
+  if (!Array.isArray(entries)) return invalidProfile('JSON 缺少 entries 数组');
+  const valid: AestheticEntry[] = [];
+  for (let index = 0; index < entries.length; index += 1) {
+    const item: unknown = entries[index];
+    const record = typeof item === 'object' && item !== null ? (item as Record<string, unknown>) : null;
+    if (
+      record === null ||
+      typeof record['id'] !== 'string' ||
+      !isAestheticArea(record['area']) ||
+      typeof record['decision'] !== 'string' ||
+      typeof record['source'] !== 'string' ||
+      typeof record['confidence'] !== 'number' ||
+      typeof record['value'] !== 'object' ||
+      record['value'] === null
+    ) {
+      return invalidProfile(`第 ${index + 1} 条记录字段不完整（需要 id/area/decision/value/source/confidence）`);
+    }
+    // Any malformed entry is reported, never silently dropped: dropping it
+    // would let the next write erase a preference without a trace.
+    if (valid.some((entry) => entry.id === record['id'])) {
+      return invalidProfile(`记录 ID 重复：${String(record['id'])}`);
+    }
+    const valueRecord = record['value'] as Record<string, unknown>;
+    const value: AestheticValue = {
+      ...(typeof valueRecord['number'] === 'number' ? { number: valueRecord['number'] } : {}),
+      ...(typeof valueRecord['unit'] === 'string' ? { unit: valueRecord['unit'] } : {}),
+      ...(typeof valueRecord['color'] === 'string' ? { color: valueRecord['color'] } : {})
+    };
+    valid.push({
+      id: record['id'],
+      area: record['area'],
+      decision: record['decision'],
+      value,
+      source: record['source'],
+      evidence: Array.isArray(record['evidence'])
+        ? (record['evidence'] as unknown[]).filter((item2): item2 is string => typeof item2 === 'string')
+        : [],
+      confidence: record['confidence'],
+      status: record['status'] === 'superseded' ? 'superseded' : 'active',
+      updatedAt: typeof record['updatedAt'] === 'string' ? record['updatedAt'] : '',
+      ...(typeof record['supersededBy'] === 'string' ? { supersededBy: record['supersededBy'] } : {})
+    });
+  }
+  return { profile: { schemaVersion: 1, entries: valid }, status: 'ok' };
+}
+
+/**
+ * Read the profile with its parse state.
+ *
+ * A missing file is a normal empty profile; a file that exists but cannot be
+ * parsed is `invalid` and every write path must refuse instead of overwriting
+ * it (0.6.1 review M6). The reader understands both the current marker+line
+ * format and the legacy fenced-JSON format written by early 0.6.1 builds.
+ */
+export async function readProfileDocument(paths: SharedPaths): Promise<ProfileReadResult> {
+  const raw = await readTextOrNull(paths.aestheticProfileMd);
+  if (raw === null) return { profile: emptyProfile(), status: 'missing' };
+  const marker = raw.indexOf(PROFILE_MARKER);
+  if (marker < 0) return invalidProfile(`缺少 \`${PROFILE_MARKER}\` 标记`);
+  const after = raw.slice(marker + PROFILE_MARKER.length);
+  const firstLine = after
+    .split('\n')
+    .map((line) => line.trim())
+    .find((line) => line.length > 0);
+  if (firstLine !== undefined && firstLine.startsWith('{')) return parseProfileEntries(firstLine);
+  const fence = /```json\s*([\s\S]*?)```/.exec(after);
+  if (fence !== null && fence[1] !== undefined) return parseProfileEntries(fence[1]);
+  return invalidProfile('marker 下方没有 JSON');
+}
+
+/** Read the profile, tolerating a missing or corrupt document (read-only callers). */
+export async function readProfile(paths: SharedPaths): Promise<AestheticProfile> {
+  return (await readProfileDocument(paths)).profile;
 }
 
 /** Write the profile markdown. */

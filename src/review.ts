@@ -120,8 +120,8 @@ export interface AestheticAuditRef {
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
   readonly profileRefs: readonly AestheticAuditRef[];
-  /** Latest baseline comparison, when one was run for this pack version. */
-  readonly compare?: BaselineCompareResult;
+  /** Baseline comparisons recorded for this pack version (one per page/state). */
+  readonly compares?: readonly BaselineCompareResult[];
 }
 
 /** A persisted delivery audit. */
@@ -849,6 +849,8 @@ export function renderAcceptanceMarkdown(
   const criteria = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   const passed = report.checks.filter((check) => check.result === 'pass');
   const minor = report.findings.filter((finding) => finding.severity === 'minor');
+  const compares = report.aesthetic?.compares ?? [];
+  const failedCompares = compares.filter((compare) => !compare.pass);
   const rows = passed.map((check) => {
     const criterion = criteria.get(check.criterionId);
     return [
@@ -865,7 +867,8 @@ export function renderAcceptanceMarkdown(
   return [
     `# 验收报告 · ${pack.title}`,
     '',
-    `> 结论：**通过**（四维齐全，must 判据 ${report.coverage.passed}/${report.coverage.total} 全部通过）`,
+    `> 结论：**通过**（四维齐全，must 判据 ${report.coverage.passed}/${report.coverage.total} 全部通过）` +
+      (failedCompares.length === 0 ? '' : `；注意：审美基线有 ${failedCompares.length} 个页面/状态未通过（见 §2.2）`),
     `> 任务包 v${pack.specVersion} · 审计 #${report.id} · ${report.createdAt}`,
     `> 任务包：\`${displayPath(paths, paths.specMd)}\` · 审计记录：\`${displayPath(paths, paths.artifactsDir)}/audit-${report.id}.md\``,
     '',
@@ -905,15 +908,34 @@ export function renderAcceptanceMarkdown(
     '',
     '### 2.2 审美基线差异',
     '',
-    report.aesthetic?.compare === undefined
+    compares.length === 0
       ? '（本轮未运行 `dwguard_aesthetic compare`；审美判据以档案与截图证据为准。）'
-      : renderCompareMarkdown(report.aesthetic.compare, '####'),
+      : compares
+          .map(
+            (compare) =>
+              `#### ${compare.page} · ${compare.state}\n\n${renderCompareMarkdown(compare, '', false)}`
+          )
+          .join('\n\n'),
     '',
     '## 3. 遗留风险',
     '',
     minor.length === 0
       ? '无开放发现。'
       : bullets(minor.map((finding) => `\`${finding.id}\` ${finding.title} — ${finding.evidence}`)),
+    '',
+    ...(failedCompares.length === 0
+      ? []
+      : [
+          '**审美基线未通过**',
+          '',
+          bullets(
+            failedCompares.map(
+              (compare) =>
+                `${compare.page} · ${compare.state} 有 ${compare.rows.filter((row) => row.verdict === 'fail').length} 项超差——如这是用户要求的新设计，需在用户确认后重建基线；否则按回归处理。`
+            )
+          ),
+          ''
+        ]),
     '',
     '## 4. 下一步',
     '',

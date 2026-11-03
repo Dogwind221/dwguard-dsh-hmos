@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { bumpVersion, syncVersionText } from '../scripts/release.mjs';
+import { bumpVersion, syncLockVersion, syncVersionText } from '../scripts/release.mjs';
 
 test('bumpVersion handles patch / minor / major', () => {
   assert.equal(bumpVersion('0.2.0', 'patch'), '0.2.1');
@@ -13,6 +13,22 @@ test('bumpVersion handles patch / minor / major', () => {
 test('bumpVersion rejects malformed input', () => {
   assert.throws(() => bumpVersion('0.2', 'patch'), /invalid version/);
   assert.throws(() => bumpVersion('0.2.0', 'beta'), /invalid bump/);
+});
+
+test('syncLockVersion updates the root version fields without touching dependencies', () => {
+  const lock = {
+    version: '0.6.1',
+    packages: {
+      '': { name: 'dwguard-dsh-hmos', version: '0.6.1' },
+      'node_modules/dep': { version: '1.2.3' }
+    }
+  };
+  const next = syncLockVersion(lock, '0.6.2');
+  assert.equal(next.version, '0.6.2');
+  assert.equal(next.packages[''].version, '0.6.2');
+  assert.equal(next.packages['node_modules/dep'].version, '1.2.3');
+  assert.equal(lock.version, '0.6.1', '输入对象不得被原地修改');
+  assert.throws(() => syncLockVersion(lock, '0.6'), /invalid version/);
 });
 
 test('syncVersionText rewrites the Chinese install pins and release command', () => {

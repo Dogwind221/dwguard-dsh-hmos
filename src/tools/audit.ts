@@ -17,7 +17,7 @@ import type { AestheticProfile } from '../aesthetic.js';
 import { AREA_LABELS, findProfileEntry, readProfile, valueLabel } from '../aesthetic.js';
 import { appendOutboxDsh } from '../dispatch.js';
 import { appendCalibration, dimensionVerdicts } from '../calibration.js';
-import { readCompareResult } from '../baseline.js';
+import { readCompareResults } from '../baseline.js';
 import { collectDeviceEvidence } from '../device.js';
 import { EvidenceError, missingEvidence, writeEvidenceBundle } from '../evidence.js';
 import { DIMENSIONS, DIMENSION_LABELS, SCREEN_FAMILIES } from '../model.js';
@@ -226,7 +226,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       const pack = await requireSpec(paths, options, TOOL);
       const policy = options.device;
       const profile = await readProfile(paths);
-      const compare = await readCompareResult(paths, pack.specVersion);
+      const compares = await readCompareResults(paths, pack.specVersion);
       const checks = applyAssertionVerdicts(pack, normalizeChecks(parseChecks(args)));
       const findings = normalizeFindings(parseFindings(args));
       const note = optionalString(args, 'note', TOOL, 2000) ?? '';
@@ -258,13 +258,27 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         throw error;
       }
 
-      const gate = gateDelivery(pack, checks, findings, policy, profile);
+      const baseGate = gateDelivery(pack, checks, findings, policy, profile);
+      const failedCompares = compares.filter((compare) => !compare.pass);
+      const gate =
+        failedCompares.length === 0
+          ? baseGate
+          : {
+              ...baseGate,
+              warnings: [
+                ...baseGate.warnings,
+                ...failedCompares.map(
+                  (compare) =>
+                    `审美基线 compare 未通过（${compare.page} · ${compare.state}，${compare.rows.filter((row) => row.verdict === 'fail').length} 项超差）：若这是用户要求的新设计，需在用户确认后重建基线；否则按回归记为 finding。`
+                )
+              ]
+            };
       const coverage = summarizeCoverage(pack, checks, policy);
       const dimensions = summarizeDimensions(pack, checks);
       const aestheticRefs = collectAestheticRefs(pack, checks, profile);
       const aesthetic: AestheticAuditSummary = {
         profileRefs: aestheticRefs,
-        ...(compare === null ? {} : { compare })
+        ...(compares.length === 0 ? {} : { compares })
       };
       const report: AuditReport = {
         id,
