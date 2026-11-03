@@ -779,6 +779,147 @@ async function buildStructuredFixture(cwd) {
   return { manifest, byTitle };
 }
 
+test('0.6.6 DS: DashScope native text embeddings recall cards with zero lexical overlap', async () => {
+  const requests = [];
+  const server = createServer((request, response) => {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      requests.push(payload);
+      const contents = payload.input.contents;
+      const embeddings = contents.map((content, index) => {
+        const text = content.text ?? '';
+        const embedding = /睡前|舒适|夜间|护眼|暗色|低亮度|黑色/.test(text)
+          ? [1, 0, 0]
+          : /暖白|明亮/.test(text)
+            ? [0, 1, 0]
+            : [0, 0, 1];
+        return { index, embedding };
+      });
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ output: { embeddings }, usage: {} }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  process.env.DWG_TEST_DS_KEY = 'test-key';
+  try {
+    const cwd = await workspace();
+    const dash = createDesignTool(
+      resolveOptions({
+        designRanker: 'hybrid',
+        designEmbeddingProvider: 'dashscope',
+        designEmbeddingEndpoint: `http://127.0.0.1:${port}/native`,
+        designEmbeddingModel: 'qwen3-vl-embedding',
+        designEmbeddingApiKeyEnv: 'DWG_TEST_DS_KEY',
+        designEmbeddingTimeoutMs: 3000,
+        designEmbeddingWeight: 0.8
+      })
+    );
+    await dash.execute({ action: 'library', op: 'init' }, exec(cwd));
+    await writeMeta(cwd, 'dark.meta.json', {
+      title: '暗色阅读界面',
+      summary: '黑色背景低亮度保护眼睛',
+      rationale: '黑色背景 低亮度 保护眼睛',
+      source: { kind: 'user', license: 'internal' }
+    });
+    await writeMeta(cwd, 'warm.meta.json', {
+      title: '暖白首页',
+      summary: '米色明亮首页',
+      rationale: '暖白 米色 明亮 白天',
+      source: { kind: 'user', license: 'internal' }
+    });
+    await dash.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(cwd));
+    const manifest = await readDesignManifest(paths(cwd));
+    assert.ok(manifest !== null);
+    const dark = manifest.cards.find((card) => card.title === '暗色阅读界面');
+    assert.ok(dark !== undefined);
+
+    const res = await dash.execute({ action: 'search', query: '睡前舒适', topK: 3 }, exec(cwd));
+    assert.equal(res.ok, true, res.detail);
+    const rows = res.detail.split('\n').filter((line) => line.startsWith('| `'));
+    assert.ok(rows[0].includes(dark.id), `语义召回应把暗色卡召回并排第一：${rows[0]}`);
+    assert.match(res.detail, /hybrid 召回：lexical 0 \+ semantic 2/);
+    assert.doesNotMatch(res.detail, /hybrid 需要 embedding 端点/);
+    assert.equal(requests[0].model, 'qwen3-vl-embedding');
+    assert.ok(Array.isArray(requests[0].input.contents), 'DashScope 原生协议应使用 input.contents');
+    assert.ok(requests[0].input.contents.some((content) => typeof content.text === 'string'));
+    const cache = JSON.parse(await readFile(paths(cwd).designEmbeddings, 'utf8'));
+    assert.equal(cache.model, 'qwen3-vl-embedding');
+    assert.ok(Object.keys(cache.vectors).length >= 3);
+  } finally {
+    delete process.env.DWG_TEST_DS_KEY;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('0.6.6 DS: DashScope multimodal provider feeds imageText with native contents', async () => {
+  const bodies = [];
+  const server = createServer((request, response) => {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      const payload = JSON.parse(body);
+      bodies.push(payload);
+      const contents = payload.input.contents;
+      const embeddings = contents.map((content, index) => ({
+        index,
+        embedding: content.text !== undefined
+          ? content.text.includes('红')
+            ? [1, 0, 0]
+            : [0, 1, 0]
+          : [1, 0, 0]
+      }));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ output: { embeddings } }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  process.env.DWG_TEST_DS_KEY = 'test-key';
+  try {
+    const cwd = await workspace();
+    await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+    const inbox = join(paths(cwd).shared, 'design-library', 'inbox');
+    await mkdir(inbox, { recursive: true });
+    await writeFile(join(inbox, 'red.png'), IMAGE_E);
+    await writeMeta(cwd, 'red.meta.json', {
+      title: '红色海报',
+      summary: '红色主视觉',
+      image: 'red.png',
+      source: { kind: 'user', license: 'internal' }
+    });
+    await tool.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(cwd));
+    const dash = createDesignTool(
+      resolveOptions({
+        designClipProvider: 'dashscope',
+        designClipEndpoint: `http://127.0.0.1:${port}/native`,
+        designClipModel: 'tongyi-embedding-vision-flash',
+        designClipApiKeyEnv: 'DWG_TEST_DS_KEY',
+        designClipTimeoutMs: 3000,
+        designClipWeight: 0.9
+      })
+    );
+    const res = await dash.execute({ action: 'search', imageText: '红色', topK: 3 }, exec(cwd));
+    assert.equal(res.ok, true, res.detail);
+    assert.match(res.detail, /tongyi-embedding-vision-flash|CLIP/);
+    assert.ok(res.detail.includes('红色海报'));
+    assert.ok(bodies.length > 0);
+    assert.equal(bodies[0].model, 'tongyi-embedding-vision-flash');
+    const contents = bodies.flatMap((body) => body.input.contents);
+    assert.ok(contents.some((content) => typeof content.image === 'string' && content.image.startsWith('data:image/png;base64,')));
+    assert.ok(contents.some((content) => content.text === '红色'));
+  } finally {
+    delete process.env.DWG_TEST_DS_KEY;
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
 test('0.6.5 CLIP: multimodal text→image and pHash+CLIP image search', async () => {
   const requests = [];
   const server = createServer((request, response) => {

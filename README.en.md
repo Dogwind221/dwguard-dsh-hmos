@@ -31,14 +31,14 @@ This plugin makes the hand-off explicit:
 
 ## Install
 
-Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.5).
+Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.6).
 
 The `desktop` profile is managed **exclusively by the desktop app** — the CLI
 refuses `dsh plugin --profile desktop …`. Pick the path that matches how you run
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.6.5`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.6.6`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -47,7 +47,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.6.5   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.6.6   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -109,7 +109,7 @@ self-report never becomes a `pass`.
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
 | `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
 | `dwguard_aesthetic` | Aesthetic learning (0.6.1) + cross-project templates (0.6.4): `profile`, `baseline`, `compare`, `learn`, `template` (list/get/export/import). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; `baseline save` needs a passing audit + user confirmation; `template import` needs `confirmed: true` (`merge` supersedes local conflicts) |
-| `dwguard_design` | Design reference library (0.6.2–0.6.5): `library init/ingest/list`, `search` (filters + `image` + `imageText` CLIP text→image), `brief`, `feedback`, `capture`, `pack list/export/import`, `stats`. Lexical by default (offline); `hybrid` needs an embedding endpoint, `imageText` needs a multimodal endpoint; failures fall back (image) or fail clearly (text); `query.mjs` stays lexical; `capture`/`pack import` need `confirmed: true`; budgets hard-stop |
+| `dwguard_design` | Design reference library (0.6.2–0.6.6): `library init/ingest/list`, `search` (filters + `image` + `imageText` multimodal text→image), `brief`, `feedback`, `capture`, `pack list/export/import`, `stats`. `hybrid` supports `openai`/`dashscope` providers and now expands recall semantically before blending; `qwen3-vl-embedding` / `tongyi-embedding-vision-flash` can embed both text and images via DashScope's native endpoint; failures fall back (image) or fail clearly (text); `query.mjs` stays lexical; `capture`/`pack import` need `confirmed: true`; budgets hard-stop |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
@@ -244,9 +244,10 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     deviceLockTimeoutMs: 600000
     designTopK: 5          # default design search size
     designMaxChunks: 2000  # warn above this chunk count
-    designRanker: lexical  # lexical (default) | hybrid (needs an embedding endpoint)
-    designEmbeddingEndpoint: ""  # OpenAI-compatible /embeddings; empty = no network
-    designEmbeddingModel: text-embedding-3-small
+    designRanker: hybrid   # lexical (default) | hybrid (semantic recall + blend)
+    designEmbeddingProvider: dashscope  # openai (compatible /embeddings) | dashscope (native contents)
+    designEmbeddingEndpoint: ""  # dashscope: empty = official multimodal-embedding endpoint
+    designEmbeddingModel: qwen3-vl-embedding  # one multimodal model for text + images; or tongyi-embedding-vision-flash
     designEmbeddingApiKeyEnv: DWG_DESIGN_EMBEDDING_KEY
     designEmbeddingTimeoutMs: 8000
     designEmbeddingWeight: 0.35
@@ -256,8 +257,9 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     maxDesignSearches: 12  # hard cap on design searches per round
     aestheticTemplatesDir: ""  # empty = ~/.dsh/dwguard/aesthetic-templates
     designPacksDir: ""         # empty = ~/.dsh/dwguard/design-packs
-    designClipEndpoint: ""     # CLIP/multimodal endpoint; empty = off
-    designClipModel: clip-vit-base-patch32
+    designClipProvider: dashscope  # custom (own contract) | dashscope (native contents)
+    designClipEndpoint: ""     # dashscope: empty = official multimodal-embedding endpoint
+    designClipModel: qwen3-vl-embedding   # or tongyi-embedding-vision-flash
     designClipApiKeyEnv: DWG_DESIGN_CLIP_KEY
     designClipTimeoutMs: 8000
     designClipWeight: 0.5      # semantic weight in image search (0–1)
@@ -287,7 +289,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 127 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 129 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

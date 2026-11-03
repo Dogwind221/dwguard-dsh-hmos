@@ -72,7 +72,9 @@ export const Config = z.object({
   maxAuditRounds: z.number().default(5),
   /** Hard stop: design searches allowed in one round (0.6.3 C). */
   maxDesignSearches: z.number().default(12),
-  /** Embedding endpoint for hybrid rerank (0.6.4); empty = lexical only. */
+  /** Embedding wire protocol: `openai` (compatible /embeddings) or `dashscope` (native contents). */
+  designEmbeddingProvider: z.string().default('openai'),
+  /** OpenAI-compatible embedding endpoint for hybrid rerank (0.6.4); empty = lexical only. */
   designEmbeddingEndpoint: z.string().default(''),
   /** Embedding model name sent to the endpoint. */
   designEmbeddingModel: z.string().default('text-embedding-3-small'),
@@ -89,6 +91,8 @@ export const Config = z.object({
   /** Optional multimodal (CLIP-style) embedding endpoint (0.6.5); empty = off. */
   designClipEndpoint: z.string().default(''),
   designClipModel: z.string().default('clip-vit-base-patch32'),
+  /** Multimodal wire protocol: our custom contract or DashScope native contents API (0.6.6). */
+  designClipProvider: z.string().default('custom'),
   designClipApiKeyEnv: z.string().default('DWG_DESIGN_CLIP_KEY'),
   designClipTimeoutMs: z.number().default(8000),
   designClipWeight: z.number().default(0.5),
@@ -131,6 +135,7 @@ export interface Options {
   readonly maxDesignSearches: number;
   /** OpenAI-compatible embedding endpoint (empty = lexical only). */
   readonly designEmbeddingEndpoint: string;
+  readonly designEmbeddingProvider: 'openai' | 'dashscope';
   readonly designEmbeddingModel: string;
   readonly designEmbeddingApiKeyEnv: string;
   readonly designEmbeddingTimeoutMs: number;
@@ -141,6 +146,7 @@ export interface Options {
   readonly designPacksDir: string;
   readonly designClipEndpoint: string;
   readonly designClipModel: string;
+  readonly designClipProvider: 'custom' | 'dashscope';
   readonly designClipApiKeyEnv: string;
   readonly designClipTimeoutMs: number;
   readonly designClipWeight: number;
@@ -169,6 +175,7 @@ const DEFAULTS: Options = {
   maxAuditRounds: 5,
   maxDesignSearches: 12,
   designEmbeddingEndpoint: '',
+  designEmbeddingProvider: 'openai',
   designEmbeddingModel: 'text-embedding-3-small',
   designEmbeddingApiKeyEnv: 'DWG_DESIGN_EMBEDDING_KEY',
   designEmbeddingTimeoutMs: 8000,
@@ -177,6 +184,7 @@ const DEFAULTS: Options = {
   designPacksDir: '',
   designClipEndpoint: '',
   designClipModel: 'clip-vit-base-patch32',
+  designClipProvider: 'custom',
   designClipApiKeyEnv: 'DWG_DESIGN_CLIP_KEY',
   designClipTimeoutMs: 8000,
   designClipWeight: 0.5,
@@ -240,6 +248,7 @@ export function resolveOptions(raw: unknown): Options {
     maxAuditRounds: positiveInt(input['maxAuditRounds'], DEFAULTS.maxAuditRounds, 1),
     maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
     designEmbeddingEndpoint: typeof input['designEmbeddingEndpoint'] === 'string' ? input['designEmbeddingEndpoint'].trim() : DEFAULTS.designEmbeddingEndpoint,
+    designEmbeddingProvider: input['designEmbeddingProvider'] === 'dashscope' ? 'dashscope' : DEFAULTS.designEmbeddingProvider,
     designEmbeddingModel: str(input['designEmbeddingModel'], DEFAULTS.designEmbeddingModel),
     designEmbeddingApiKeyEnv: str(input['designEmbeddingApiKeyEnv'], DEFAULTS.designEmbeddingApiKeyEnv),
     designEmbeddingTimeoutMs: positiveInt(input['designEmbeddingTimeoutMs'], DEFAULTS.designEmbeddingTimeoutMs, 1000),
@@ -253,6 +262,7 @@ export function resolveOptions(raw: unknown): Options {
     designClipEndpoint:
       typeof input['designClipEndpoint'] === 'string' ? input['designClipEndpoint'].trim() : DEFAULTS.designClipEndpoint,
     designClipModel: str(input['designClipModel'], DEFAULTS.designClipModel),
+    designClipProvider: input['designClipProvider'] === 'dashscope' ? 'dashscope' : DEFAULTS.designClipProvider,
     designClipApiKeyEnv: str(input['designClipApiKeyEnv'], DEFAULTS.designClipApiKeyEnv),
     designClipTimeoutMs: positiveInt(input['designClipTimeoutMs'], DEFAULTS.designClipTimeoutMs, 1000),
     designClipWeight: fraction(input['designClipWeight'], DEFAULTS.designClipWeight),

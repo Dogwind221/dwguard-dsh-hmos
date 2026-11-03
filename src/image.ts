@@ -315,12 +315,33 @@ export function imageSimilarity(left: ImageFeatures, right: ImageFeatures): Imag
   };
 }
 
-/** Optional multimodal (CLIP-style) embedding endpoint (0.6.5). */
+/** Optional multimodal (CLIP-style) embedding endpoint (0.6.5/0.6.6). */
 export interface ClipConfig {
   readonly endpoint: string;
   readonly model: string;
   readonly apiKey?: string;
   readonly timeoutMs: number;
+  /** `custom` = our documented {images,texts} contract; `dashscope` = native contents API. */
+  readonly provider?: 'custom' | 'dashscope';
+}
+
+/** DashScope native multimodal embedding endpoint (not supported by compatible mode). */
+export const DASHSCOPE_MULTIMODAL_ENDPOINT =
+  'https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding';
+
+/** Text-only embedder backed by DashScope's native multimodal endpoint (0.6.6). */
+export async function createDashScopeTextEmbedder(config: {
+  readonly endpoint: string;
+  readonly model: string;
+  readonly apiKey?: string;
+  readonly timeoutMs: number;
+}): Promise<(texts: readonly string[]) => Promise<number[][]>> {
+  const client = await createClipClient({ ...config, provider: 'dashscope' });
+  return async (texts) => {
+    if (texts.length === 0) return [];
+    const embeddings = await client({ texts });
+    return embeddings.textEmbeddings.map((vector) => [...vector]);
+  };
 }
 
 /** One CLIP embedding response. */
@@ -329,9 +350,40 @@ export interface ClipEmbeddings {
   readonly textEmbeddings: readonly (readonly number[])[];
 }
 
+function asVector(raw: unknown, label: string): number[] {
+  if (!Array.isArray(raw) || raw.length === 0) throw new Error(`${label} 向量格式不对`);
+  return raw.map((value) => {
+    if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${label} 含非数值`);
+    return value;
+  });
+}
+
+async function requestJson(
+  config: ClipConfig,
+  init: { method: string; headers: Record<string, string>; body: string; signal: AbortSignal },
+  label: string
+): Promise<Record<string, unknown>> {
+  const response = await fetch(config.endpoint, init);
+  const text = await response.text();
+  let body: Record<string, unknown> = {};
+  try {
+    body = JSON.parse(text) as Record<string, unknown>;
+  } catch {
+    throw new Error(`${label} HTTP ${response.status}（非 JSON 响应）`);
+  }
+  if (!response.ok) {
+    const message = typeof body['message'] === 'string' ? body['message'] : text.slice(0, 200);
+    throw new Error(`${label} HTTP ${response.status}：${message}`);
+  }
+  return body;
+}
+
 /**
- * Call a multimodal embedding endpoint with one documented contract:
- * `POST {model, images?: [dataUrl], texts?: [string]}` →
+ * Call a multimodal embedding endpoint.
+ *
+ * `dashscope` follows the native multimodal-embedding API:
+ * `POST {model, input:{contents:[{text}|{image}]}}` → `{output:{embeddings:[{index,embedding}]}}`.
+ * `custom` follows `POST {model, images?: [dataUrl], texts?: [string]}` →
  * `{imageEmbeddings?: number[][], textEmbeddings?: number[][]}`.
  */
 export async function createClipClient(
@@ -342,37 +394,71 @@ export async function createClipClient(
   return async (request) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), Math.max(1000, config.timeoutMs));
+    const images = request.images ?? [];
+    const texts = request.texts ?? [];
     try {
-      const images = (request.images ?? []).map((buffer) => `data:image/png;base64,${buffer.toString('base64')}`);
-      const response = await fetch(config.endpoint, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          ...(config.apiKey === undefined ? {} : { authorization: `Bearer ${config.apiKey}` })
+      const headers = {
+        'content-type': 'application/json',
+        ...(config.apiKey === undefined ? {} : { authorization: `Bearer ${config.apiKey}` })
+      };
+      if (config.provider === 'dashscope') {
+        if (config.endpoint.length === 0) throw new Error('DashScope provider 缺少 endpoint');
+        const contents = [
+          ...images.map((buffer) => ({ image: `data:image/png;base64,${buffer.toString('base64')}` })),
+          ...texts.map((text) => ({ text }))
+        ];
+        if (contents.length === 0) return { imageEmbeddings: [], textEmbeddings: [] };
+        const body = await requestJson(
+          config,
+          {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({ model: config.model, input: { contents } }),
+            signal: controller.signal
+          },
+          'DashScope 多模态'
+        );
+        const output = body['output'];
+        const embeddings = typeof output === 'object' && output !== null ? (output as Record<string, unknown>)['embeddings'] : undefined;
+        if (!Array.isArray(embeddings) || embeddings.length !== contents.length) {
+          throw new Error(`DashScope 返回条数与输入不一致（期望 ${contents.length}，实际 ${Array.isArray(embeddings) ? embeddings.length : 0}）`);
+        }
+        const byIndex = new Map<number, readonly number[]>();
+        embeddings.forEach((entry) => {
+          if (typeof entry !== 'object' || entry === null) throw new Error('DashScope embedding 条目格式不对');
+          const record = entry as Record<string, unknown>;
+          const index = typeof record['index'] === 'number' ? record['index'] : byIndex.size;
+          if (index < 0 || index >= contents.length) throw new Error(`DashScope embedding index 越界：${index}`);
+          byIndex.set(index, asVector(record['embedding'], `DashScope[${index}]`));
+        });
+        return {
+          imageEmbeddings: images.map((_, index) => byIndex.get(index) ?? []),
+          textEmbeddings: texts.map((_, index) => byIndex.get(images.length + index) ?? [])
+        };
+      }
+      const dataUrls = images.map((buffer) => `data:image/png;base64,${buffer.toString('base64')}`);
+      const body = await requestJson(
+        config,
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            model: config.model,
+            ...(dataUrls.length === 0 ? {} : { images: dataUrls }),
+            ...(texts.length === 0 ? {} : { texts })
+          }),
+          signal: controller.signal
         },
-        body: JSON.stringify({
-          model: config.model,
-          ...(images.length === 0 ? {} : { images }),
-          ...(request.texts === undefined ? {} : { texts: request.texts })
-        }),
-        signal: controller.signal
-      });
-      if (!response.ok) throw new Error(`CLIP HTTP ${response.status}`);
-      const body = (await response.json()) as Record<string, unknown>;
+        'CLIP'
+      );
       const parse = (raw: unknown, expected: number, label: string): number[][] => {
         if (raw === undefined) return [];
         if (!Array.isArray(raw) || raw.length !== expected) throw new Error(`${label} 条数与输入不一致`);
-        return raw.map((row) => {
-          if (!Array.isArray(row) || row.length === 0) throw new Error(`${label} 向量格式不对`);
-          return row.map((value) => {
-            if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`${label} 含非数值`);
-            return value;
-          });
-        });
+        return raw.map((row, index) => asVector(row, `${label}[${index}]`));
       };
       return {
         imageEmbeddings: parse(body['imageEmbeddings'], images.length, 'imageEmbeddings'),
-        textEmbeddings: parse(body['textEmbeddings'], request.texts?.length ?? 0, 'textEmbeddings')
+        textEmbeddings: parse(body['textEmbeddings'], texts.length, 'textEmbeddings')
       };
     } finally {
       clearTimeout(timer);

@@ -18,7 +18,7 @@ import type { BaselineEntry } from './baseline.js';
 import { baselineDir, extractMetrics, findBaselineEntry, readBaselineIndex, readBoundsJson } from './baseline.js';
 import type { Options } from './config.js';
 import type { DecodedImage, ImageFeatures } from './image.js';
-import { createClipClient, decodePng, imageFeatures, imageSimilarity, type ClipConfig } from './image.js';
+import { DASHSCOPE_MULTIMODAL_ENDPOINT, createClipClient, createDashScopeTextEmbedder, decodePng, imageFeatures, imageSimilarity, type ClipConfig } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
@@ -29,7 +29,7 @@ import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull,
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
-export const DESIGN_ENGINE_VERSION = '0.6.5';
+export const DESIGN_ENGINE_VERSION = '0.6.6';
 
 /** The card sections that become retrievable chunks. */
 export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand'] as const;
@@ -1201,26 +1201,22 @@ export async function saveDesignEmbeddingCache(
 }
 
 /**
- * Rerank lexical candidates with cosine similarity (0.6.4 hybrid).
+ * Rerank candidates with precomputed cosine vectors (0.6.6; shared by recall).
  *
  * Final score blends normalized lexical score with `(cosine + 1) / 2`; the
  * original `breakdown` is kept so the report still shows why a card was retrieved.
  */
-export async function rerankDesignHits(
+export function rerankDesignHitsWithVectors(
   candidates: readonly DesignSearchHit[],
-  query: string,
-  embed: DesignEmbedder,
+  queryVector: readonly number[],
+  vectors: ReadonlyMap<string, readonly number[]>,
   options: { readonly weight: number; readonly model: string }
-): Promise<{ readonly results: DesignSearchHit[]; readonly notes: string[] }> {
+): { readonly results: DesignSearchHit[]; readonly notes: string[] } {
   if (candidates.length === 0) return { results: [], notes: [] };
-  const texts = candidates.map((hit) => `${hit.title}\n${hit.snippet}`);
-  const vectors = await embed([query, ...texts]);
-  if (vectors.length !== texts.length + 1) throw new Error('embedding 返回条数与输入不一致');
-  const queryVector = vectors[0] ?? [];
   const maxBase = Math.max(...candidates.map((hit) => hit.score), 1e-9);
   const weight = Math.min(1, Math.max(0, options.weight));
-  const reranked = candidates.map((hit, index) => {
-    const semantic = (cosineSimilarity(queryVector, vectors[index + 1] ?? []) + 1) / 2;
+  const reranked = candidates.map((hit) => {
+    const semantic = (cosineSimilarity(queryVector, vectors.get(hit.cardId) ?? []) + 1) / 2;
     const lexical = hit.score / maxBase;
     return {
       ...hit,
@@ -1238,11 +1234,65 @@ export async function rerankDesignHits(
   };
 }
 
+/** Rerank lexical candidates with cosine similarity (0.6.4; embed the candidates itself). */
+export async function rerankDesignHits(
+  candidates: readonly DesignSearchHit[],
+  query: string,
+  embed: DesignEmbedder,
+  options: { readonly weight: number; readonly model: string }
+): Promise<{ readonly results: DesignSearchHit[]; readonly notes: string[] }> {
+  if (candidates.length === 0) return { results: [], notes: [] };
+  const texts = candidates.map((hit) => `${hit.title}\n${hit.snippet}`);
+  const vectors = await embed([query, ...texts]);
+  if (vectors.length !== texts.length + 1) throw new Error('embedding 返回条数与输入不一致');
+  const byCard = new Map(candidates.map((hit, index) => [hit.cardId, vectors[index + 1] ?? []] as const));
+  return rerankDesignHitsWithVectors(candidates, vectors[0] ?? [], byCard, options);
+}
+
+/** Text used to embed a whole card for semantic recall (0.6.6). */
+export function cardEmbeddingText(card: DesignCard): string {
+  return truncate(
+    normalizeDesignText(
+      [
+        card.title,
+        card.summary,
+        card.rationale ?? '',
+        tokensText(card.tokens),
+        card.tags.join(' '),
+        (card.stylePriority ?? []).join(' '),
+        card.donts.join(' ')
+      ].join('\n')
+    ),
+    800
+  );
+}
+
+function semanticOnlyHit(card: DesignCard): DesignSearchHit {
+  return {
+    cardId: card.id,
+    title: card.title,
+    kind: designCardKind(card),
+    score: 0,
+    breakdown: {
+      bm25: 0,
+      tokenBoost: 0,
+      tagBoost: 0,
+      profileBoost: 0,
+      weight: Math.min(1.5, Math.max(0.5, card.weight))
+    },
+    snippet: truncate(card.summary.length === 0 ? (card.rationale ?? '') : card.summary, 160),
+    tokens: card.tokens,
+    source: card.source,
+    images: card.images
+  };
+}
+
 /**
- * Lexical search, optionally followed by semantic rerank (0.6.4).
+ * Lexical search, optionally expanded with a semantic candidate pool and
+ * reranked (0.6.4/0.6.6).
  *
  * The hybrid path is deliberately confined to the DSH tool: `query.mjs` stays
- * lexical (it has no endpoint/credentials), and the brief says so.
+ * lexical (no endpoint/credentials), and the brief says so.
  */
 export async function searchDesignWithRanker(
   paths: SharedPaths,
@@ -1259,15 +1309,22 @@ export async function searchDesignWithRanker(
   }
 ): Promise<DesignSearchResult> {
   const hybrid = options.designRanker === 'hybrid';
+  const filters = extra.filters ?? { kind: 'pattern' as const };
   const base = searchDesignLibrary(manifest, index, chunks, query, {
     topK: hybrid ? Math.max(topK, 30) : topK,
     ranker: options.designRanker,
     licenseRequired: extra.licenseRequired,
     ...(extra.profileAreas === undefined ? {} : { profileAreas: extra.profileAreas }),
-    ...(extra.filters === undefined ? {} : { filters: extra.filters })
+    filters
   });
   if (!hybrid) return base;
-  if (options.designEmbeddingEndpoint.length === 0) {
+  const embeddingEndpoint =
+    options.designEmbeddingEndpoint.length > 0
+      ? options.designEmbeddingEndpoint
+      : options.designEmbeddingProvider === 'dashscope'
+        ? DASHSCOPE_MULTIMODAL_ENDPOINT
+        : '';
+  if (embeddingEndpoint.length === 0) {
     return {
       ...base,
       results: base.results.slice(0, topK),
@@ -1278,17 +1335,50 @@ export async function searchDesignWithRanker(
     const cache = await loadDesignEmbeddingCache(paths, options.designEmbeddingModel);
     const apiKey = process.env[options.designEmbeddingApiKeyEnv];
     const embed = createCachedEmbedder(
-      createHttpEmbedder({
-        endpoint: options.designEmbeddingEndpoint,
-        model: options.designEmbeddingModel,
-        ...(apiKey === undefined || apiKey.length === 0 ? {} : { apiKey }),
-        timeoutMs: options.designEmbeddingTimeoutMs,
-        weight: options.designEmbeddingWeight
-      }),
+      options.designEmbeddingProvider === 'dashscope'
+        ? await createDashScopeTextEmbedder({
+            endpoint: embeddingEndpoint,
+            model: options.designEmbeddingModel,
+            ...(apiKey === undefined || apiKey.length === 0 ? {} : { apiKey }),
+            timeoutMs: options.designEmbeddingTimeoutMs
+          })
+        : createHttpEmbedder({
+            endpoint: embeddingEndpoint,
+            model: options.designEmbeddingModel,
+            ...(apiKey === undefined || apiKey.length === 0 ? {} : { apiKey }),
+            timeoutMs: options.designEmbeddingTimeoutMs,
+            weight: options.designEmbeddingWeight
+          }),
       cache,
       options.designEmbeddingModel
     );
-    const reranked = await rerankDesignHits(base.results, query, embed, {
+    // Semantic recall: embed every eligible card, take the closest ones, then
+    // union with the lexical candidates before the final blend (0.6.6).
+    const eligible = manifest.cards.filter((card) => {
+      if (card.status !== 'active') return false;
+      if (extra.licenseRequired && card.source.license.toLowerCase() === 'unknown') return false;
+      return matchesDesignFilters(card, filters);
+    });
+    const texts = eligible.map(cardEmbeddingText);
+    const vectors = await embed([query, ...texts]);
+    if (vectors.length !== texts.length + 1) throw new Error('embedding 返回条数与输入不一致');
+    const queryVector = vectors[0] ?? [];
+    const byCard = new Map<string, readonly number[]>(
+      eligible.map((card, index) => [card.id, vectors[index + 1] ?? []] as const)
+    );
+    const semantic = eligible
+      .map((card) => ({
+        card,
+        score: cosineSimilarity(queryVector, byCard.get(card.id) ?? [])
+      }))
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 30);
+    const union = new Map<string, DesignSearchHit>();
+    for (const hit of base.results) union.set(hit.cardId, hit);
+    for (const item of semantic) {
+      if (!union.has(item.card.id)) union.set(item.card.id, semanticOnlyHit(item.card));
+    }
+    const reranked = rerankDesignHitsWithVectors([...union.values()], queryVector, byCard, {
       weight: options.designEmbeddingWeight,
       model: options.designEmbeddingModel
     });
@@ -1297,7 +1387,12 @@ export async function searchDesignWithRanker(
       ...base,
       results: reranked.results.slice(0, topK),
       ranker: 'hybrid',
-      notes: [...base.notes, ...reranked.notes, 'query.mjs 仍为 lexical（CLI 无 embedding 端点）；以本工具排序为准']
+      notes: [
+        ...base.notes.filter((note) => !note.startsWith('hybrid 需要 embedding 端点')),
+        `hybrid 召回：lexical ${base.results.length} + semantic ${semantic.length}（并集 ${union.size}）`,
+        ...reranked.notes,
+        'query.mjs 仍为 lexical（CLI 无 embedding 端点）；以本工具排序为准'
+      ]
     };
   } catch (error) {
     return {

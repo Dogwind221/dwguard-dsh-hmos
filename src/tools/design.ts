@@ -16,6 +16,7 @@ import { AREA_LABELS, readProfile, type AestheticArea } from '../aesthetic.js';
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import type { ClipConfig } from '../image.js';
+import { DASHSCOPE_MULTIMODAL_ENDPOINT } from '../image.js';
 import {
   applyDesignFeedback,
   captureDesignCard,
@@ -66,13 +67,20 @@ const PACK_OPS = ['list', 'export', 'import'] as const;
 const LIBRARY_OPS = ['init', 'ingest', 'list'] as const;
 const INGEST_SOURCES = ['rules', 'inbox'] as const;
 
-/** Optional CLIP/multimodal endpoint from config (0.6.5). */
+/** Optional CLIP/multimodal endpoint from config (0.6.5/0.6.6). */
 function clipConfig(options: Options): ClipConfig | undefined {
-  if (options.designClipEndpoint.length === 0) return undefined;
+  const endpoint =
+    options.designClipEndpoint.length > 0
+      ? options.designClipEndpoint
+      : options.designClipProvider === 'dashscope'
+        ? DASHSCOPE_MULTIMODAL_ENDPOINT
+        : '';
+  if (endpoint.length === 0) return undefined;
   const apiKey = process.env[options.designClipApiKeyEnv];
   return {
-    endpoint: options.designClipEndpoint,
+    endpoint,
     model: options.designClipModel,
+    provider: options.designClipProvider,
     ...(apiKey === undefined || apiKey.length === 0 ? {} : { apiKey }),
     timeoutMs: options.designClipTimeoutMs
   };
@@ -162,7 +170,7 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Design reference library (0.6.2–0.6.5): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts (or optional hybrid semantic rerank) and supports search-by-image (`image`) plus CLIP text→image (`imageText`), `brief` writes `tasks/design-brief.md` for DevEco and appends an `inspiration` outbox record (answer a DevEco `design-request` with `request: "q-1"`), `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `pack` exports/imports card packs across projects, `stats` summarizes coverage. ' +
+      'Design reference library (0.6.2–0.6.6): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts, optional hybrid semantic recall (openai/dashscope embeddings) and search-by-image (`image`) / multimodal text→image (`imageText`), `brief` writes `tasks/design-brief.md` for DevEco and appends an `inspiration` outbox record (answer a DevEco `design-request` with `request: "q-1"`), `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `pack` exports/imports card packs across projects, `stats` summarizes coverage. ' +
       'No network, no model calls, no extra dependencies; the same input always produces the same index and ranking. 参考是证据不是判据。',
     parameters: {
       action: {

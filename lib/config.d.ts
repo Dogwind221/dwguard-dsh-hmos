@@ -45,6 +45,7 @@ export interface Options {
     readonly maxDesignSearches: number;
     /** OpenAI-compatible embedding endpoint (empty = lexical only). */
     readonly designEmbeddingEndpoint: string;
+    readonly designEmbeddingProvider: 'openai' | 'dashscope';
     readonly designEmbeddingModel: string;
     readonly designEmbeddingApiKeyEnv: string;
     readonly designEmbeddingTimeoutMs: number;
@@ -55,6 +56,7 @@ export interface Options {
     readonly designPacksDir: string;
     readonly designClipEndpoint: string;
     readonly designClipModel: string;
+    readonly designClipProvider: 'custom' | 'dashscope';
     readonly designClipApiKeyEnv: string;
     readonly designClipTimeoutMs: number;
     readonly designClipWeight: number;

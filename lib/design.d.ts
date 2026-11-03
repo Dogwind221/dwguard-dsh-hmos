@@ -14,7 +14,7 @@ import { type ClipConfig } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
-export declare const DESIGN_ENGINE_VERSION = "0.6.5";
+export declare const DESIGN_ENGINE_VERSION = "0.6.6";
 /** The card sections that become retrievable chunks. */
 export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand"];
 /** One retrievable section of a card. */
@@ -288,11 +288,19 @@ export declare function loadDesignEmbeddingCache(paths: SharedPaths, model: stri
 /** Persist the embedding cache. */
 export declare function saveDesignEmbeddingCache(paths: SharedPaths, cache: DesignEmbeddingCache): Promise<void>;
 /**
- * Rerank lexical candidates with cosine similarity (0.6.4 hybrid).
+ * Rerank candidates with precomputed cosine vectors (0.6.6; shared by recall).
  *
  * Final score blends normalized lexical score with `(cosine + 1) / 2`; the
  * original `breakdown` is kept so the report still shows why a card was retrieved.
  */
+export declare function rerankDesignHitsWithVectors(candidates: readonly DesignSearchHit[], queryVector: readonly number[], vectors: ReadonlyMap<string, readonly number[]>, options: {
+    readonly weight: number;
+    readonly model: string;
+}): {
+    readonly results: DesignSearchHit[];
+    readonly notes: string[];
+};
+/** Rerank lexical candidates with cosine similarity (0.6.4; embed the candidates itself). */
 export declare function rerankDesignHits(candidates: readonly DesignSearchHit[], query: string, embed: DesignEmbedder, options: {
     readonly weight: number;
     readonly model: string;
@@ -300,11 +308,14 @@ export declare function rerankDesignHits(candidates: readonly DesignSearchHit[],
     readonly results: DesignSearchHit[];
     readonly notes: string[];
 }>;
+/** Text used to embed a whole card for semantic recall (0.6.6). */
+export declare function cardEmbeddingText(card: DesignCard): string;
 /**
- * Lexical search, optionally followed by semantic rerank (0.6.4).
+ * Lexical search, optionally expanded with a semantic candidate pool and
+ * reranked (0.6.4/0.6.6).
  *
  * The hybrid path is deliberately confined to the DSH tool: `query.mjs` stays
- * lexical (it has no endpoint/credentials), and the brief says so.
+ * lexical (no endpoint/credentials), and the brief says so.
  */
 export declare function searchDesignWithRanker(paths: SharedPaths, options: Options, manifest: DesignManifest, index: DesignIndex, chunks: readonly DesignChunk[], query: string, topK: number, extra: {
     readonly licenseRequired: boolean;

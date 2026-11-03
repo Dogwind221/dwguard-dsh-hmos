@@ -4,6 +4,43 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.6 — 2026-11-03
+
+The multimodal-embedding release: DashScope native multimodal embeddings become a
+first-class provider, one model can embed both text and images, and hybrid search
+now expands recall semantically instead of only reranking lexical hits.
+
+### Added
+
+- **DashScope multimodal provider**: `designEmbeddingProvider` / `designClipProvider`
+  accept `dashscope`; native endpoint
+  `POST /api/v1/services/embeddings/multimodal-embedding/multimodal-embedding`
+  with `{model, input:{contents:[{text}|{image}]}}` →
+  `{output:{embeddings:[{index,embedding}]}}`. Images are sent as
+  `data:image/png;base64,…`; text hybrid uses the same native contents protocol,
+  so `qwen3-vl-embedding` / `tongyi-embedding-vision-flash` can serve both text
+  and image spaces. Endpoint defaults to the official native URL when the
+  provider is `dashscope`; keys still come from env vars.
+- **Semantic recall expansion**: hybrid now embeds every eligible card
+  (title/summary/rationale/tokens/tags/stylePriority/donts, cached), takes a
+  semantic top-30, unions it with the BM25 top-30, and only then blends
+  `(1-w)×BM25 + w×cosine`. Cards with zero lexical overlap are now reachable.
+  Successful runs report `hybrid 召回：lexical X + semantic Y（并集 Z）` and no
+  longer keep the stale “not configured/fallback” note.
+- `qwen3.7-text-embedding-flash` is no longer part of the recommended stack; the
+  same multimodal model can serve text and image embeddings.
+- `DESIGN_ENGINE_VERSION` → `0.6.6`.
+
+### Tests
+
+- Two DashScope native-contract cases (text hybrid + imageText) run against
+  loopback stubs, plus a zero-lexical-overlap recall case; suite is now 129/129.
+- Live native multimodal calls are **not** claimed: the test account currently
+  returns HTTP 400 (account good-standing/overdue) for
+  `tongyi-embedding-vision-flash` and HTTP 403 (free quota exhausted) for
+  `qwen3-vl-embedding`. The models/endpoint exist; quota must be enabled for
+  live verification.
+
 ## 0.6.5 — 2026-11-03
 
 The inheritance + portability release: anti-patterns follow their design cards
