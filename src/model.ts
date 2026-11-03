@@ -110,6 +110,8 @@ export interface Criterion {
   readonly profileRef?: string;
   /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */
   readonly designRefs?: readonly string[];
+  /** Anti-pattern cards this criterion must not violate (`AP-0001`, 0.6.4). */
+  readonly antiPatternRefs?: readonly string[];
 }
 
 /** The frozen task pack DSH hands to the executor agent. */
@@ -173,6 +175,8 @@ export interface Check {
   readonly profileRef?: string;
   /** Design-library cards this check compared against (0.6.2). */
   readonly designRefs?: readonly string[];
+  /** Anti-pattern cards this check verified as absent (0.6.4). */
+  readonly antiPatternRefs?: readonly string[];
 }
 
 /** One device recorded in an audit report. */

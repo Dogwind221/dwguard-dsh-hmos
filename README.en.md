@@ -31,14 +31,14 @@ This plugin makes the hand-off explicit:
 
 ## Install
 
-Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.3).
+Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.4).
 
 The `desktop` profile is managed **exclusively by the desktop app** — the CLI
 refuses `dsh plugin --profile desktop …`. Pick the path that matches how you run
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.6.3`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.6.4`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -47,7 +47,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.6.3   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.6.4   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -108,8 +108,8 @@ self-report never becomes a `pass`.
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
 | `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
-| `dwguard_aesthetic` | Aesthetic learning (0.6.1): `profile` (list/get/write/remove), `baseline` (save/list), `compare` (numeric layout diff) and `learn` (propose preferences from confirmations, rejections, audit findings and project resources). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; multiple conflicts need per-area `choices` (an ambiguous single `choice` is refused); `baseline save` needs a passing audit + user confirmation; `compare` is unit-aware (±2vp spacing/radius, zero tolerance for font size and colours) |
-| `dwguard_design` | Design reference library (0.6.2–0.6.3): `library init/ingest/list`, `search` (filters: `appType` / `platform` / `style` / `kind`), `brief` (writes `tasks/design-brief.md`, appends an `inspiration` reply; force-injects brand cards; carries rework suggestions), `feedback`, `capture`, `stats`. Lexical only; `hybrid` is reserved and falls back explicitly; references are evidence, not criteria; `license: unknown` cards are excluded by default; search/audit budgets hard-stop |
+| `dwguard_aesthetic` | Aesthetic learning (0.6.1) + cross-project templates (0.6.4): `profile`, `baseline`, `compare`, `learn`, `template` (list/get/export/import). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; `baseline save` needs a passing audit + user confirmation; `template import` needs `confirmed: true` (`merge` supersedes local conflicts) |
+| `dwguard_design` | Design reference library (0.6.2–0.6.4): `library init/ingest/list`, `search` (filters `appType`/`platform`/`style`/`kind`, optional `image` search), `brief` (writes `tasks/design-brief.md`, appends an `inspiration` reply; force-injects brand cards; carries rework suggestions), `feedback`, `capture`, `stats`. Lexical by default (offline); `hybrid` needs an embedding endpoint and falls back explicitly; `query.mjs` stays lexical; `license: unknown` cards are excluded by default; search/audit budgets hard-stop |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
@@ -123,22 +123,24 @@ you save a visual baseline; `compare` then turns the next layout dump into
 numeric diffs (±2vp for spacing/radius, zero tolerance for font size and
 colours) that appear in the acceptance report.
 
-`dwguard_design` (0.6.2–0.6.3) turns "what should it look like" into a shared,
+`dwguard_design` (0.6.2–0.6.4) turns "what should it look like" into a shared,
 retrievable asset: `library init` writes `.shared/design-library/` and a
 dependency-free read-only `query.mjs`; `library ingest` seeds cards from the
 aesthetic rule catalog and `inbox/*.meta.json` (incl. `stylePriority`,
 `antiPatterns` (`AP-*`), `checklist`, `dimensions`, and brand cards; images are
 copied into `refs/` by sha256); `search` ranks with deterministic BM25 plus
-token/tag/profile boosts and filters by `appType` / `platform` / `style` /
-`kind`. `brief` writes `tasks/design-brief.md` and appends an `inspiration`
-outbox record; brand cards (`source.kind: brand`) are force-injected into a
+token/tag/profile boosts, filters by `appType` / `platform` / `style` / `kind`,
+optionally reranks with an OpenAI-compatible embedding endpoint (cached vectors,
+explicit lexical fallback) or searches by image (pHash + RGB histogram).
+`brief` writes `tasks/design-brief.md` and appends an `inspiration` outbox
+record; brand cards (`source.kind: brand`) are force-injected into a
 「品牌与业务约束」 section; a failed aesthetic audit writes
 `rework-suggestions.json` and the next brief carries 「上一轮返工定向参考」.
-Aesthetic criteria/checks may carry `designRefs`; the audit gate rejects
-missing/blocked refs and the report renders a comparison column. `feedback`
-adjusts weight or hides cards; `capture` (after a passing audit + user
-confirmation) stores the baseline as a project card. Per-round budgets
-(`maxAuditRounds`, `maxDesignSearches`) hard-stop and are shown by
+Aesthetic criteria/checks may carry `designRefs` and `antiPatternRefs`; the
+audit gate rejects missing/blocked refs and the reports render comparison
+columns. `feedback` adjusts weight or hides cards; `capture` (after a passing
+audit + user confirmation) stores the baseline as a project card. Per-round
+budgets (`maxAuditRounds`, `maxDesignSearches`) hard-stop and are shown by
 `dwguard_status`. DSH uses the tool; DevEco runs
 `node .shared/design-library/query.mjs "dark card spacing" --top 5 --json` on the
 same index (parity-tested).
@@ -165,13 +167,15 @@ same index (parity-tested).
 │  ├─ visual-baseline/<specVersion>/  # bounds JSON + screenshots (sha256 each)
 │  ├─ aesthetic/compare-latest.json   # latest baseline diff (referenced by the report)
 │  └─ acceptance-report.md
-├─ design-library/            # 0.6.2: design references
-│  ├─ manifest.json           # cards (DSG-*) + counts
+├─ design-library/            # 0.6.2–0.6.4: design references
+│  ├─ manifest.json           # cards (DSG-* / AP-*) + counts
 │  ├─ chunks.jsonl            # section text + sha256
 │  ├─ index.json              # BM25 postings/df (rebuildable cache)
-│  ├─ query.mjs               # dependency-free read-only CLI (DevEco)
+│  ├─ query.mjs               # dependency-free read-only CLI (lexical only)
 │  ├─ feedback.jsonl          # useful / off / block / unblock ledger
 │  ├─ rework-suggestions.json # queries from the last failed aesthetic audit
+│  ├─ embeddings.json         # hybrid rerank vectors (model + sha256 keyed)
+│  ├─ image-features.json     # pHash / histogram cache for image search
 │  ├─ refs/                   # images named by sha256
 │  └─ inbox/                  # user drops <name>.png + <name>.meta.json
 └─ knowledge/
@@ -236,11 +240,17 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     deviceLockTimeoutMs: 600000
     designTopK: 5          # default design search size
     designMaxChunks: 2000  # warn above this chunk count
-    designRanker: lexical  # lexical (default) | hybrid (reserved, explicit fallback)
+    designRanker: lexical  # lexical (default) | hybrid (needs an embedding endpoint)
+    designEmbeddingEndpoint: ""  # OpenAI-compatible /embeddings; empty = no network
+    designEmbeddingModel: text-embedding-3-small
+    designEmbeddingApiKeyEnv: DWG_DESIGN_EMBEDDING_KEY
+    designEmbeddingTimeoutMs: 8000
+    designEmbeddingWeight: 0.35
     designBriefCards: 5    # cards per tasks/design-brief.md
     designBrandCards: 3    # brand cards force-injected into every brief (0 = off)
     maxAuditRounds: 5      # hard cap on audits per round
     maxDesignSearches: 12  # hard cap on design searches per round
+    aestheticTemplatesDir: ""  # empty = ~/.dsh/dwguard/aesthetic-templates
     designLicenseRequired: true  # true = licence-unknown cards are excluded from search
 ```
 
@@ -267,7 +277,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 116 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 124 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

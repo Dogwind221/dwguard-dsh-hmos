@@ -17,15 +17,18 @@ import { AREA_LABELS, isAestheticArea } from './aesthetic.js';
 import type { BaselineEntry } from './baseline.js';
 import { baselineDir, extractMetrics, findBaselineEntry, readBaselineIndex, readBoundsJson } from './baseline.js';
 import type { Options } from './config.js';
+import type { DecodedImage, ImageFeatures } from './image.js';
+import { decodePng, imageFeatures, imageSimilarity } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { RULES } from './rules.js';
+import { readFile } from 'node:fs/promises';
 import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull, removeFile, sha256File, writeTextAtomic } from './util/fs.js';
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
-export const DESIGN_ENGINE_VERSION = '0.6.3';
+export const DESIGN_ENGINE_VERSION = '0.6.4';
 
 /** The card sections that become retrievable chunks. */
 export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand'] as const;
@@ -161,6 +164,10 @@ export interface DesignSearchHit {
   readonly tokens: DesignTokens;
   readonly source: DesignSource;
   readonly images: DesignCard['images'];
+  /** Cosine-based semantic score when hybrid rerank ran (0.6.4). */
+  readonly semanticScore?: number;
+  /** Weight used for the semantic blend (0.6.4). */
+  readonly rerankWeight?: number;
 }
 
 /** Retrieval filters applied before ranking (0.6.3 A/B). */
@@ -858,6 +865,16 @@ export async function ingestDesignLibrary(
     updatedAt: now,
     cards: [...manifest.cards, ...added]
   };
+  // A pattern may reference an AP card that is not ingested yet; warn instead of
+  // failing the ingest so library setup order stays flexible (0.6.4).
+  const knownIds = new Set(next.cards.map((card) => card.id));
+  for (const card of added) {
+    for (const ref of card.antiPatterns ?? []) {
+      if (!knownIds.has(ref)) {
+        warnings.push(`卡片 \`${card.id}\` 引用的反模式 \`${ref}\` 不存在；补 ingest 反模式卡后再把它写进 antiPatternRefs。`);
+      }
+    }
+  }
   files.push(...(await writeLibrary(paths, next)));
   const written = await readDesignManifest(paths);
   return { manifest: written ?? next, added, skipped, warnings, files, changed: true };
@@ -914,7 +931,7 @@ export function searchDesignLibrary(
   const notes: string[] = [];
   const requestedRanker = options.ranker;
   if (requestedRanker === 'hybrid') {
-    notes.push('hybrid 排序尚未实现，已回退 lexical（接口预留）');
+    notes.push('hybrid 需要 embedding 端点；工具层负责语义重排，未配置或失败时回退 lexical');
   }
   const ranker = 'lexical' as const;
   const queryTokens = expandDesignQuery(tokenizeDesignText(query));
@@ -1045,6 +1062,370 @@ export function renderDesignCardsMarkdown(manifest: DesignManifest): string {
 /** One-line token summary used by spec/audit reports (0.6.2 P2). */
 export function designCardTokenSummary(card: DesignCard): string {
   return tokensText(card.tokens).split('\n').join('；');
+}
+
+/** Embedding endpoint settings for hybrid rerank (0.6.4). */
+export interface DesignEmbeddingConfig {
+  readonly endpoint: string;
+  readonly model: string;
+  readonly apiKey?: string;
+  readonly timeoutMs: number;
+  readonly weight: number;
+}
+
+/** A batch embedding function (tests inject a stub). */
+export type DesignEmbedder = (texts: readonly string[]) => Promise<number[][]>;
+
+/** Create an OpenAI-compatible `/embeddings` client. */
+export function createHttpEmbedder(config: DesignEmbeddingConfig): DesignEmbedder {
+  return async (texts) => {
+    if (texts.length === 0) return [];
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), Math.max(1000, config.timeoutMs));
+    try {
+      const response = await fetch(config.endpoint, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(config.apiKey === undefined ? {} : { authorization: `Bearer ${config.apiKey}` })
+        },
+        body: JSON.stringify({ model: config.model, input: texts }),
+        signal: controller.signal
+      });
+      if (!response.ok) throw new Error(`embedding HTTP ${response.status}`);
+      const body = (await response.json()) as { data?: unknown };
+      if (!Array.isArray(body.data) || body.data.length !== texts.length) {
+        throw new Error('embedding 返回条数与输入不一致');
+      }
+      return body.data.map((row, index) => {
+        if (typeof row !== 'object' || row === null) throw new Error(`embedding 第 ${index} 条格式不对`);
+        const embedding = (row as Record<string, unknown>)['embedding'];
+        if (!Array.isArray(embedding) || embedding.length === 0) {
+          throw new Error(`embedding 第 ${index} 条没有向量`);
+        }
+        return embedding.map((value) => {
+          if (typeof value !== 'number' || !Number.isFinite(value)) throw new Error(`embedding 第 ${index} 条含非数值`);
+          return value;
+        });
+      });
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+}
+
+/** Cosine similarity; zero vectors score 0. */
+export function cosineSimilarity(left: readonly number[], right: readonly number[]): number {
+  if (left.length !== right.length || left.length === 0) return 0;
+  let dot = 0;
+  let leftNorm = 0;
+  let rightNorm = 0;
+  for (let index = 0; index < left.length; index += 1) {
+    const a = left[index] ?? 0;
+    const b = right[index] ?? 0;
+    dot += a * b;
+    leftNorm += a * a;
+    rightNorm += b * b;
+  }
+  if (leftNorm === 0 || rightNorm === 0) return 0;
+  return dot / Math.sqrt(leftNorm * rightNorm);
+}
+
+/** `embeddings.json` cache so repeated briefs do not re-embed the same text. */
+export interface DesignEmbeddingCache {
+  schemaVersion: 1;
+  model: string;
+  vectors: Record<string, readonly number[]>;
+}
+
+/** Cache key for one text (model-scoped). */
+export function embeddingCacheKey(model: string, text: string): string {
+  return sha256Text(`${model}\u0000${text}`);
+}
+
+/** Wrap an embedder with the on-disk cache (mutates `cache`). */
+export function createCachedEmbedder(
+  embed: DesignEmbedder,
+  cache: DesignEmbeddingCache,
+  model: string
+): DesignEmbedder {
+  return async (texts) => {
+    const keys = texts.map((text) => embeddingCacheKey(model, text));
+    const missing: number[] = [];
+    keys.forEach((key, index) => {
+      if (cache.vectors[key] === undefined) missing.push(index);
+    });
+    if (missing.length > 0) {
+      const vectors = await embed(missing.map((index) => texts[index] ?? ''));
+      if (vectors.length !== missing.length) throw new Error('embedding 返回条数与输入不一致');
+      missing.forEach((textIndex, vectorIndex) => {
+        cache.vectors[keys[textIndex] ?? ''] = vectors[vectorIndex] ?? [];
+      });
+    }
+    return keys.map((key) => [...(cache.vectors[key] ?? [])]);
+  };
+}
+
+/** Load the embedding cache for a model (empty when missing/mismatched). */
+export async function loadDesignEmbeddingCache(
+  paths: SharedPaths,
+  model: string
+): Promise<DesignEmbeddingCache> {
+  const raw = await readTextOrNull(paths.designEmbeddings);
+  if (raw === null) return { schemaVersion: 1, model, vectors: {} };
+  try {
+    const parsed = JSON.parse(raw) as Partial<DesignEmbeddingCache>;
+    if (parsed.schemaVersion !== 1 || parsed.model !== model || typeof parsed.vectors !== 'object' || parsed.vectors === null) {
+      return { schemaVersion: 1, model, vectors: {} };
+    }
+    return { schemaVersion: 1, model, vectors: parsed.vectors as Record<string, readonly number[]> };
+  } catch {
+    return { schemaVersion: 1, model, vectors: {} };
+  }
+}
+
+/** Persist the embedding cache. */
+export async function saveDesignEmbeddingCache(
+  paths: SharedPaths,
+  cache: DesignEmbeddingCache
+): Promise<void> {
+  await ensureDir(paths.designDir);
+  await writeTextAtomic(paths.designEmbeddings, `${JSON.stringify(cache)}\n`);
+}
+
+/**
+ * Rerank lexical candidates with cosine similarity (0.6.4 hybrid).
+ *
+ * Final score blends normalized lexical score with `(cosine + 1) / 2`; the
+ * original `breakdown` is kept so the report still shows why a card was retrieved.
+ */
+export async function rerankDesignHits(
+  candidates: readonly DesignSearchHit[],
+  query: string,
+  embed: DesignEmbedder,
+  options: { readonly weight: number; readonly model: string }
+): Promise<{ readonly results: DesignSearchHit[]; readonly notes: string[] }> {
+  if (candidates.length === 0) return { results: [], notes: [] };
+  const texts = candidates.map((hit) => `${hit.title}\n${hit.snippet}`);
+  const vectors = await embed([query, ...texts]);
+  if (vectors.length !== texts.length + 1) throw new Error('embedding 返回条数与输入不一致');
+  const queryVector = vectors[0] ?? [];
+  const maxBase = Math.max(...candidates.map((hit) => hit.score), 1e-9);
+  const weight = Math.min(1, Math.max(0, options.weight));
+  const reranked = candidates.map((hit, index) => {
+    const semantic = (cosineSimilarity(queryVector, vectors[index + 1] ?? []) + 1) / 2;
+    const lexical = hit.score / maxBase;
+    return {
+      ...hit,
+      score: Number((((1 - weight) * lexical + weight * semantic)).toFixed(4)),
+      semanticScore: Number(semantic.toFixed(4)),
+      rerankWeight: weight
+    };
+  });
+  reranked.sort((left, right) =>
+    right.score === left.score ? left.cardId.localeCompare(right.cardId) : right.score - left.score
+  );
+  return {
+    results: reranked,
+    notes: [`hybrid 语义重排：${options.model}，语义权重 ${weight}`]
+  };
+}
+
+/**
+ * Lexical search, optionally followed by semantic rerank (0.6.4).
+ *
+ * The hybrid path is deliberately confined to the DSH tool: `query.mjs` stays
+ * lexical (it has no endpoint/credentials), and the brief says so.
+ */
+export async function searchDesignWithRanker(
+  paths: SharedPaths,
+  options: Options,
+  manifest: DesignManifest,
+  index: DesignIndex,
+  chunks: readonly DesignChunk[],
+  query: string,
+  topK: number,
+  extra: {
+    readonly licenseRequired: boolean;
+    readonly profileAreas?: ReadonlySet<AestheticArea>;
+    readonly filters?: DesignSearchFilters;
+  }
+): Promise<DesignSearchResult> {
+  const hybrid = options.designRanker === 'hybrid';
+  const base = searchDesignLibrary(manifest, index, chunks, query, {
+    topK: hybrid ? Math.max(topK, 30) : topK,
+    ranker: options.designRanker,
+    licenseRequired: extra.licenseRequired,
+    ...(extra.profileAreas === undefined ? {} : { profileAreas: extra.profileAreas }),
+    ...(extra.filters === undefined ? {} : { filters: extra.filters })
+  });
+  if (!hybrid) return base;
+  if (options.designEmbeddingEndpoint.length === 0) {
+    return {
+      ...base,
+      results: base.results.slice(0, topK),
+      notes: [...base.notes, '未配置 designEmbeddingEndpoint，回退 lexical']
+    };
+  }
+  try {
+    const cache = await loadDesignEmbeddingCache(paths, options.designEmbeddingModel);
+    const apiKey = process.env[options.designEmbeddingApiKeyEnv];
+    const embed = createCachedEmbedder(
+      createHttpEmbedder({
+        endpoint: options.designEmbeddingEndpoint,
+        model: options.designEmbeddingModel,
+        ...(apiKey === undefined || apiKey.length === 0 ? {} : { apiKey }),
+        timeoutMs: options.designEmbeddingTimeoutMs,
+        weight: options.designEmbeddingWeight
+      }),
+      cache,
+      options.designEmbeddingModel
+    );
+    const reranked = await rerankDesignHits(base.results, query, embed, {
+      weight: options.designEmbeddingWeight,
+      model: options.designEmbeddingModel
+    });
+    await saveDesignEmbeddingCache(paths, cache);
+    return {
+      ...base,
+      results: reranked.results.slice(0, topK),
+      ranker: 'hybrid',
+      notes: [...base.notes, ...reranked.notes, 'query.mjs 仍为 lexical（CLI 无 embedding 端点）；以本工具排序为准']
+    };
+  } catch (error) {
+    return {
+      ...base,
+      results: base.results.slice(0, topK),
+      notes: [...base.notes, `语义重排失败（${(error as Error).message}），回退 lexical`]
+    };
+  }
+}
+
+/** One card matching a query image (0.6.4). */
+export interface DesignImageHit {
+  readonly cardId: string;
+  readonly title: string;
+  readonly score: number;
+  readonly hashDistance: number;
+  readonly hashSimilarity: number;
+  readonly histogramSimilarity: number;
+  readonly license: string;
+  readonly imagePath: string;
+}
+
+/** Result of `search` with an `image` argument. */
+export interface DesignImageSearchResult {
+  readonly query: { readonly width: number; readonly height: number; readonly phash: string };
+  readonly results: readonly DesignImageHit[];
+  readonly notes: readonly string[];
+}
+
+interface ImageFeatureCache {
+  schemaVersion: 1;
+  features: Record<string, ImageFeatures>;
+}
+
+async function loadImageFeatureCache(paths: SharedPaths): Promise<ImageFeatureCache> {
+  const raw = await readTextOrNull(paths.designImageFeatures);
+  if (raw === null) return { schemaVersion: 1, features: {} };
+  try {
+    const parsed = JSON.parse(raw) as Partial<ImageFeatureCache>;
+    if (parsed.schemaVersion !== 1 || typeof parsed.features !== 'object' || parsed.features === null) {
+      return { schemaVersion: 1, features: {} };
+    }
+    return { schemaVersion: 1, features: parsed.features as Record<string, ImageFeatures> };
+  } catch {
+    return { schemaVersion: 1, features: {} };
+  }
+}
+
+/**
+ * Rank cards by perceptual similarity to a query PNG (0.6.4).
+ *
+ * Card images are keyed by their sha256; features are cached in
+ * `image-features.json` so repeated searches do not re-decode every image.
+ */
+export async function searchDesignByImage(
+  paths: SharedPaths,
+  manifest: DesignManifest,
+  queryPath: string,
+  topK: number,
+  options: { readonly licenseRequired: boolean }
+): Promise<DesignImageSearchResult> {
+  const queryImage: DecodedImage = decodePng(await readFile(queryPath));
+  const query = imageFeatures(queryImage);
+  const cache = await loadImageFeatureCache(paths);
+  let computed = 0;
+  let cached = 0;
+  const perCard = new Map<string, DesignImageHit>();
+  for (const card of manifest.cards) {
+    if (card.status !== 'active') continue;
+    if (designCardKind(card) === 'anti-pattern') continue;
+    if (options.licenseRequired && card.source.license.toLowerCase() === 'unknown') continue;
+    for (const image of card.images) {
+      const file = join(paths.designDir, image.path);
+      if (!(await fileExists(file))) continue;
+      const sha = image.sha256 ?? (await sha256File(file));
+      let features = cache.features[sha];
+      if (features === undefined) {
+        features = imageFeatures(decodePng(await readFile(file)));
+        cache.features[sha] = features;
+        computed += 1;
+      } else {
+        cached += 1;
+      }
+      const similarity = imageSimilarity(query, features);
+      const current = perCard.get(card.id);
+      if (current !== undefined && current.score >= similarity.score) continue;
+      perCard.set(card.id, {
+        cardId: card.id,
+        title: card.title,
+        score: similarity.score,
+        hashDistance: similarity.hashDistance,
+        hashSimilarity: similarity.hashSimilarity,
+        histogramSimilarity: similarity.histogramSimilarity,
+        license: card.source.license,
+        imagePath: image.path
+      });
+    }
+  }
+  if (computed > 0) {
+    await writeTextAtomic(paths.designImageFeatures, `${JSON.stringify(cache)}\n`);
+  }
+  const results = [...perCard.values()]
+    .sort((left, right) => (right.score === left.score ? left.cardId.localeCompare(right.cardId) : right.score - left.score))
+    .slice(0, topK);
+  return {
+    query: { width: queryImage.width, height: queryImage.height, phash: query.phash },
+    results,
+    notes: [
+      `以图搜图：pHash ${query.phash} · 特征 ${computed} 新算 / ${cached} 缓存`,
+      '排序 = 60% pHash 汉明相似度 + 40% 颜色直方图交集；query.mjs 不支持以图搜图（仅 DSH 侧）'
+    ]
+  };
+}
+
+/** Render the image-search result table. */
+export function renderDesignImageSearchMarkdown(result: DesignImageSearchResult): string {
+  if (result.results.length === 0) {
+    return ['本轮没有与查询图相似的卡片。', ...result.notes.map((note) => `> ${note}`)].join('\n');
+  }
+  const rows = result.results.map((hit) => [
+    `\`${hit.cardId}\``,
+    hit.title,
+    hit.score.toFixed(3),
+    hit.hashDistance === 0 ? '0（相同）' : String(hit.hashDistance),
+    hit.histogramSimilarity.toFixed(3),
+    hit.license,
+    `\`${hit.imagePath}\``
+  ]);
+  return [
+    '| ID | 标题 | 相似度 | pHash 距离 | 直方图 | license | 图片 |',
+    '| --- | --- | --- | --- | --- | --- | --- |',
+    ...rows.map((row) => `| ${row.join(' | ')} |`),
+    '',
+    ...result.notes.map((note) => `> ${note}`)
+  ].join('\n');
 }
 
 /** One targeted suggestion for a failed aesthetic criterion (0.6.3 F). */
@@ -1286,9 +1667,7 @@ export async function generateDesignBrief(
   }
   const { index, chunks } = await readDesignIndex(paths);
   const query = buildBriefQuery(pack);
-  const result = searchDesignLibrary(manifest, index, chunks, query, {
-    topK: options.designBriefCards,
-    ranker: options.designRanker,
+  const result = await searchDesignWithRanker(paths, options, manifest, index, chunks, query, options.designBriefCards, {
     licenseRequired: options.designLicenseRequired,
     filters: { kind: 'pattern' }
   });
@@ -1304,9 +1683,7 @@ export async function generateDesignBrief(
     const seen = new Set(result.results.map((hit) => hit.cardId));
     const extraHits: DesignSearchHit[] = [];
     for (const suggestion of queue.suggestions.slice(0, 3)) {
-      const extra = searchDesignLibrary(manifest, index, chunks, suggestion.query, {
-        topK: 2,
-        ranker: options.designRanker,
+      const extra = await searchDesignWithRanker(paths, options, manifest, index, chunks, suggestion.query, 2, {
         licenseRequired: options.designLicenseRequired,
         filters: { kind: 'pattern' }
       });

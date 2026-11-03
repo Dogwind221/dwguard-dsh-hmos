@@ -33,6 +33,7 @@ import type {
   AestheticAuditSummary,
   AuditReport,
   CheckInput,
+  DesignAntiPatternAuditRef,
   DesignAuditRef,
   DesignAuditSummary,
   FindingInput
@@ -87,7 +88,8 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
       device: optionalString(item, 'device', label, 200),
       family: optionalEnum(item, 'family', SCREEN_FAMILIES, label),
       profileRef: optionalString(item, 'profileRef', label, 40),
-      designRefs: optionalStringArray(item, 'designRefs', label, 8)
+      designRefs: optionalStringArray(item, 'designRefs', label, 8),
+      antiPatternRefs: optionalStringArray(item, 'antiPatternRefs', label, 8)
     };
   });
 }
@@ -179,6 +181,32 @@ function collectDesignRefs(
   return [...refs.values()];
 }
 
+/** Resolve every `antiPatternRef` named by the pack/checks into a report entry (0.6.4). */
+function collectAntiPatternRefs(
+  pack: TaskPack,
+  checks: readonly Check[],
+  design: ReadonlyMap<string, DesignCard> | undefined
+): DesignAntiPatternAuditRef[] {
+  const refs = new Map<string, DesignAntiPatternAuditRef>();
+  const add = (criterionId: string, antiPatternRef: string): void => {
+    if (refs.has(antiPatternRef)) return;
+    const card = design?.get(antiPatternRef);
+    refs.set(antiPatternRef, {
+      criterionId,
+      antiPatternRef,
+      status: card === undefined ? 'missing' : card.status,
+      ...(card === undefined ? {} : { title: card.title })
+    });
+  };
+  for (const criterion of pack.criteria) {
+    for (const ref of criterion.antiPatternRefs ?? []) add(criterion.id, ref);
+  }
+  for (const check of checks) {
+    for (const ref of check.antiPatternRefs ?? []) add(check.criterionId, ref);
+  }
+  return [...refs.values()];
+}
+
 /**
  * Targeted retrieval suggestions for the next brief: one per failed aesthetic
  * criterion (0.6.3 F). This is what turns B's rejection into A's next query.
@@ -254,6 +282,12 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               items: { type: 'string' },
               description:
                 '设计参考卡 ID（0.6.2，如 `DSG-0007`）。引用不存在或已 block 的卡片会被闸门拒绝；报告渲染「参考对照」。'
+            },
+            antiPatternRefs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '反模式卡 ID（0.6.4，如 `AP-0001`）。引用不存在或已 block 的反模式会被闸门拒绝；报告渲染「反模式对照」。'
             },
             evidenceFiles: {
               type: 'array',
@@ -371,7 +405,14 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         ...(compares.length === 0 ? {} : { compares })
       };
       const designRefs = collectDesignRefs(pack, checks, designCards);
-      const design: DesignAuditSummary | undefined = designRefs.length === 0 ? undefined : { refs: designRefs };
+      const antiPatternRefs = collectAntiPatternRefs(pack, checks, designCards);
+      const design: DesignAuditSummary | undefined =
+        designRefs.length === 0 && antiPatternRefs.length === 0
+          ? undefined
+          : {
+              refs: designRefs,
+              ...(antiPatternRefs.length === 0 ? {} : { antiPatterns: antiPatternRefs })
+            };
       const report: AuditReport = {
         id,
         stage: 'delivery',

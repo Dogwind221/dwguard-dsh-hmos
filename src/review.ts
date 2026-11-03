@@ -74,6 +74,8 @@ export interface CheckInput {
   readonly profileRef?: string;
   /** Design-library cards this check compared against (0.6.2). */
   readonly designRefs?: readonly string[];
+  /** Anti-pattern cards this check verified as absent (0.6.4). */
+  readonly antiPatternRefs?: readonly string[];
 }
 
 /** Gate outcome. */
@@ -131,6 +133,14 @@ export interface DesignAuditRef {
   readonly tokens?: string;
 }
 
+/** One anti-pattern reference recorded by an audit (0.6.4). */
+export interface DesignAntiPatternAuditRef {
+  readonly criterionId: string;
+  readonly antiPatternRef: string;
+  readonly status: 'active' | 'blocked' | 'missing';
+  readonly title?: string;
+}
+
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
   readonly profileRefs: readonly AestheticAuditRef[];
@@ -141,6 +151,8 @@ export interface AestheticAuditSummary {
 /** Design evidence attached to an audit report (0.6.2 P2). */
 export interface DesignAuditSummary {
   readonly refs: readonly DesignAuditRef[];
+  /** Anti-pattern references (0.6.4). */
+  readonly antiPatterns?: readonly DesignAntiPatternAuditRef[];
 }
 
 /** A persisted delivery audit. */
@@ -222,6 +234,9 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
     ...(item.designRefs === undefined || item.designRefs.length === 0
       ? {}
       : { designRefs: [...new Set(item.designRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
+    ...(item.antiPatternRefs === undefined || item.antiPatternRefs.length === 0
+      ? {}
+      : { antiPatternRefs: [...new Set(item.antiPatternRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
     ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
       ? {}
       : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
@@ -501,23 +516,25 @@ export function gateDelivery(
   // Design references (0.6.2 P2): a ref that does not resolve to an active card
   // cannot be used as an acceptance basis. A missing library is an error only
   // when a pack/check actually names a ref.
-  const designRefs: Array<{ ref: string; owner: string }> = [];
+  const designRefs: Array<{ ref: string; owner: string; label: '设计参考' | '反模式' }> = [];
   for (const criterion of pack.criteria) {
-    for (const ref of criterion.designRefs ?? []) designRefs.push({ ref, owner: `判据 \`${criterion.id}\`` });
+    for (const ref of criterion.designRefs ?? []) designRefs.push({ ref, owner: `判据 \`${criterion.id}\``, label: '设计参考' });
+    for (const ref of criterion.antiPatternRefs ?? []) designRefs.push({ ref, owner: `判据 \`${criterion.id}\``, label: '反模式' });
   }
   for (const check of checks) {
-    for (const ref of check.designRefs ?? []) designRefs.push({ ref, owner: `检查 \`${check.criterionId}\`` });
+    for (const ref of check.designRefs ?? []) designRefs.push({ ref, owner: `检查 \`${check.criterionId}\``, label: '设计参考' });
+    for (const ref of check.antiPatternRefs ?? []) designRefs.push({ ref, owner: `检查 \`${check.criterionId}\``, label: '反模式' });
   }
   if (designRefs.length > 0) {
     if (design === undefined) {
-      errors.push('判据/检查引用了设计参考，但设计库不可用；先初始化并 ingest 设计库。');
+      errors.push('判据/检查引用了设计参考或反模式，但设计库不可用；先初始化并 ingest 设计库。');
     } else {
-      for (const { ref, owner } of designRefs) {
+      for (const { ref, owner, label } of designRefs) {
         const card = design.get(ref);
         if (card === undefined) {
-          errors.push(`${owner} 引用的设计参考 \`${ref}\` 不存在；先 ingest 该卡片或换一个 ref。`);
+          errors.push(`${owner} 引用的${label} \`${ref}\` 不存在；先 ingest 该卡片或换一个 ref。`);
         } else if (card.status !== 'active') {
-          errors.push(`${owner} 引用的设计参考 \`${ref}\` 已被 block，不能作为验收依据。`);
+          errors.push(`${owner} 引用的${label} \`${ref}\` 已被 block，不能作为验收依据。`);
         }
       }
     }
@@ -727,6 +744,21 @@ function designCell(
     .join('<br><br>');
 }
 
+/** One cell for the anti-pattern column (0.6.4). */
+function antiPatternCell(
+  refs: readonly string[] | undefined,
+  design: ReadonlyMap<string, DesignCard> | undefined
+): string {
+  if (refs === undefined || refs.length === 0) return '—';
+  return refs
+    .map((ref) => {
+      const card = design?.get(ref);
+      if (card === undefined) return `\`${ref}\`<br>缺失`;
+      return `\`${ref}\`<br>${card.title}`;
+    })
+    .join('<br>');
+}
+
 /** Render `artifacts/audit-<n>.md`. */
 export function renderAuditMarkdown(
   report: AuditReport,
@@ -747,6 +779,7 @@ export function renderAuditMarkdown(
       check.family === undefined ? '—' : SCREEN_FAMILY_LABELS[check.family],
       aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
       designCell(check.designRefs ?? criterion?.designRefs, design),
+      antiPatternCell(check.antiPatternRefs ?? criterion?.antiPatternRefs, design),
       RESULT_LABELS[check.result],
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual === undefined ? '—' : check.actual,
@@ -807,7 +840,7 @@ export function renderAuditMarkdown(
     report.checks.length === 0
       ? '（无）'
       : table(
-          ['判据', '维度', '设备', '屏幕族', '审美档案', '参考对照', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
+          ['判据', '维度', '设备', '屏幕族', '审美档案', '参考对照', '反模式对照', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
           checkRows
         ),
     '',
@@ -956,6 +989,7 @@ export function renderAcceptanceMarkdown(
       check.family === undefined ? check.device ?? '—' : `${check.device ?? '—'} · ${SCREEN_FAMILY_LABELS[check.family]}`,
       aestheticCell(check.profileRef ?? criterion?.profileRef, aesthetic),
       designCell(check.designRefs ?? criterion?.designRefs, design),
+      antiPatternCell(check.antiPatternRefs ?? criterion?.antiPatternRefs, design),
       check.evidence
     ];
   });
@@ -981,7 +1015,7 @@ export function renderAcceptanceMarkdown(
     '',
     '## 2. 证据索引',
     '',
-    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '审美档案', '参考对照', '独立证据'], rows),
+    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '审美档案', '参考对照', '反模式对照', '独立证据'], rows),
     '',
     '### 2.1 屏幕族矩阵',
     '',

@@ -4,6 +4,46 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.4 — 2026-11-03
+
+The adversarial-knowledge release: anti-patterns become first-class acceptance
+gates, retrieval can rerank semantically or by image, and a project's aesthetic
+profile can be exported as a reusable template.
+
+### Added
+
+- **Anti-pattern gate**: criteria/checks accept `antiPatternRefs` (`AP-*` only,
+  aesthetic criteria only); `dwguard_spec` and `dwguard_audit` reject missing or
+  blocked refs, reports render a 「反模式对照」 column, and
+  `audit-<n>.json` records `design.antiPatterns`. `library ingest` warns when a
+  pattern references an AP card that has not been ingested yet.
+- **Hybrid semantic rerank**: optional OpenAI-compatible embedding endpoint
+  (`designEmbeddingEndpoint`, `designEmbeddingModel`,
+  `designEmbeddingApiKeyEnv`, `designEmbeddingTimeoutMs`,
+  `designEmbeddingWeight`). Lexical top-30 candidates are reranked by cosine
+  similarity, cached in `design-library/embeddings.json`; missing timeout/errors
+  fall back to lexical with an explicit note. `query.mjs` stays lexical and the
+  brief marks the DSH ranking as authoritative.
+- **Search by image**: zero-dependency PNG decoder (`src/image.ts`, 8-bit
+  non-interlaced gray/RGB/palette/GA/RGBA) computing a DCT pHash plus a 64-bin
+  RGB histogram; `dwguard_design search` accepts `image` (a `.shared/` PNG) and
+  ranks cards by `0.6 × pHash similarity + 0.4 × histogram intersection`.
+  Features are cached in `image-features.json`; unsupported/corrupt images and
+  path escapes are refused. DSH-only (the CLI stays text-only).
+- **Cross-project aesthetic templates**: `dwguard_aesthetic template
+  list/get/export/import` with a global directory
+  (`aestheticTemplatesDir`, default `~/.dsh/dwguard/aesthetic-templates`).
+  `import` requires `confirmed: true`; `merge` supersedes conflicting local
+  entries and skips duplicates, `replace` swaps the whole profile; history is
+  appended to `knowledge/aesthetic-history.jsonl`.
+- `DESIGN_ENGINE_VERSION` → `0.6.4`.
+
+### Tests
+
+- `tests/design.test.mjs` gains eight 0.6.4 cases (AP spec/audit gates + report,
+  hybrid rerank unit + cache + loopback HTTP + fallback, PNG pHash/histogram,
+  image search, template export/import); suite is now 124/124.
+
 ## 0.6.3 — 2026-11-03
 
 The structured-knowledge release: design cards get business dimensions and

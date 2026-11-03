@@ -26,6 +26,8 @@ export interface CriterionInput {
     readonly profileRef?: string;
     /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */
     readonly designRefs?: readonly string[];
+    /** Anti-pattern cards this criterion must not violate (`AP-0001`, 0.6.4). */
+    readonly antiPatternRefs?: readonly string[];
 }
 /** The model-supplied shape of a task pack. */
 export interface TaskPackInput {
@@ -63,6 +65,8 @@ export declare function normalizeAssertion(value: unknown): {
 };
 /** Compact one-line rendering of an assertion (used by specs, briefs and audits). */
 export declare function assertionLabel(assertion: CriterionAssertion): string;
+/** Whether a string is a well-formed anti-pattern id (`AP-0001`). */
+export declare function isAntiPatternRefId(value: string): boolean;
 /** Whether a string is a well-formed design-library id (`DSG-0007`). */
 export declare function isDesignRefId(value: string): boolean;
 /**

@@ -10,6 +10,7 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
+import { resolve, sep } from 'node:path';
 
 import { AREA_LABELS, readProfile, type AestheticArea } from '../aesthetic.js';
 import type { Options } from '../config.js';
@@ -28,7 +29,9 @@ import {
   readDesignManifest,
   renderDesignCardsMarkdown,
   renderDesignSearchMarkdown,
-  searchDesignLibrary,
+  renderDesignImageSearchMarkdown,
+  searchDesignByImage,
+  searchDesignWithRanker,
   type DesignManifest
 } from '../design.js';
 import { appendOutboxDsh, parseOutbox } from '../dispatch.js';
@@ -36,7 +39,7 @@ import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { ensureShared } from '../scaffold.js';
 import { readLatestJson, readState, updateState } from '../state.js';
-import { readTextOrNull } from '../util/fs.js';
+import { readTextOrNull, fileExists } from '../util/fs.js';
 import { nowIso } from '../util/md.js';
 import {
   arrayOfRecords,
@@ -140,7 +143,7 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Design reference library (0.6.2): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts, `brief` writes `tasks/design-brief.md` for DevEco and appends an `inspiration` outbox record (answer a DevEco `design-request` with `request: "q-1"`), `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `stats` summarizes coverage. ' +
+      'Design reference library (0.6.2–0.6.4): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts (or optional hybrid semantic rerank) and supports search-by-image (`image`), `brief` writes `tasks/design-brief.md` for DevEco and appends an `inspiration` outbox record (answer a DevEco `design-request` with `request: "q-1"`), `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `stats` summarizes coverage. ' +
       'No network, no model calls, no extra dependencies; the same input always produces the same index and ranking. 参考是证据不是判据。',
     parameters: {
       action: {
@@ -159,7 +162,11 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
         items: { type: 'string', enum: [...INGEST_SOURCES] },
         description: 'ingest 的来源：`rules`（审美规则目录）与/或 `inbox`（用户投递的 meta + 图片），默认两者。'
       },
-      query: { type: 'string', description: 'search 的查询词，如「深色 卡片 间距」。' },
+      query: { type: 'string', description: 'search 的查询词，如「深色 卡片 间距」；与 image 二选一。' },
+      image: {
+        type: 'string',
+        description: 'search 的以图搜图：`.shared/` 内的 PNG 路径（0.6.4，DSH 侧 pHash + 颜色直方图）。'
+      },
       topK: { type: 'number', description: 'search/brief 返回条数（search 默认 designTopK，brief 默认 designBriefCards，1–50）。' },
       appType: { type: 'string', description: 'search 过滤：App 类型（如 `金融后台`），命中 dimensions.appType。' },
       platform: { type: 'string', description: 'search 过滤：平台（如 `harmonyos`），命中 dimensions.platform。' },
@@ -446,22 +453,53 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
         // action === 'search'
         const searchBudget = await searchBudgetGuard(paths, options, now);
         if (searchBudget !== null) return searchBudget;
-        const query = requiredString(args, 'query', TOOL, 200);
+        const queryArg = optionalString(args, 'query', TOOL, 200);
+        const imageArg = optionalString(args, 'image', TOOL, 300);
+        if (queryArg === undefined && imageArg === undefined) {
+          return fail('`search` 需要 `query`（关键词）或 `image`（.shared 内的 PNG 路径）。');
+        }
         const topK = optionalInt(args, 'topK', options.designTopK, TOOL, 1, 50);
+        const manifest = await readDesignManifest(paths);
+        if (manifest === null) return fail('还没有设计库。', { next: '先运行 `library init` + `library ingest`。' });
+        if (imageArg !== undefined) {
+          const sharedRoot = paths.shared;
+          const resolved = resolve(sharedRoot, imageArg);
+          if (resolved !== sharedRoot && !resolved.startsWith(`${sharedRoot}${sep}`)) {
+            return fail('`image` 必须是 `.shared/` 内的路径。', { next: '把查询图放到 `.shared/` 下再重试。' });
+          }
+          if (!(await fileExists(resolved))) return fail(`查询图不存在：\`${imageArg}\`。`);
+          let imageResult;
+          try {
+            imageResult = await searchDesignByImage(paths, manifest, resolved, topK, {
+              licenseRequired: options.designLicenseRequired
+            });
+          } catch (error) {
+            return fail(`以图搜图失败：${(error as Error).message}`, {
+              next: '换一张 8 位非隔行 PNG；损坏/不支持格式的图片不会被计费，也不会改库。'
+            });
+          }
+          await consumeSearchBudget(paths, now);
+          return ok(
+            imageResult.results.length === 0
+              ? '以图搜图没有命中相似卡片。'
+              : `以图搜图命中 ${imageResult.results.length} 张卡（pHash ${imageResult.query.phash}）。`,
+            {
+              detail: renderDesignImageSearchMarkdown(imageResult),
+              next: '把最相似的 refId 交给用户挑选；pHash 只做形状/明暗相似，颜色以直方图为准。'
+            }
+          );
+        }
+        const query = queryArg ?? '';
         const appType = optionalString(args, 'appType', TOOL, 40);
         const platform = optionalString(args, 'platform', TOOL, 40);
         const style = optionalString(args, 'style', TOOL, 40);
         const kind = optionalEnum(args, 'kind', ['pattern', 'anti-pattern', 'brand'] as const, TOOL);
-        const manifest = await readDesignManifest(paths);
-        if (manifest === null) return fail('还没有设计库。', { next: '先运行 `library init` + `library ingest`。' });
         const { index, chunks } = await readDesignIndex(paths);
         const profile = await readProfile(paths);
         const profileAreas = new Set<AestheticArea>(
           profile.entries.filter((entry) => entry.status === 'active').map((entry) => entry.area)
         );
-        const result = searchDesignLibrary(manifest, index, chunks, query, {
-          topK,
-          ranker: options.designRanker,
+        const result = await searchDesignWithRanker(paths, options, manifest, index, chunks, query, topK, {
           licenseRequired: options.designLicenseRequired,
           ...(profileAreas.size === 0 ? {} : { profileAreas }),
           filters: {

@@ -3,16 +3,25 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { promisify } from 'node:util';
+import { crc32, deflateSync } from 'node:zlib';
 
 // Keep the workspace registry the tools write out of the real DSH home.
 process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dwguard-home-'));
 
 import { resolveOptions } from '../lib/config.js';
-import { readDesignIndex, readDesignManifest, searchDesignLibrary } from '../lib/design.js';
+import {
+  createCachedEmbedder,
+  readDesignIndex,
+  readDesignManifest,
+  rerankDesignHits,
+  searchDesignLibrary
+} from '../lib/design.js';
+import { decodePng, imageFeatures, imageSimilarity } from '../lib/image.js';
 import { parseOutbox } from '../lib/dispatch.js';
 import { resolvePaths } from '../lib/paths.js';
 import { createAestheticTool } from '../lib/tools/aesthetic.js';
@@ -110,6 +119,50 @@ async function writeBounds(cwd, relative, value) {
   await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, 'utf8');
   return file;
 }
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+
+function pngChunk(type, data) {
+  const typeBuffer = Buffer.from(type, 'ascii');
+  const length = Buffer.alloc(4);
+  length.writeUInt32BE(data.length);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(Buffer.concat([typeBuffer, data])) >>> 0);
+  return Buffer.concat([length, typeBuffer, data, crc]);
+}
+
+/** Write an 8-bit RGB PNG whose pixels come from `pixel(x, y) -> [r, g, b]`. */
+function makePng(width, height, pixel) {
+  const stride = 1 + width * 3;
+  const raw = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y += 1) {
+    raw[y * stride] = 0;
+    for (let x = 0; x < width; x += 1) {
+      const [r, g, b] = pixel(x, y);
+      const offset = y * stride + 1 + x * 3;
+      raw[offset] = r;
+      raw[offset + 1] = g;
+      raw[offset + 2] = b;
+    }
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8;
+  ihdr[9] = 2;
+  return Buffer.concat([
+    PNG_SIGNATURE,
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0))
+  ]);
+}
+
+const leftDark = (x) => (x < 16 ? [0, 0, 0] : [255, 255, 255]);
+const leftLight = (x) => (x < 16 ? [255, 255, 255] : [0, 0, 0]);
+const IMAGE_A = makePng(32, 32, (x) => leftDark(x));
+const IMAGE_C = makePng(32, 32, (x) => leftLight(x));
+const IMAGE_D = makePng(32, 32, () => [128, 128, 128]);
 
 const dirs = [];
 after(async () => {
@@ -724,6 +777,347 @@ async function buildStructuredFixture(cwd) {
   const byTitle = new Map(manifest.cards.map((card) => [card.title, card]));
   return { manifest, byTitle };
 }
+
+test('0.6.4 AP-A: anti-pattern refs are gated at spec and audit, and rendered in reports', async () => {
+  const cwd = await workspace();
+  const { byTitle } = await buildStructuredFixture(cwd);
+  const anti = byTitle.get('紫粉渐变');
+  assert.ok(anti !== undefined);
+  const spec = await writeSpec(cwd, { antiPatternRefs: [anti.id] });
+  assert.equal(spec.ok, true, spec.detail);
+  const specJson = JSON.parse(await readFile(paths(cwd).specJson, 'utf8'));
+  assert.deepEqual(specJson.criteria.find((criterion) => criterion.id === 'A-01')?.antiPatternRefs, [anti.id]);
+
+  const unknown = await writeSpec(cwd, { antiPatternRefs: ['AP-9999'] });
+  assert.equal(unknown.ok, false);
+  assert.match(unknown.detail, /不存在/);
+
+  const audit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audit.ok, true, audit.detail);
+  const report = await readFile(join(paths(cwd).shared, 'artifacts', 'acceptance-report.md'), 'utf8');
+  assert.match(report, /反模式对照/);
+  assert.match(report, new RegExp(anti.id));
+  assert.match(report, /紫粉渐变/);
+  const json = JSON.parse(await readFile(join(paths(cwd).shared, 'artifacts', 'audit-1.json'), 'utf8'));
+  assert.equal(json.design.antiPatterns.length, 1);
+  assert.equal(json.design.antiPatterns[0].antiPatternRef, anti.id);
+  assert.equal(json.design.antiPatterns[0].status, 'active');
+
+  const specJson2 = JSON.parse(await readFile(paths(cwd).specJson, 'utf8'));
+  specJson2.criteria = specJson2.criteria.map((criterion) =>
+    criterion.id === 'A-01' ? { ...criterion, antiPatternRefs: ['AP-9999'] } : criterion
+  );
+  await writeFile(paths(cwd).specJson, `${JSON.stringify(specJson2, null, 2)}\n`, 'utf8');
+  const unknownAudit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(unknownAudit.ok, false);
+  assert.match(unknownAudit.detail, /不存在/);
+
+  const raw = JSON.parse(await readFile(paths(cwd).designManifest, 'utf8'));
+  raw.cards = raw.cards.map((card) => (card.id === anti.id ? { ...card, status: 'blocked' } : card));
+  await writeFile(paths(cwd).designManifest, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+  specJson2.criteria = specJson2.criteria.map((criterion) =>
+    criterion.id === 'A-01' ? { ...criterion, antiPatternRefs: [anti.id] } : criterion
+  );
+  await writeFile(paths(cwd).specJson, `${JSON.stringify(specJson2, null, 2)}\n`, 'utf8');
+  const blockedAudit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(blockedAudit.ok, false);
+  assert.match(blockedAudit.detail, /block/);
+});
+
+test('0.6.4 T-1: aesthetic templates export, merge-import and replace-import', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'dwguard-templates-'));
+  after(async () => {
+    await rm(dir, { recursive: true, force: true });
+  });
+  const templateTool = createAestheticTool(resolveOptions({ aestheticTemplatesDir: dir }));
+  const source = await workspace();
+  const writeA = await templateTool.execute(
+    {
+      action: 'profile',
+      op: 'write',
+      area: 'radius',
+      decision: '卡片圆角 20vp',
+      source: 'confirmation',
+      confidence: 0.8,
+      number: 20,
+      unit: 'vp',
+      confirmed: true
+    },
+    exec(source)
+  );
+  assert.equal(writeA.ok, true, writeA.detail);
+  const writeSpacing = await templateTool.execute(
+    {
+      action: 'profile',
+      op: 'write',
+      area: 'spacing',
+      decision: '页面间距 12vp',
+      source: 'confirmation',
+      confidence: 0.8,
+      number: 12,
+      unit: 'vp',
+      confirmed: true
+    },
+    exec(source)
+  );
+  assert.equal(writeSpacing.ok, true, writeSpacing.detail);
+  const exported = await templateTool.execute(
+    { action: 'template', op: 'export', name: 'dark-saas' },
+    exec(source)
+  );
+  assert.equal(exported.ok, true, exported.detail);
+  assert.ok(exported.detail.includes('dark-saas'));
+
+  const listed = await templateTool.execute({ action: 'template', op: 'list' }, exec(source));
+  assert.equal(listed.ok, true, listed.detail);
+  assert.match(listed.detail, /dark-saas/);
+  const got = await templateTool.execute({ action: 'template', op: 'get', name: 'dark-saas' }, exec(source));
+  assert.equal(got.ok, true, got.detail);
+  assert.match(got.detail, /20vp/);
+
+  const target = await workspace();
+  const writeLocal = await templateTool.execute(
+    {
+      action: 'profile',
+      op: 'write',
+      area: 'radius',
+      decision: '卡片圆角 16vp',
+      source: 'confirmation',
+      confidence: 0.8,
+      number: 16,
+      unit: 'vp',
+      confirmed: true
+    },
+    exec(target)
+  );
+  assert.equal(writeLocal.ok, true, writeLocal.detail);
+  const unconfirmed = await templateTool.execute(
+    { action: 'template', op: 'import', name: 'dark-saas' },
+    exec(target)
+  );
+  assert.equal(unconfirmed.ok, false);
+  assert.match(unconfirmed.summary, /confirmed/);
+
+  const merged = await templateTool.execute(
+    { action: 'template', op: 'import', name: 'dark-saas', confirmed: true },
+    exec(target)
+  );
+  assert.equal(merged.ok, true, merged.detail);
+  assert.match(merged.detail, /被替代/);
+  const profile = await readFile(paths(target).aestheticProfileMd, 'utf8');
+  assert.match(profile, /20vp/);
+  assert.match(profile, /superseded/);
+
+  const replaced = await templateTool.execute(
+    { action: 'template', op: 'import', name: 'dark-saas', confirmed: true, strategy: 'replace' },
+    exec(target)
+  );
+  assert.equal(replaced.ok, true, replaced.detail);
+  const replacedProfile = await readFile(paths(target).aestheticProfileMd, 'utf8');
+  assert.match(replacedProfile, /12vp/);
+
+  const badName = await templateTool.execute(
+    { action: 'template', op: 'export', name: '../bad' },
+    exec(source)
+  );
+  assert.equal(badName.ok, false);
+});
+
+test('0.6.4 I-1: PNG decode + pHash/histogram features are deterministic', async () => {
+  const decoded = decodePng(IMAGE_A);
+  assert.equal(decoded.width, 32);
+  assert.equal(decoded.height, 32);
+  const first = imageFeatures(decoded);
+  const second = imageFeatures(decodePng(IMAGE_A));
+  const inverted = imageFeatures(decodePng(IMAGE_C));
+  assert.deepEqual(first, second);
+  assert.match(first.phash, /^[0-9a-f]{16}$/);
+  assert.equal(first.histogram.length, 64);
+  const same = imageSimilarity(first, second);
+  assert.equal(same.score, 1);
+  assert.equal(same.hashDistance, 0);
+  const different = imageSimilarity(first, inverted);
+  assert.ok(different.score < 0.8, `反色图不应与同图同分，实测 ${different.score}`);
+  const solid = imageFeatures(decodePng(IMAGE_D));
+  const solidScore = imageSimilarity(first, solid);
+  assert.ok(solidScore.score < 0.5, `纯灰图与黑白分割图应明显不同，实测 ${solidScore.score}`);
+  const corrupt = Buffer.from(IMAGE_A);
+  corrupt[40] ^= 0xff;
+  assert.throws(() => decodePng(corrupt), /CRC|PNG/);
+});
+
+test('0.6.4 I-2: search by image ranks the matching card and caches features', async () => {
+  const cwd = await workspace();
+  await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+  const inbox = join(paths(cwd).shared, 'design-library', 'inbox');
+  await mkdir(inbox, { recursive: true });
+  await writeFile(join(inbox, 'a.png'), IMAGE_A);
+  await writeFile(join(inbox, 'c.png'), IMAGE_C);
+  await writeMeta(cwd, 'a.meta.json', {
+    title: '左暗右亮',
+    summary: '黑白分割 A',
+    image: 'a.png',
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, 'c.meta.json', {
+    title: '左亮右暗',
+    summary: '黑白分割 C',
+    image: 'c.png',
+    source: { kind: 'user', license: 'internal' }
+  });
+  await ingest(cwd, ['inbox']);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const byTitle = new Map(manifest.cards.map((card) => [card.title, card]));
+  const match = byTitle.get('左暗右亮');
+  const opposite = byTitle.get('左亮右暗');
+  assert.ok(match !== undefined && opposite !== undefined);
+
+  const queryFile = join(paths(cwd).shared, 'artifacts', 'query.png');
+  await mkdir(dirname(queryFile), { recursive: true });
+  await writeFile(queryFile, IMAGE_A);
+  const found = await tool.execute({ action: 'search', image: 'artifacts/query.png', topK: 3 }, exec(cwd));
+  assert.equal(found.ok, true, found.detail);
+  assert.match(found.detail, /以图搜图/);
+  const rows = found.detail.split('\n').filter((line) => line.startsWith('| `'));
+  assert.ok(rows.length >= 2);
+  assert.ok(rows[0].includes(match.id), `第一行应为匹配卡，实际：${rows[0]}`);
+  assert.ok(rows.findIndex((line) => line.includes(opposite.id)) > 0);
+  const cache = JSON.parse(await readFile(paths(cwd).designImageFeatures, 'utf8'));
+  assert.equal(cache.schemaVersion, 1);
+  assert.ok(Object.keys(cache.features).length >= 2);
+
+  const again = await tool.execute({ action: 'search', image: 'artifacts/query.png', topK: 3 }, exec(cwd));
+  assert.equal(again.ok, true, again.detail);
+  assert.ok(again.detail.includes(match.id));
+
+  const garbage = join(paths(cwd).shared, 'artifacts', 'bad.png');
+  await writeFile(garbage, 'not a png');
+  const bad = await tool.execute({ action: 'search', image: 'artifacts/bad.png' }, exec(cwd));
+  assert.equal(bad.ok, false);
+  assert.match(bad.summary, /PNG|解码/);
+
+  const escape = await tool.execute({ action: 'search', image: '../outside.png' }, exec(cwd));
+  assert.equal(escape.ok, false);
+  assert.match(escape.summary, /shared/);
+});
+
+test('0.6.4 H-1: hybrid rerank blends semantic similarity and keeps lexical breakdown', async () => {
+  const base = [
+    {
+      cardId: 'DSG-0001',
+      title: '运动渐变',
+      kind: 'pattern',
+      score: 3,
+      breakdown: { bm25: 3, tokenBoost: 0, tagBoost: 0, profileBoost: 0, weight: 1 },
+      snippet: '运动 渐变 高能量',
+      tokens: { palette: [], spacing: [], radius: [], type: [], motion: [] },
+      source: { kind: 'user', license: 'internal' },
+      images: []
+    },
+    {
+      cardId: 'DSG-0002',
+      title: '深色卡片',
+      kind: 'pattern',
+      score: 2.5,
+      breakdown: { bm25: 2.5, tokenBoost: 0, tagBoost: 0, profileBoost: 0, weight: 1 },
+      snippet: '深色 背景 圆角',
+      tokens: { palette: [], spacing: [], radius: [], type: [], motion: [] },
+      source: { kind: 'user', license: 'internal' },
+      images: []
+    }
+  ];
+  const embed = async (texts) => texts.map((text) => (text.includes('深色') ? [1, 0, 0] : [0, 1, 0]));
+  const out = await rerankDesignHits(base, '深色 背景', embed, { weight: 0.6, model: 'stub' });
+  assert.equal(out.results[0].cardId, 'DSG-0002', '语义更近的卡片应排到 first');
+  assert.ok((out.results[0].semanticScore ?? 0) > (out.results[1].semanticScore ?? 0));
+  assert.equal(out.results[0].rerankWeight, 0.6);
+  assert.equal(out.results[0].breakdown.bm25, 2.5, '原始 BM25 分解保留');
+  assert.match(out.notes[0], /hybrid 语义重排/);
+});
+
+test('0.6.4 H-2: embedding cache avoids duplicate calls', async () => {
+  let calls = 0;
+  const embed = async (texts) => {
+    calls += 1;
+    return texts.map((text) => [text.length, 1]);
+  };
+  const cache = { schemaVersion: 1, model: 'stub', vectors: {} };
+  const cached = createCachedEmbedder(embed, cache, 'stub');
+  const first = await cached(['深色', '卡片']);
+  const second = await cached(['深色', '间距']);
+  assert.equal(calls, 2);
+  assert.deepEqual(first[0], second[0], '同一文本复用缓存向量');
+  assert.equal(Object.keys(cache.vectors).length, 3);
+});
+
+test('0.6.4 H-3: hybrid endpoint reranks via HTTP and caches vectors', async () => {
+  const requests = [];
+  const server = createServer((request, response) => {
+    let body = '';
+    request.on('data', (chunk) => {
+      body += chunk;
+    });
+    request.on('end', () => {
+      const input = JSON.parse(body).input;
+      requests.push(input.length);
+      const data = input.map((text) => ({
+        embedding: [text.includes('深色') ? 1 : 0, text.includes('圆角') ? 1 : 0, 1]
+      }));
+      response.writeHead(200, { 'content-type': 'application/json' });
+      response.end(JSON.stringify({ data }));
+    });
+  });
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const port = server.address().port;
+  try {
+    const cwd = await workspace();
+    await buildFixtureLibrary(cwd);
+    const hybrid = createDesignTool(
+      resolveOptions({
+        designRanker: 'hybrid',
+        designEmbeddingEndpoint: `http://127.0.0.1:${port}/v1/embeddings`,
+        designEmbeddingModel: 'stub',
+        designEmbeddingTimeoutMs: 3000,
+        designEmbeddingWeight: 0.5
+      })
+    );
+    const first = await hybrid.execute({ action: 'search', query: '深色 卡片', topK: 3 }, exec(cwd));
+    assert.equal(first.ok, true, first.detail);
+    assert.match(first.detail, /hybrid/);
+    assert.match(first.detail, /语义权重 0\.5/);
+    const cache = JSON.parse(await readFile(paths(cwd).designEmbeddings, 'utf8'));
+    assert.equal(cache.model, 'stub');
+    assert.ok(Object.keys(cache.vectors).length >= 3);
+    const before = requests.length;
+    const second = await hybrid.execute({ action: 'search', query: '深色 卡片', topK: 3 }, exec(cwd));
+    assert.equal(second.ok, true, second.detail);
+    assert.equal(requests.length, before, '第二次检索应全部命中缓存');
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});
+
+test('0.6.4 H-4: missing or unreachable embedding endpoint falls back to lexical', async () => {
+  const cwd = await workspace();
+  await buildFixtureLibrary(cwd);
+  const noEndpoint = createDesignTool(resolveOptions({ designRanker: 'hybrid' }));
+  const first = await noEndpoint.execute({ action: 'search', query: '深色 卡片', topK: 3 }, exec(cwd));
+  assert.equal(first.ok, true, first.detail);
+  assert.match(first.detail, /未配置 designEmbeddingEndpoint|回退 lexical/);
+
+  const unreachable = createDesignTool(
+    resolveOptions({
+      designRanker: 'hybrid',
+      designEmbeddingEndpoint: 'http://127.0.0.1:1/v1/embeddings',
+      designEmbeddingTimeoutMs: 1000
+    })
+  );
+  const second = await unreachable.execute({ action: 'search', query: '深色 卡片', topK: 3 }, exec(cwd));
+  assert.equal(second.ok, true, second.detail);
+  assert.match(second.detail, /回退 lexical/);
+  assert.match(second.detail, /DSG-/);
+});
 
 test('0.6.3 A: structured card fields round-trip and retrieval filters work', async () => {
   const cwd = await workspace();

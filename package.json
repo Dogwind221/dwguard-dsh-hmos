@@ -1,6 +1,6 @@
 {
   "name": "dwguard-dsh-hmos",
-  "version": "0.6.3",
+  "version": "0.6.4",
   "description": "DwGuard-Dsh-Hmos — DSH 侧的鸿蒙双 Agent 编排与外部审计插件：把 DSH ↔ DevEco Code 的任务包、对抗预审、派发、四维验收、返工与知识沉淀落成可执行的工程闭环。",
   "type": "module",
   "main": "lib/index.js",

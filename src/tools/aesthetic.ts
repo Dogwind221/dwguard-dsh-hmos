@@ -12,6 +12,7 @@ import { join } from 'node:path';
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
+import { resolve } from 'node:path';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
@@ -22,12 +23,18 @@ import {
   appendAestheticHistory,
   applyAestheticProposals,
   conflictsMatchingChoice,
+  defaultAestheticTemplatesDir,
+  exportAestheticTemplate,
   factsFromSources,
   findProfileEntry,
+  importAestheticTemplate,
   isAestheticArea,
   learnAesthetics,
+  listAestheticTemplates,
   nextAestheticId,
   normalizeValue,
+  readAestheticTemplate,
+  readProfile,
   readProfileDocument,
   readProjectAestheticFacts,
   renderConflicts,
@@ -63,6 +70,7 @@ import {
   arrayOfRecords,
   asRecord,
   optionalBoolean,
+  optionalEnum,
   optionalString,
   optionalStringArray,
   requiredEnum,
@@ -71,9 +79,10 @@ import {
 import { pathsOf, requireSpec } from './common.js';
 
 const TOOL = 'dwguard_aesthetic';
-const ACTIONS = ['profile', 'baseline', 'compare', 'learn'] as const;
+const ACTIONS = ['profile', 'baseline', 'compare', 'learn', 'template'] as const;
 const PROFILE_OPS = ['list', 'get', 'write', 'remove'] as const;
 const BASELINE_OPS = ['save', 'list'] as const;
+const TEMPLATE_OPS = ['list', 'get', 'export', 'import'] as const;
 
 interface Deps {
   readonly options: Options;
@@ -610,24 +619,105 @@ async function runLearn(deps: Deps): Promise<ToolResult> {
  * @param options - resolved plugin options.
  * @param ctx - plugin context (used to resolve the session working directory).
  */
+async function runTemplate(deps: Deps): Promise<ToolResult> {
+  const { options, paths, args, now } = deps;
+  const op = requiredEnum(args, 'op', TEMPLATE_OPS, TOOL);
+  const dir = options.aestheticTemplatesDir.length > 0 ? resolve(options.aestheticTemplatesDir) : defaultAestheticTemplatesDir();
+  if (op === 'list') {
+    const templates = await listAestheticTemplates(dir);
+    return ok(templates.length === 0 ? `模板目录为空：\`${dir}\`` : `共 ${templates.length} 个审美模板。`, {
+      detail:
+        templates.length === 0
+          ? `目录：\`${dir}\`\n用 \`template export\` 把当前项目的 active 偏好存成模板。`
+          : table(
+              ['模板', '条目', '创建时间', '文件'],
+              templates.map((template) => [template.name, String(template.entries), template.createdAt || '—', `\`${template.path}\``])
+            ),
+      next: '跨项目复用：`template import`（需要 `confirmed: true`）。'
+    });
+  }
+  const name = requiredString(args, 'name', TOOL, 60);
+  if (op === 'get') {
+    const template = await readAestheticTemplate(dir, name);
+    if (template === null) {
+      return fail(`模板 \`${name}\` 不存在或格式不正确。`, { next: '用 `template list` 查看已有模板。' });
+    }
+    return ok(`模板 \`${template.name}\`（${template.entries.length} 条 active 偏好）。`, {
+      detail: table(
+        ['ID', '领域', '决策', '取值', '置信度', '来源'],
+        template.entries.map((entry) => [
+          `\`${entry.id}\``,
+          AREA_LABELS[entry.area],
+          entry.decision,
+          valueLabel(entry.value),
+          entry.confidence.toFixed(2),
+          entry.source
+        ])
+      ),
+      next: '确认适合当前项目后，用 `template import`（`confirmed: true`）导入。'
+    });
+  }
+  if (op === 'export') {
+    const profile = await readProfile(paths);
+    const result = await exportAestheticTemplate(dir, profile, name, now);
+    return ok(`已导出审美模板 \`${name}\`（${result.template.entries.length} 条）。`, {
+      detail: [
+        `- 文件：\`${result.file}\``,
+        `- 条目：${result.template.entries.length}（只导出 active）`,
+        `- 目录：\`${dir}\``
+      ].join('\n'),
+      files: [result.file],
+      next: '其他项目用 `template import`（`confirmed: true`）复用；导出不会修改当前档案。'
+    });
+  }
+  // op === 'import'
+  if (!optionalBoolean(args, 'confirmed', false)) {
+    return fail('`template import` 会改写当前项目的审美档案，需要 `confirmed: true`。', {
+      next: '先 `template get` 给用户看内容，确认后再导入。'
+    });
+  }
+  const strategy = optionalEnum(args, 'strategy', ['merge', 'replace'] as const, TOOL) ?? 'merge';
+  const profile = await readProfile(paths);
+  const result = await importAestheticTemplate(paths, dir, profile, name, strategy, now);
+  return ok(`已从模板 \`${name}\` 导入 ${result.imported.length} 条（${strategy}）。`, {
+    detail: [
+      `- 导入：${result.imported.map((entry) => `\`${entry.id}\``).join('、') || '（无）'}`,
+      `- 被替代：${result.superseded.map((id) => `\`${id}\``).join('、') || '（无）'}`,
+      `- 跳过（同领域同取值）：${result.skipped.map((id) => `\`${id}\``).join('、') || '（无）'}`,
+      '- 语义：merge 下同领域不同取值会 supersede 本地 active；replace 会用模板整体替换。'
+    ].join('\n'),
+    files: [result.file],
+    next: '跑一轮审计确认新偏好适合当前项目；不合适就 `profile remove` 回退。'
+  });
+}
+
 export function createAestheticTool(options: Options, ctx?: PluginContext): ToolDefinition<unknown, ToolResult> {
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Aesthetic learning v1 (0.6.1): `profile` (list/get/write/remove), `baseline` (save/list visual baselines), `compare` (numeric layout diff against the baseline) and `learn` (propose preferences from confirmed user wording or project resources). ' +
-      '`learn` never writes unless `apply: true` and `confirmed: true`; a conflict needs `choice`. `baseline save` is refused without a passing audit + user confirmation. ' +
+      'Aesthetic learning v1 (0.6.1) + cross-project templates (0.6.4): `profile` (list/get/write/remove), `baseline` (save/list visual baselines), `compare` (numeric layout diff against the baseline), `learn` (propose preferences from confirmed user wording or project resources) and `template` (list/get/export/import a global aesthetic profile). ' +
+      '`learn` never writes unless `apply: true` and `confirmed: true`; a conflict needs `choice`. `baseline save` is refused without a passing audit + user confirmation; `template import` needs `confirmed: true`. ' +
       '审美判断有档案、有基线、可解释可撤销；不用模型猜没说过的话。',
     parameters: {
       action: {
         type: 'string',
         required: true,
         enum: [...ACTIONS],
-        description: 'profile / baseline / compare / learn。'
+        description: 'profile / baseline / compare / learn / template。'
       },
       op: {
         type: 'string',
-        enum: [...PROFILE_OPS, ...BASELINE_OPS],
-        description: '子操作：profile 用 list/get/write/remove；baseline 用 save/list。'
+        enum: [...PROFILE_OPS, ...BASELINE_OPS, ...TEMPLATE_OPS],
+        description: '子操作：profile 用 list/get/write/remove；baseline 用 save/list；template 用 list/get/export/import。'
+      },
+      name: {
+        type: 'string',
+        description: 'template 的模板名（字母/数字/`-`/`_`）；list 不需要。'
+      },
+      strategy: {
+        type: 'string',
+        enum: ['merge', 'replace'],
+        description: 'template import 的合并语义：merge（默认，同领域冲突 supersede 本地）/ replace（整体替换）。'
       },
       id: { type: 'string', description: '档案 ID（如 `AES-RADIUS-01`），`profile get/remove` 与可选 `write` 用。' },
       area: {
@@ -671,7 +761,7 @@ export function createAestheticTool(options: Options, ctx?: PluginContext): Tool
       apply: { type: 'boolean', description: 'true = 写入档案（默认只提议）。' },
       confirmed: {
         type: 'boolean',
-        description: '用户已确认。`learn` 的 apply、以及 `profile write` 改已有领域时必填。'
+        description: '用户已确认。`learn` 的 apply、`profile write` 改已有领域、`template import` 必填。'
       },
       choice: { type: 'string', description: '单个冲突的裁决：保留的值（如 `20vp`）或档案 ID；同时匹配多个冲突会被拒绝。' },
       choices: {
@@ -697,6 +787,15 @@ export function createAestheticTool(options: Options, ctx?: PluginContext): Tool
       if (action === 'profile') return runProfile(deps);
       if (action === 'baseline') return runBaseline(deps);
       if (action === 'compare') return runCompare(deps);
+      if (action === 'template') {
+        try {
+          return await runTemplate(deps);
+        } catch (error) {
+          return fail(`模板操作失败：${(error as Error).message}`, {
+            next: '检查模板名与模板文件；export 只导出 active 偏好，import 需要 `confirmed: true`。'
+          });
+        }
+      }
       return runLearn(deps);
     },
     presentCall(args) {

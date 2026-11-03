@@ -220,6 +220,51 @@ export declare function writeProfile(paths: SharedPaths, profile: AestheticProfi
 export declare function appendAestheticHistory(paths: SharedPaths, events: readonly AestheticHistoryEvent[]): Promise<string | null>;
 /** Find an entry by id (active or superseded). */
 export declare function findProfileEntry(profile: AestheticProfile, id: string): AestheticEntry | undefined;
+/** Default global directory for cross-project aesthetic templates (0.6.4). */
+export declare function defaultAestheticTemplatesDir(): string;
+/** One exported cross-project template. */
+export interface AestheticTemplate {
+    readonly schemaVersion: 1;
+    readonly name: string;
+    readonly createdAt: string;
+    readonly entries: readonly AestheticEntry[];
+}
+/** One row of `template list`. */
+export interface AestheticTemplateSummary {
+    readonly name: string;
+    readonly createdAt: string;
+    readonly entries: number;
+    readonly path: string;
+}
+/** Result of `template export`. */
+export interface TemplateExportResult {
+    readonly file: string;
+    readonly template: AestheticTemplate;
+}
+/** Result of `template import`. */
+export interface TemplateImportResult {
+    readonly profile: AestheticProfile;
+    readonly imported: readonly AestheticEntry[];
+    readonly superseded: readonly string[];
+    readonly skipped: readonly string[];
+    readonly file: string;
+}
+/** Validate a template name (safe as a filename). */
+export declare function isTemplateName(value: string): boolean;
+/** List templates in the global directory (invalid files are skipped). */
+export declare function listAestheticTemplates(dir: string): Promise<AestheticTemplateSummary[]>;
+/** Export active preferences under a reusable name. */
+export declare function exportAestheticTemplate(dir: string, profile: AestheticProfile, name: string, now: string): Promise<TemplateExportResult>;
+/** Read a template by name (throws when missing/invalid). */
+export declare function readAestheticTemplate(dir: string, name: string): Promise<AestheticTemplate | null>;
+/**
+ * Import a template into the local profile.
+ *
+ * `merge` (default): same area+value is skipped; same area with a different
+ * value supersedes the local active entry; id collisions get a fresh id.
+ * `replace`: the template becomes the whole profile.
+ */
+export declare function importAestheticTemplate(paths: SharedPaths, dir: string, profile: AestheticProfile, name: string, strategy: 'merge' | 'replace', now: string): Promise<TemplateImportResult>;
 /** Active entry ids, used by the audit gate to validate `profileRef`. */
 export declare function activeProfileIds(profile: AestheticProfile): Set<string>;
 /** Render proposals as a markdown table. */

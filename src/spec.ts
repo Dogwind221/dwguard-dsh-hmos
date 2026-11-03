@@ -40,6 +40,8 @@ export interface CriterionInput {
   readonly profileRef?: string;
   /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */
   readonly designRefs?: readonly string[];
+  /** Anti-pattern cards this criterion must not violate (`AP-0001`, 0.6.4). */
+  readonly antiPatternRefs?: readonly string[];
 }
 
 /** The model-supplied shape of a task pack. */
@@ -337,7 +339,29 @@ function criterionIssue(input: CriterionInput, index: number): Issue[] {
     }
   }
 
+  for (const raw of input.antiPatternRefs ?? []) {
+    const ref = inline(raw);
+    if (!isAntiPatternRefId(ref)) {
+      issues.push({
+        code: 'E_CRITERION_ANTIPATTERN_FORMAT',
+        message: `判据 \`${label}\` 的 antiPatternRef \`${ref}\` 格式不对；应为 \`AP-<四位数字>\`（如 \`AP-0001\`）。`,
+        criterionId: label
+      });
+    } else if (input.dimension !== 'aesthetic') {
+      issues.push({
+        code: 'W_CRITERION_ANTIPATTERN_DIMENSION',
+        message: `判据 \`${label}\` 位于「${DIMENSION_LABELS[input.dimension]}」，却引用了反模式 \`${ref}\`；只有审美判据应带 antiPatternRefs。`,
+        criterionId: label
+      });
+    }
+  }
+
   return issues;
+}
+
+/** Whether a string is a well-formed anti-pattern id (`AP-0001`). */
+export function isAntiPatternRefId(value: string): boolean {
+  return /^AP-\d{4}$/.test(value);
 }
 
 /** Whether a string is a well-formed design-library id (`DSG-0007`). */
@@ -516,6 +540,11 @@ export function buildTaskPack(
     ...(criterion.designRefs === undefined || criterion.designRefs.length === 0
       ? {}
       : { designRefs: dedupe(criterion.designRefs.map((ref) => inline(ref)).filter((ref) => ref.length > 0)) }),
+    ...(criterion.antiPatternRefs === undefined || criterion.antiPatternRefs.length === 0
+      ? {}
+      : {
+          antiPatternRefs: dedupe(criterion.antiPatternRefs.map((ref) => inline(ref)).filter((ref) => ref.length > 0))
+        }),
     ...(criterion.assertion === undefined ? {} : { assertion: criterion.assertion })
   }));
   const constraints = dedupe((input.constraints ?? []).map((item) => inline(item)).filter((item) => item.length > 0));
@@ -588,6 +617,14 @@ export function parseTaskPack(raw: string | null): TaskPack | null {
               .filter((item2) => item2.length > 0)
           }
         : {}),
+      ...(Array.isArray(entry['antiPatternRefs'])
+        ? {
+            antiPatternRefs: (entry['antiPatternRefs'] as unknown[])
+              .filter((item2): item2 is string => typeof item2 === 'string')
+              .map((item2) => item2.trim())
+              .filter((item2) => item2.length > 0)
+          }
+        : {}),
       ...(assertion === undefined ? {} : { assertion })
     });
   }
@@ -641,6 +678,9 @@ export function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths): string {
         criterion.designRefs === undefined || criterion.designRefs.length === 0
           ? '—'
           : criterion.designRefs.map((ref) => `\`${ref}\``).join('<br>'),
+        criterion.antiPatternRefs === undefined || criterion.antiPatternRefs.length === 0
+          ? '—'
+          : criterion.antiPatternRefs.map((ref) => `\`${ref}\``).join('<br>'),
         criterion.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
         criterion.statement,
         criterion.verify
@@ -674,7 +714,7 @@ export function renderSpecMarkdown(pack: TaskPack, paths: SharedPaths): string {
     '',
     `共 ${pack.criteria.length} 条（must ${must} / should ${should}）。验收由 DSH 独立取证，不采信执行者自述。`,
     '',
-    table(['ID', '维度', '权重', '规则', '审美档案', '设计参考', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
+    table(['ID', '维度', '权重', '规则', '审美档案', '设计参考', '反模式', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
     '',
     '### 维度覆盖',
     '',

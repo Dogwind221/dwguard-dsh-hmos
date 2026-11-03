@@ -65,7 +65,7 @@ flowchart TD
 
 要求：DSH `0.2.1-rc.x`（`engines.dsh: >=0.2.1-rc.0 <0.3.0`）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-已发布到 npm：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.6.3）。
+已发布到 npm：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.6.4）。
 
 先确认你跑的是哪种入口——**`desktop` profile 由桌面应用独占管理，命令行改不了它**（`dsh plugin --profile desktop …` 会被明确拒绝），所以两种入口的安装方式不同：
 
@@ -77,7 +77,7 @@ flowchart TD
 ### 桌面版：应用内安装
 
 1. 左侧栏打开 **插件** → 右上 **添加插件**；
-2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.6.3`）→ 安装、选配置层、确认；
+2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.6.4`）→ 安装、选配置层、确认；
 3. 装完按提示重启应用（托盘里也要退出）。
 
 同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
@@ -89,7 +89,7 @@ flowchart TD
 dsh plugin --profile web add dwguard-dsh-hmos
 
 # 固定版本
-dsh plugin --profile web add dwguard-dsh-hmos@0.6.3
+dsh plugin --profile web add dwguard-dsh-hmos@0.6.4
 
 # 机器上没有 dsh 命令时，用 npm 上的 CLI 包
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
@@ -235,8 +235,8 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_rules` | 全程 | 查规则目录（`list` / `get`，支持别名）与本地官方语料（`search`，返回 file:line + 出处 URL） | 语料目录由 `docsDir` / `DWG_DOCS_DIR` 指定；`get` 未知 ID 直接报错 |
 | `dwguard_audit_dimension` | 审计取证 | 单个维度子代理返回后立刻记录（`passed` / `failed` / `note`） | 写 `artifacts/audit-progress.json`；面板据此让四张卡**逐张落地**，而不是同时亮 |
 | `dwguard_audit` | 外部审计 | 汇总逐条检查与发现，自动出返工单或验收报告 | must 全覆盖、四维全评估、无未关闭 blocker/major、失败项不许记成 unverified；带 `assertion` 的判据必须给 `actual` 实测值，闸门重算断言并拒绝矛盾结论；matrix 模式（主机内存 ≥32GB）下 checks 必须带 `device`+`family`，审美/无障碍缺屏族会被拒绝；`profileRef` 引用不存在/已 superseded 的审美档案 → error；证据文件缺失或**超过 20MB/份、100MB/包**整次拒绝；完成后清空进度文件；每次审计自动记账 |
-| `dwguard_aesthetic` | 审美学习（0.6.1） | `profile`（list/get/write/remove 审美档案）、`baseline`（save/list 视觉基线）、`compare`（布局树数值 diff）、`learn`（从用户确认/驳回/审计发现/项目资源提议偏好） | 写档案必须带 `source` + `confidence`，改已有领域的值需 `confirmed: true`；`learn` 默认只提议不落盘，`apply` 必须 `confirmed: true`，多冲突用 `choices` 按领域裁决（单 `choice` 同时匹配多个冲突会被拒绝）；`baseline save` 必须有通过审计 + 用户确认；`compare` 间距/圆角 ±2vp、字号/颜色 0 容差（单位不一致直接判失败） |
-| `dwguard_design` | 设计参考库（0.6.2–0.6.3） | `library init/ingest/list`、`search`（可按 appType/platform/style/kind 过滤）、`brief`（写 `tasks/design-brief.md` + `inspiration`；强制注入品牌卡；自动带入返工建议）、`feedback`、`capture`、`stats` | 默认 `lexical`、零网络零依赖；参考是证据不是判据；`hybrid` 只预留接口、显式回退；`license: unknown` 默认不进结果；`capture` 必须 `confirmed: true`；检索/审计轮次受预算硬停 |
+| `dwguard_aesthetic` | 审美学习（0.6.1–0.6.4） | `profile`、`baseline`、`compare`、`learn`、`template`（list/get/export/import 跨项目审美模板） | 写档案必须带 `source` + `confidence`，改已有领域的值需 `confirmed: true`；`learn` 默认只提议不落盘，`apply` 必须 `confirmed: true`；`baseline save` 必须有通过审计 + 用户确认；`template import` 必须 `confirmed: true`（merge 会 supersede 本地冲突） |
+| `dwguard_design` | 设计参考库（0.6.2–0.6.4） | `library init/ingest/list`、`search`（关键词 + `appType/platform/style/kind` 过滤 + 可选 `image` 以图搜图）、`brief`（写 `tasks/design-brief.md`；品牌卡强制注入；返工建议带入）、`feedback`、`capture`、`stats` | 默认 `lexical` 零网络；`hybrid` 需配置 embedding 端点，失败显式回退；`query.mjs` 始终 lexical；`license: unknown` 默认不进结果；`capture` 必须 `confirmed: true`；检索/审计轮次受预算硬停 |
 | `dwguard_calibration` | 收尾 | 闸门准确率账本：`report` 算四维漏检率，`miss` 记录"审计通过但用户后来发现问题" | `miss` 必须针对已通过的审计；账本 `knowledge/calibration.jsonl` 只追加 |
 | `dwguard_confirm` | 收尾 | 记录用户对验收报告的决定：`accept` 结束本轮，`new_round` 迭代号 +1 | 必须有通过的审计与 acceptance-report；写 `artifacts/confirmation-<n>.json` 并更新 state |
 | `dwguard_knowledge` | 沉淀 | 追加到 `knowledge/<topic>.md` | 索引按 kind+结论去重 |
@@ -255,22 +255,24 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 3. `dwguard_spec` 的审美判据可带 `profileRef: "AES-RADIUS-01"`；`dwguard_audit` 校验引用存在且 active，并在审计/验收报告里渲染「审美档案」列；
 4. 通过审计 + 用户确认后可用 `baseline save` 存视觉基线；下一轮用 `compare` 做数值回归（间距/圆角 ±2vp，字号/颜色 0 容差），差异自动进验收报告的「审美基线差异」小节。
 
-### 设计参考库（0.6.2–0.6.3）
+### 设计参考库（0.6.2–0.6.4）
 
 `dwguard_design` 把「参考什么」变成可检索、可追溯、两个 Agent 都能读的资产：
 
 1. **建库**：`library init` 写 `.shared/design-library/`（manifest / chunks / index）并生成零依赖只读 `query.mjs`；
 2. **摄取**：`library ingest` 从审美规则目录播种卡片，也可以吃 `inbox/<name>.meta.json`（title / tags / tokens / stylePriority / antiPatterns / checklist / dimensions / brand / source / license；图片会按 sha256 复制进 `refs/`）；
-3. **检索**：确定性 BM25（中文 bigram + 同义词表）+ token/tag 精确加权 + 审美档案领域加成；可用 `appType` / `platform` / `style` / `kind` 过滤（默认只返回 pattern）；默认 `designRanker: lexical`，`hybrid` 只预留接口、会显式回退并注明；
+3. **检索**：确定性 BM25（中文 bigram + 同义词表）+ token/tag 精确加权 + 审美档案领域加成；可用 `appType` / `platform` / `style` / `kind` 过滤（默认只返回 pattern）；`hybrid` 可接 OpenAI-compatible embedding 端点做语义重排（缓存向量、失败显式回退）；`search` 还支持 `image` 以图搜图（pHash + 颜色直方图）；
 4. **简报与问答**：`brief` 按任务包生成 `tasks/design-brief.md` 并写 `inspiration` 回执；**品牌卡（`source.kind: brand`）强制注入**「品牌与业务约束」小节；DevEco 可写 `design-request` 请求补充，DSH 用 `brief request: "q-1"` 应答；`dwguard_dispatch` 会自动生成并引用简报；
-5. **闸门与报告**：审美判据/检查可带 `designRefs`（`DSG-*`）；spec 写入时校验卡片存在且 active，审计闸门拒绝缺失/blocked 引用，报告新增「参考对照」列；
+5. **闸门与报告**：审美判据/检查可带 `designRefs`（`DSG-*`）与 `antiPatternRefs`（`AP-*`）；spec 写入时校验存在且 active，审计闸门拒绝缺失/blocked 引用，报告新增「参考对照」与「反模式对照」列；
 6. **返工检索桥（0.6.3 F）**：审计失败时按未通过的审美判据写 `rework-suggestions.json`，返工单给出建议检索词与参考；下一轮 `brief` 自动带入「上一轮返工定向参考」，审计通过后清空；
 7. **预算（0.6.3 C）**：`maxAuditRounds` / `maxDesignSearches` 本轮上限，`dwguard_status` 显示「本轮预算」，用尽即硬停；
 8. **反馈与捕获**：`feedback`（useful / off / block / unblock）调整权重或隐藏卡片；通过审计 + 用户确认后 `capture` 把视觉基线存成 `project` 卡，下一轮可直接命中；
-9. **两个读者**：DSH 用 `dwguard_design`；DevEco 在 IDE 终端直接跑
-   `node .shared/design-library/query.mjs "深色 卡片 间距" --top 5 --json`（支持 `--app-type` / `--platform` / `--style` / `--kind`），与工具同一索引、同一排序（parity 测试守着）。
+9. **以图搜图（0.6.4）**：`search image: "artifacts/query.png"` 在 `.shared/` 内取 PNG，零依赖解码后算 64-bit DCT pHash + 4×4×4 颜色直方图，按 `0.6×pHash + 0.4×直方图` 排序；卡片图片特征缓存在 `image-features.json`，坏图/越界路径直接拒绝；
+10. **跨项目模板（0.6.4）**：`dwguard_aesthetic template export/import` 把 active 审美档案存到全局目录（默认 `~/.dsh/dwguard/aesthetic-templates`）；import 必须 `confirmed: true`，merge 会 supersede 本地冲突；
+11. **两个读者**：DSH 用 `dwguard_design`；DevEco 在 IDE 终端直接跑
+   `node .shared/design-library/query.mjs "深色 卡片 间距" --top 5 --json`（支持 `--app-type` / `--platform` / `--style` / `--kind`），词法排序与工具 parity；hybrid 与以图搜图只在 DSH 侧（CLI 无端点/凭据），以简报/工具结果为准。
 
-设计取舍与分阶段路线见 [docs/0.6.2-plan.md](docs/0.6.2-plan.md) 与 [docs/0.6.3-plan.md](docs/0.6.3-plan.md)。
+设计取舍与分阶段路线见 [docs/0.6.2-plan.md](docs/0.6.2-plan.md)、[docs/0.6.3-plan.md](docs/0.6.3-plan.md) 与 [docs/0.6.4-plan.md](docs/0.6.4-plan.md)。
 
 ### 三个 Skill
 
@@ -310,13 +312,15 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
 │  ├─ visual-baseline/<specVersion>/  # 视觉基线：bounds JSON + 截图（每份带 sha256）
 │  ├─ aesthetic/compare-latest.json   # 最近一次审美基线 diff（验收报告引用）
 │  └─ acceptance-report.md   # 验收报告（通过时）
-├─ design-library/            # 0.6.2：设计参考库
-│  ├─ manifest.json           # 卡片（DSG-*）+ chunks/index（确定性、可重建）
+├─ design-library/            # 0.6.2–0.6.4：设计参考库
+│  ├─ manifest.json           # 卡片（DSG-* / AP-*）+ chunks/index（确定性、可重建）
 │  ├─ chunks.jsonl            # 卡片分段文本 + sha256
 │  ├─ index.json              # BM25 postings/df（可随时由 chunks 重建）
-│  ├─ query.mjs               # 零依赖只读 CLI（DevEco 在 IDE 终端用）
+│  ├─ query.mjs               # 零依赖只读 CLI（DevEco 在 IDE 终端用；仅词法）
 │  ├─ feedback.jsonl          # useful/off/block/unblock 账本
 │  ├─ rework-suggestions.json # 上次失败审美审计的建议检索队列（下一轮 brief 带入）
+│  ├─ embeddings.json         # hybrid 语义重排的向量缓存（按 model+sha256）
+│  ├─ image-features.json     # 以图搜图的 pHash/直方图缓存（按 sha256）
 │  ├─ refs/                   # 参考图（sha256 命名）
 │  └─ inbox/                  # 用户投递：<name>.png + <name>.meta.json
 └─ knowledge/
@@ -393,11 +397,17 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
     deviceLockTimeoutMs: 600000           # 设备锁超过该时长视为过期并回收
     designTopK: 5                         # 设计库检索默认条数
     designMaxChunks: 2000                 # 块数上限（超出警告，不阻断）
-    designRanker: lexical                 # lexical（默认，确定性）| hybrid（预留，显式回退）
+    designRanker: lexical                 # lexical（默认）| hybrid（需 embedding 端点，失败显式回退）
+    designEmbeddingEndpoint: ""           # OpenAI-compatible /embeddings；空 = 不联网
+    designEmbeddingModel: text-embedding-3-small
+    designEmbeddingApiKeyEnv: DWG_DESIGN_EMBEDDING_KEY  # 从该环境变量读 key
+    designEmbeddingTimeoutMs: 8000
+    designEmbeddingWeight: 0.35           # 语义分数权重（0–1）
     designBriefCards: 5                   # 每份 design-brief.md 的卡片数
     designBrandCards: 3                   # 强制注入的品牌卡上限（0 = 关闭）
     maxAuditRounds: 5                     # 本轮审计轮次硬上限
     maxDesignSearches: 12                 # 本轮设计检索次数硬上限
+    aestheticTemplatesDir: ""             # 跨项目模板目录；空 = ~/.dsh/dwguard/aesthetic-templates
     designLicenseRequired: true           # true = license: unknown 的卡片不进检索结果
 ```
 
@@ -454,12 +464,12 @@ npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.6.3 && git push origin v0.6.3`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.6.4 && git push origin v0.6.4`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（116 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、审美学习（AEST-A~K：档案写读 / learn 不落盘 / 置信度与驳回降权 / 多冲突 choices / 基线前置 / compare 阈值与单位 / profileRef 闸门与 superseded / 冷启动多根 / 多页基线 / 坏档案拒写 / 报告渲染）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs 双向闸门与「参考对照」；P3 feedback/capture；0.6.3 A 结构化字段与过滤/CLI parity、B 品牌强制注入、C 检索与审计预算、F 返工建议→下一轮 brief）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
+2. `npm test` 全绿（124 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

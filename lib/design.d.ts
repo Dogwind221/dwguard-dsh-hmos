@@ -13,7 +13,7 @@ import type { Options } from './config.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
-export declare const DESIGN_ENGINE_VERSION = "0.6.3";
+export declare const DESIGN_ENGINE_VERSION = "0.6.4";
 /** The card sections that become retrievable chunks. */
 export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand"];
 /** One retrievable section of a card. */
@@ -143,6 +143,10 @@ export interface DesignSearchHit {
     readonly tokens: DesignTokens;
     readonly source: DesignSource;
     readonly images: DesignCard['images'];
+    /** Cosine-based semantic score when hybrid rerank ran (0.6.4). */
+    readonly semanticScore?: number;
+    /** Weight used for the semantic blend (0.6.4). */
+    readonly rerankWeight?: number;
 }
 /** Retrieval filters applied before ranking (0.6.3 A/B). */
 export interface DesignSearchFilters {
@@ -252,6 +256,90 @@ export declare function renderDesignSearchMarkdown(result: DesignSearchResult): 
 export declare function renderDesignCardsMarkdown(manifest: DesignManifest): string;
 /** One-line token summary used by spec/audit reports (0.6.2 P2). */
 export declare function designCardTokenSummary(card: DesignCard): string;
+/** Embedding endpoint settings for hybrid rerank (0.6.4). */
+export interface DesignEmbeddingConfig {
+    readonly endpoint: string;
+    readonly model: string;
+    readonly apiKey?: string;
+    readonly timeoutMs: number;
+    readonly weight: number;
+}
+/** A batch embedding function (tests inject a stub). */
+export type DesignEmbedder = (texts: readonly string[]) => Promise<number[][]>;
+/** Create an OpenAI-compatible `/embeddings` client. */
+export declare function createHttpEmbedder(config: DesignEmbeddingConfig): DesignEmbedder;
+/** Cosine similarity; zero vectors score 0. */
+export declare function cosineSimilarity(left: readonly number[], right: readonly number[]): number;
+/** `embeddings.json` cache so repeated briefs do not re-embed the same text. */
+export interface DesignEmbeddingCache {
+    schemaVersion: 1;
+    model: string;
+    vectors: Record<string, readonly number[]>;
+}
+/** Cache key for one text (model-scoped). */
+export declare function embeddingCacheKey(model: string, text: string): string;
+/** Wrap an embedder with the on-disk cache (mutates `cache`). */
+export declare function createCachedEmbedder(embed: DesignEmbedder, cache: DesignEmbeddingCache, model: string): DesignEmbedder;
+/** Load the embedding cache for a model (empty when missing/mismatched). */
+export declare function loadDesignEmbeddingCache(paths: SharedPaths, model: string): Promise<DesignEmbeddingCache>;
+/** Persist the embedding cache. */
+export declare function saveDesignEmbeddingCache(paths: SharedPaths, cache: DesignEmbeddingCache): Promise<void>;
+/**
+ * Rerank lexical candidates with cosine similarity (0.6.4 hybrid).
+ *
+ * Final score blends normalized lexical score with `(cosine + 1) / 2`; the
+ * original `breakdown` is kept so the report still shows why a card was retrieved.
+ */
+export declare function rerankDesignHits(candidates: readonly DesignSearchHit[], query: string, embed: DesignEmbedder, options: {
+    readonly weight: number;
+    readonly model: string;
+}): Promise<{
+    readonly results: DesignSearchHit[];
+    readonly notes: string[];
+}>;
+/**
+ * Lexical search, optionally followed by semantic rerank (0.6.4).
+ *
+ * The hybrid path is deliberately confined to the DSH tool: `query.mjs` stays
+ * lexical (it has no endpoint/credentials), and the brief says so.
+ */
+export declare function searchDesignWithRanker(paths: SharedPaths, options: Options, manifest: DesignManifest, index: DesignIndex, chunks: readonly DesignChunk[], query: string, topK: number, extra: {
+    readonly licenseRequired: boolean;
+    readonly profileAreas?: ReadonlySet<AestheticArea>;
+    readonly filters?: DesignSearchFilters;
+}): Promise<DesignSearchResult>;
+/** One card matching a query image (0.6.4). */
+export interface DesignImageHit {
+    readonly cardId: string;
+    readonly title: string;
+    readonly score: number;
+    readonly hashDistance: number;
+    readonly hashSimilarity: number;
+    readonly histogramSimilarity: number;
+    readonly license: string;
+    readonly imagePath: string;
+}
+/** Result of `search` with an `image` argument. */
+export interface DesignImageSearchResult {
+    readonly query: {
+        readonly width: number;
+        readonly height: number;
+        readonly phash: string;
+    };
+    readonly results: readonly DesignImageHit[];
+    readonly notes: readonly string[];
+}
+/**
+ * Rank cards by perceptual similarity to a query PNG (0.6.4).
+ *
+ * Card images are keyed by their sha256; features are cached in
+ * `image-features.json` so repeated searches do not re-decode every image.
+ */
+export declare function searchDesignByImage(paths: SharedPaths, manifest: DesignManifest, queryPath: string, topK: number, options: {
+    readonly licenseRequired: boolean;
+}): Promise<DesignImageSearchResult>;
+/** Render the image-search result table. */
+export declare function renderDesignImageSearchMarkdown(result: DesignImageSearchResult): string;
 /** One targeted suggestion for a failed aesthetic criterion (0.6.3 F). */
 export interface DesignReworkSuggestion {
     readonly criterionId: string;

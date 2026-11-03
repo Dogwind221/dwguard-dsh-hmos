@@ -48,6 +48,10 @@ export interface SharedPaths {
     readonly designBriefMd: string;
     /** Suggestions from the last failed aesthetic audit (0.6.3 F). */
     readonly designReworkQueue: string;
+    /** Embedding cache for hybrid rerank (0.6.4). */
+    readonly designEmbeddings: string;
+    /** Image feature cache for search-by-image (0.6.4). */
+    readonly designImageFeatures: string;
     readonly designRefsDir: string;
     readonly designInboxDir: string;
 }

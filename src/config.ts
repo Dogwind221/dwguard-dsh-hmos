@@ -72,6 +72,18 @@ export const Config = z.object({
   maxAuditRounds: z.number().default(5),
   /** Hard stop: design searches allowed in one round (0.6.3 C). */
   maxDesignSearches: z.number().default(12),
+  /** Embedding endpoint for hybrid rerank (0.6.4); empty = lexical only. */
+  designEmbeddingEndpoint: z.string().default(''),
+  /** Embedding model name sent to the endpoint. */
+  designEmbeddingModel: z.string().default('text-embedding-3-small'),
+  /** Env var holding the endpoint API key. */
+  designEmbeddingApiKeyEnv: z.string().default('DWG_DESIGN_EMBEDDING_KEY'),
+  /** Embedding request timeout (ms). */
+  designEmbeddingTimeoutMs: z.number().default(8000),
+  /** Semantic weight in the hybrid blend (0–1). */
+  designEmbeddingWeight: z.number().default(0.35),
+  /** Global directory for cross-project aesthetic templates (0.6.4); empty = ~/.dsh/dwguard/aesthetic-templates. */
+  aestheticTemplatesDir: z.string().default(''),
   /** Exclude cards whose license is unknown from search results. */
   designLicenseRequired: z.boolean().default(true)
 });
@@ -109,6 +121,14 @@ export interface Options {
   readonly maxAuditRounds: number;
   /** Design searches allowed per round (hard stop). */
   readonly maxDesignSearches: number;
+  /** OpenAI-compatible embedding endpoint (empty = lexical only). */
+  readonly designEmbeddingEndpoint: string;
+  readonly designEmbeddingModel: string;
+  readonly designEmbeddingApiKeyEnv: string;
+  readonly designEmbeddingTimeoutMs: number;
+  readonly designEmbeddingWeight: number;
+  /** Global directory for cross-project aesthetic templates (empty = default). */
+  readonly aestheticTemplatesDir: string;
   readonly designLicenseRequired: boolean;
 }
 
@@ -133,6 +153,12 @@ const DEFAULTS: Options = {
   designBrandCards: 3,
   maxAuditRounds: 5,
   maxDesignSearches: 12,
+  designEmbeddingEndpoint: '',
+  designEmbeddingModel: 'text-embedding-3-small',
+  designEmbeddingApiKeyEnv: 'DWG_DESIGN_EMBEDDING_KEY',
+  designEmbeddingTimeoutMs: 8000,
+  designEmbeddingWeight: 0.35,
+  aestheticTemplatesDir: '',
   designLicenseRequired: true
 };
 
@@ -147,6 +173,11 @@ function positiveInt(value: unknown, fallback: number, min: number): number {
 
 function str(value: unknown, fallback: string): string {
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
+}
+
+function fraction(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(1, Math.max(0, value));
 }
 
 /**
@@ -187,6 +218,15 @@ export function resolveOptions(raw: unknown): Options {
     designBrandCards: positiveInt(input['designBrandCards'], DEFAULTS.designBrandCards, 0),
     maxAuditRounds: positiveInt(input['maxAuditRounds'], DEFAULTS.maxAuditRounds, 1),
     maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
+    designEmbeddingEndpoint: typeof input['designEmbeddingEndpoint'] === 'string' ? input['designEmbeddingEndpoint'].trim() : DEFAULTS.designEmbeddingEndpoint,
+    designEmbeddingModel: str(input['designEmbeddingModel'], DEFAULTS.designEmbeddingModel),
+    designEmbeddingApiKeyEnv: str(input['designEmbeddingApiKeyEnv'], DEFAULTS.designEmbeddingApiKeyEnv),
+    designEmbeddingTimeoutMs: positiveInt(input['designEmbeddingTimeoutMs'], DEFAULTS.designEmbeddingTimeoutMs, 1000),
+    designEmbeddingWeight: fraction(input['designEmbeddingWeight'], DEFAULTS.designEmbeddingWeight),
+    aestheticTemplatesDir:
+      typeof input['aestheticTemplatesDir'] === 'string'
+        ? input['aestheticTemplatesDir'].trim()
+        : DEFAULTS.aestheticTemplatesDir,
     designLicenseRequired: bool(input['designLicenseRequired'], DEFAULTS.designLicenseRequired)
   };
 }

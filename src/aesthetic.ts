@@ -8,11 +8,12 @@
  * @module dwguard-dsh-hmos/aesthetic
  */
 
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
-import { appendText, listDir, readTextOrNull, writeTextAtomic } from './util/fs.js';
+import { appendText, ensureDir, listDir, readTextOrNull, writeTextAtomic } from './util/fs.js';
 import { inline, table, truncate } from './util/md.js';
 
 /** Preference areas an entry can belong to. */
@@ -966,6 +967,219 @@ export async function appendAestheticHistory(
 /** Find an entry by id (active or superseded). */
 export function findProfileEntry(profile: AestheticProfile, id: string): AestheticEntry | undefined {
   return profile.entries.find((entry) => entry.id === id);
+}
+
+/** Default global directory for cross-project aesthetic templates (0.6.4). */
+export function defaultAestheticTemplatesDir(): string {
+  return join(homedir(), '.dsh', 'dwguard', 'aesthetic-templates');
+}
+
+/** One exported cross-project template. */
+export interface AestheticTemplate {
+  readonly schemaVersion: 1;
+  readonly name: string;
+  readonly createdAt: string;
+  readonly entries: readonly AestheticEntry[];
+}
+
+/** One row of `template list`. */
+export interface AestheticTemplateSummary {
+  readonly name: string;
+  readonly createdAt: string;
+  readonly entries: number;
+  readonly path: string;
+}
+
+/** Result of `template export`. */
+export interface TemplateExportResult {
+  readonly file: string;
+  readonly template: AestheticTemplate;
+}
+
+/** Result of `template import`. */
+export interface TemplateImportResult {
+  readonly profile: AestheticProfile;
+  readonly imported: readonly AestheticEntry[];
+  readonly superseded: readonly string[];
+  readonly skipped: readonly string[];
+  readonly file: string;
+}
+
+const TEMPLATE_NAME = /^[a-z0-9][a-z0-9_-]{1,40}$/i;
+
+/** Validate a template name (safe as a filename). */
+export function isTemplateName(value: string): boolean {
+  return TEMPLATE_NAME.test(value);
+}
+
+function sameAestheticValue(left: AestheticValue, right: AestheticValue): boolean {
+  return left.number === right.number && left.unit === right.unit && left.color === right.color;
+}
+
+function parseTemplateEntry(raw: unknown): AestheticEntry | undefined {
+  if (typeof raw !== 'object' || raw === null) return undefined;
+  const record = raw as Record<string, unknown>;
+  const id = record['id'];
+  const area = record['area'];
+  const decision = record['decision'];
+  const value = record['value'];
+  const source = record['source'];
+  const confidence = record['confidence'];
+  const status = record['status'];
+  const updatedAt = record['updatedAt'];
+  if (typeof id !== 'string' || !isAestheticId(id)) return undefined;
+  if (!isAestheticArea(area)) return undefined;
+  if (typeof decision !== 'string' || inline(decision).length === 0) return undefined;
+  if (typeof value !== 'object' || value === null) return undefined;
+  const valueRecord = value as Record<string, unknown>;
+  const number = typeof valueRecord['number'] === 'number' ? valueRecord['number'] : undefined;
+  const unit = typeof valueRecord['unit'] === 'string' ? valueRecord['unit'] : undefined;
+  const color = typeof valueRecord['color'] === 'string' ? valueRecord['color'] : undefined;
+  if (number === undefined && color === undefined) return undefined;
+  if (typeof source !== 'string' || typeof confidence !== 'number') return undefined;
+  if (status !== 'active' && status !== 'superseded') return undefined;
+  if (typeof updatedAt !== 'string') return undefined;
+  return {
+    id,
+    area,
+    decision: inline(decision),
+    value: {
+      ...(number === undefined ? {} : { number }),
+      ...(unit === undefined ? {} : { unit }),
+      ...(color === undefined ? {} : { color })
+    },
+    source,
+    evidence: Array.isArray(record['evidence'])
+      ? (record['evidence'] as unknown[]).filter((item): item is string => typeof item === 'string').slice(0, 8)
+      : [],
+    confidence: clampConfidence(confidence),
+    status,
+    updatedAt,
+    ...(typeof record['supersededBy'] === 'string' ? { supersededBy: record['supersededBy'] } : {})
+  };
+}
+
+/** List templates in the global directory (invalid files are skipped). */
+export async function listAestheticTemplates(dir: string): Promise<AestheticTemplateSummary[]> {
+  const names = (await listDir(dir)).filter((name) => name.endsWith('.json')).sort();
+  const summaries: AestheticTemplateSummary[] = [];
+  for (const name of names) {
+    const raw = await readTextOrNull(join(dir, name));
+    if (raw === null) continue;
+    try {
+      const parsed = JSON.parse(raw) as Partial<AestheticTemplate>;
+      if (parsed.schemaVersion !== 1 || typeof parsed.name !== 'string' || !Array.isArray(parsed.entries)) continue;
+      summaries.push({
+        name: parsed.name,
+        createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : '',
+        entries: parsed.entries.length,
+        path: join(dir, name)
+      });
+    } catch {
+      // A corrupt template must not break list/export/import of the others.
+    }
+  }
+  return summaries;
+}
+
+/** Export active preferences under a reusable name. */
+export async function exportAestheticTemplate(
+  dir: string,
+  profile: AestheticProfile,
+  name: string,
+  now: string
+): Promise<TemplateExportResult> {
+  if (!isTemplateName(name)) {
+    throw new Error('模板名只能使用字母、数字、`-`、`_`，长度 2–41，且以字母或数字开头。');
+  }
+  const active = profile.entries.filter((entry) => entry.status === 'active');
+  if (active.length === 0) throw new Error('当前审美档案没有 active 条目，无法导出模板。');
+  const template: AestheticTemplate = {
+    schemaVersion: 1,
+    name,
+    createdAt: now,
+    entries: active
+  };
+  await ensureDir(dir);
+  const file = join(dir, `${name}.json`);
+  await writeTextAtomic(file, `${JSON.stringify(template, null, 2)}\n`);
+  return { file, template };
+}
+
+/** Read a template by name (throws when missing/invalid). */
+export async function readAestheticTemplate(dir: string, name: string): Promise<AestheticTemplate | null> {
+  if (!isTemplateName(name)) throw new Error('模板名只能使用字母、数字、`-`、`_`，长度 2–41。');
+  const raw = await readTextOrNull(join(dir, `${name}.json`));
+  if (raw === null) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<AestheticTemplate>;
+    if (parsed.schemaVersion !== 1 || typeof parsed.name !== 'string' || !Array.isArray(parsed.entries)) return null;
+    const entries: AestheticEntry[] = [];
+    for (const item of parsed.entries) {
+      const entry = parseTemplateEntry(item);
+      if (entry !== undefined && entry.status === 'active') entries.push(entry);
+    }
+    return { schemaVersion: 1, name: parsed.name, createdAt: parsed.createdAt ?? '', entries };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Import a template into the local profile.
+ *
+ * `merge` (default): same area+value is skipped; same area with a different
+ * value supersedes the local active entry; id collisions get a fresh id.
+ * `replace`: the template becomes the whole profile.
+ */
+export async function importAestheticTemplate(
+  paths: SharedPaths,
+  dir: string,
+  profile: AestheticProfile,
+  name: string,
+  strategy: 'merge' | 'replace',
+  now: string
+): Promise<TemplateImportResult> {
+  const template = await readAestheticTemplate(dir, name);
+  if (template === null) throw new Error(`模板 \`${name}\` 不存在或格式不正确。`);
+  const imported: AestheticEntry[] = [];
+  const superseded: string[] = [];
+  const skipped: string[] = [];
+  let entries = strategy === 'replace' ? [] : [...profile.entries];
+  for (const source of template.entries) {
+    const activeSameArea = entries.find((entry) => entry.area === source.area && entry.status === 'active');
+    if (activeSameArea !== undefined && sameAestheticValue(activeSameArea.value, source.value)) {
+      skipped.push(source.id);
+      continue;
+    }
+    const idTaken = entries.some((entry) => entry.id === source.id);
+    const id = idTaken ? nextAestheticId(source.area, entries) : source.id;
+    if (activeSameArea !== undefined) {
+      superseded.push(activeSameArea.id);
+      entries = entries.map((entry) =>
+        entry.id === activeSameArea.id
+          ? { ...entry, status: 'superseded' as const, supersededBy: id, updatedAt: now }
+          : entry
+      );
+    }
+    const entry: AestheticEntry = {
+      ...source,
+      id,
+      source: `template:${name}`,
+      evidence: [...source.evidence, `template:${name}`].slice(0, 8),
+      status: 'active',
+      updatedAt: now
+    };
+    imported.push(entry);
+    entries.push(entry);
+  }
+  const next: AestheticProfile = { schemaVersion: 1, entries };
+  await writeProfile(paths, next);
+  await appendAestheticHistory(paths, [
+    { at: now, kind: 'applied', note: `template import ${name}（${strategy}）：${imported.length} 条` },
+    ...superseded.map((id) => ({ at: now, kind: 'superseded' as const, id, note: `template:${name}` }))
+  ]);
+  return { profile: next, imported, superseded, skipped, file: join(dir, `${name}.json`) };
 }
 
 /** Active entry ids, used by the audit gate to validate `profileRef`. */

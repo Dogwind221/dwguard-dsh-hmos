@@ -43,6 +43,14 @@ export interface Options {
     readonly maxAuditRounds: number;
     /** Design searches allowed per round (hard stop). */
     readonly maxDesignSearches: number;
+    /** OpenAI-compatible embedding endpoint (empty = lexical only). */
+    readonly designEmbeddingEndpoint: string;
+    readonly designEmbeddingModel: string;
+    readonly designEmbeddingApiKeyEnv: string;
+    readonly designEmbeddingTimeoutMs: number;
+    readonly designEmbeddingWeight: number;
+    /** Global directory for cross-project aesthetic templates (empty = default). */
+    readonly aestheticTemplatesDir: string;
     readonly designLicenseRequired: boolean;
 }
 /**

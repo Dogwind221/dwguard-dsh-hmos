@@ -46,6 +46,8 @@ export interface CheckInput {
     readonly profileRef?: string;
     /** Design-library cards this check compared against (0.6.2). */
     readonly designRefs?: readonly string[];
+    /** Anti-pattern cards this check verified as absent (0.6.4). */
+    readonly antiPatternRefs?: readonly string[];
 }
 /** Gate outcome. */
 export interface Gate {
@@ -96,6 +98,13 @@ export interface DesignAuditRef {
     readonly license?: string;
     readonly tokens?: string;
 }
+/** One anti-pattern reference recorded by an audit (0.6.4). */
+export interface DesignAntiPatternAuditRef {
+    readonly criterionId: string;
+    readonly antiPatternRef: string;
+    readonly status: 'active' | 'blocked' | 'missing';
+    readonly title?: string;
+}
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
     readonly profileRefs: readonly AestheticAuditRef[];
@@ -105,6 +114,8 @@ export interface AestheticAuditSummary {
 /** Design evidence attached to an audit report (0.6.2 P2). */
 export interface DesignAuditSummary {
     readonly refs: readonly DesignAuditRef[];
+    /** Anti-pattern references (0.6.4). */
+    readonly antiPatterns?: readonly DesignAntiPatternAuditRef[];
 }
 /** A persisted delivery audit. */
 export interface AuditReport {

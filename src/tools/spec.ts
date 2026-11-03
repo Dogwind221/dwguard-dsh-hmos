@@ -20,6 +20,7 @@ import type { CriterionInput, Issue, ValidationResult } from '../spec.js';
 import {
   buildTaskPack,
   criteriaByDimension,
+  isAntiPatternRefId,
   isDesignRefId,
   normalizeAssertion,
   parseTaskPack,
@@ -80,6 +81,7 @@ function parseCriteria(raw: Record<string, unknown>): CriterionInput[] {
       ruleId: optionalString(item, 'ruleId', label, 60),
       profileRef: optionalString(item, 'profileRef', label, 40),
       designRefs: optionalStringArray(item, 'designRefs', label, 8),
+      antiPatternRefs: optionalStringArray(item, 'antiPatternRefs', label, 8),
       ...(assertion === undefined ? {} : { assertion })
     };
   });
@@ -112,12 +114,20 @@ async function designRefIssues(
   }
   if (manifest === null) {
     for (const criterion of pack.criteria) {
-      if ((criterion.designRefs?.length ?? 0) === 0) continue;
-      errors.push({
-        code: 'E_DESIGN_LIBRARY_MISSING',
-        message: `判据 \`${criterion.id}\` 引用了设计参考，但设计库还没初始化；先 \`dwguard_design\` 的 \`library init\` + \`library ingest\`。`,
-        criterionId: criterion.id
-      });
+      if ((criterion.designRefs?.length ?? 0) > 0) {
+        errors.push({
+          code: 'E_DESIGN_LIBRARY_MISSING',
+          message: `判据 \`${criterion.id}\` 引用了设计参考，但设计库还没初始化；先 \`dwguard_design\` 的 \`library init\` + \`library ingest\`。`,
+          criterionId: criterion.id
+        });
+      }
+      if ((criterion.antiPatternRefs?.length ?? 0) > 0) {
+        errors.push({
+          code: 'E_ANTIPATTERN_LIBRARY_MISSING',
+          message: `判据 \`${criterion.id}\` 引用了反模式，但设计库还没初始化；先 \`dwguard_design\` 的 \`library init\` + \`library ingest\`。`,
+          criterionId: criterion.id
+        });
+      }
     }
     return { errors, warnings };
   }
@@ -142,6 +152,23 @@ async function designRefIssues(
         warnings.push({
           code: 'W_DESIGN_REF_LICENSE',
           message: `判据 \`${criterion.id}\` 引用的设计参考 \`${ref}\` license 未知；报告里会标注来源风险。`,
+          criterionId: criterion.id
+        });
+      }
+    }
+    for (const ref of criterion.antiPatternRefs ?? []) {
+      if (!isAntiPatternRefId(ref)) continue; // format error already reported
+      const card = cards.get(ref);
+      if (card === undefined) {
+        errors.push({
+          code: 'E_ANTIPATTERN_REF_UNKNOWN',
+          message: `判据 \`${criterion.id}\` 引用的反模式 \`${ref}\` 不存在；先在 \`library inbox\` 里 ingest 该反模式卡。`,
+          criterionId: criterion.id
+        });
+      } else if (card.status !== 'active') {
+        errors.push({
+          code: 'E_ANTIPATTERN_REF_BLOCKED',
+          message: `判据 \`${criterion.id}\` 引用的反模式 \`${ref}\` 已被 block，不能作为验收依据。`,
           criterionId: criterion.id
         });
       }
@@ -228,6 +255,12 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
               items: { type: 'string' },
               description:
                 '设计参考卡 ID（0.6.2，如 `DSG-0007`）：只有审美判据应带；写入时校验卡片存在且 active，审计报告会渲染「参考对照」。'
+            },
+            antiPatternRefs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '反模式卡 ID（0.6.4，如 `AP-0001`）：只有审美判据应带；写入/审计时校验反模式存在且 active，报告渲染「反模式对照」。'
             },
             weight: {
               type: 'string',
