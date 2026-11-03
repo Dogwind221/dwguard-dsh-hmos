@@ -215,6 +215,18 @@ test('AEST-D: a different value for the same area is a conflict, never an overwr
   assert.equal(await sha256(profileFile), before);
   const profile = await readProfile(paths(cwd));
   assert.equal(profile.entries[0]?.value.number, 20, '旧值不能被悄悄覆盖');
+
+  // Two contradictory values in the same round are a conflict too, not two proposals.
+  const fresh = await workspace();
+  const ambiguous = await aestheticTool.execute(
+    { action: 'learn', sources: [{ kind: 'confirmation', text: '圆角 20vp 或 24vp' }] },
+    exec(fresh)
+  );
+  assert.equal(ambiguous.ok, true, ambiguous.detail);
+  assert.match(ambiguous.detail, /冲突/);
+  assert.match(ambiguous.detail, /20vp/);
+  assert.match(ambiguous.detail, /24vp/);
+  await assert.rejects(readFile(join(paths(fresh).shared, 'knowledge', 'aesthetic-profile.md'), 'utf8'));
 });
 
 test('AEST-E: apply needs a choice for conflicts, then supersedes the loser and keeps history', async () => {
@@ -435,4 +447,9 @@ test('extraction is deterministic: clauses, keywords, numbers and colours', () =
   const first = learnAesthetics(profile, facts, new Map(), new Map());
   const second = learnAesthetics(profile, facts, new Map(), new Map());
   assert.deepEqual(first, second);
+
+  const ambiguous = learnAesthetics(profile, extractAestheticFacts('圆角 20vp 或 24vp'), new Map(), new Map());
+  assert.equal(ambiguous.proposals.length, 0);
+  assert.equal(ambiguous.conflicts.length, 1);
+  assert.equal(ambiguous.conflicts[0]?.candidates.length, 2);
 });

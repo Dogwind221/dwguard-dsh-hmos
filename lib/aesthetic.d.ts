@@ -143,6 +143,9 @@ export declare function nextAestheticId(area: AestheticArea, entries: readonly A
 /**
  * Compute proposals/conflicts for the current round. Pure: the profile is read,
  * never written.
+ *
+ * Facts are grouped per area first, so two different values proposed in the same
+ * round become a conflict just like a value that contradicts the stored profile.
  */
 export declare function learnAesthetics(profile: AestheticProfile, facts: readonly AestheticFact[], sourcesByKey: ReadonlyMap<string, readonly string[]>, startConfidence: ReadonlyMap<string, number>): AestheticLearnResult;
 /** Build the per-fact source labels and base confidences from learn sources. */

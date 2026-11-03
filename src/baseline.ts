@@ -112,11 +112,19 @@ export async function readBaselineIndex(paths: SharedPaths, specVersion: number)
       if (typeof item !== 'object' || item === null) continue;
       const record = item as Record<string, unknown>;
       if (typeof record['page'] !== 'string' || typeof record['boundsFile'] !== 'string') continue;
+      // The index is rewritten by the tool, but a hand-edited one must not be
+      // able to point the reader outside the baseline directory.
+      const boundsFile = record['boundsFile'];
+      if (!/^[A-Za-z0-9_.-]+$/.test(boundsFile)) continue;
+      const screenshotFile =
+        typeof record['screenshotFile'] === 'string' && /^[A-Za-z0-9_.-]+$/.test(record['screenshotFile'])
+          ? record['screenshotFile']
+          : undefined;
       valid.push({
         page: record['page'],
         state: typeof record['state'] === 'string' ? record['state'] : 'default',
-        boundsFile: record['boundsFile'],
-        ...(typeof record['screenshotFile'] === 'string' ? { screenshotFile: record['screenshotFile'] } : {}),
+        boundsFile,
+        ...(screenshotFile === undefined ? {} : { screenshotFile }),
         boundsSha256: typeof record['boundsSha256'] === 'string' ? record['boundsSha256'] : '',
         ...(typeof record['screenshotSha256'] === 'string' ? { screenshotSha256: record['screenshotSha256'] } : {}),
         savedAt: typeof record['savedAt'] === 'string' ? record['savedAt'] : '',
