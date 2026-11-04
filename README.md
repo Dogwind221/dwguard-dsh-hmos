@@ -84,7 +84,7 @@ flowchart TD
 
 npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.7.0）。
 
-> **0.7.0 尚未发布到 npm**（npm 最新为 0.6.6）。发布前安装请省略 `@0.7.0`，或显式使用 `@0.6.6`；下文的固定版本示例对应源码版本。
+> **0.7.0 已发布到 npm（latest）。** 固定版本安装用 `dwguard-dsh-hmos@0.7.0`；省略版本则跟随最新版。
 
 ### 从 npm 拉取（推荐）
 

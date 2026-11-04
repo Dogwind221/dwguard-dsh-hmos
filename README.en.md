@@ -54,7 +54,7 @@ acceptance evidence. Design cards/refs are contrast evidence, not criteria.
 
 npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.7.0).
 
-> **0.7.0 is not published to npm yet** (latest is 0.6.6). Until it is, omit `@0.7.0` or pin `@0.6.6` when installing; the fixed-version examples below track the source version.
+> **0.7.0 is published on npm (latest).** Pin `dwguard-dsh-hmos@0.7.0`, or omit the version to follow the latest release.
 
 ### Install from npm
 
