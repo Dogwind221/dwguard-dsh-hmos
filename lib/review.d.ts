@@ -48,6 +48,8 @@ export interface CheckInput {
     readonly designRefs?: readonly string[];
     /** Anti-pattern cards this check verified as absent (0.6.4). */
     readonly antiPatternRefs?: readonly string[];
+    /** Principle cards this check used as direction/contrast (0.6.7). */
+    readonly principleRefs?: readonly string[];
 }
 /** Gate outcome. */
 export interface Gate {
@@ -109,6 +111,14 @@ export interface DesignAntiPatternAuditRef {
     /** The design card this AP was inherited from (0.6.5). */
     readonly inheritedFrom?: string;
 }
+/** One principle reference recorded by an audit (0.6.7). */
+export interface DesignPrincipleAuditRef {
+    readonly criterionId: string;
+    readonly principleRef: string;
+    readonly status: 'active' | 'blocked' | 'missing';
+    readonly title?: string;
+    readonly proxies?: string;
+}
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
     readonly profileRefs: readonly AestheticAuditRef[];
@@ -120,6 +130,8 @@ export interface DesignAuditSummary {
     readonly refs: readonly DesignAuditRef[];
     /** Anti-pattern references (0.6.4). */
     readonly antiPatterns?: readonly DesignAntiPatternAuditRef[];
+    /** Principle references (0.6.7). */
+    readonly principles?: readonly DesignPrincipleAuditRef[];
 }
 /** A persisted delivery audit. */
 export interface AuditReport {

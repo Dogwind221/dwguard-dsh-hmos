@@ -75,6 +75,8 @@ export interface Criterion {
     readonly designRefs?: readonly string[];
     /** Anti-pattern cards this criterion must not violate (`AP-0001`, 0.6.4). */
     readonly antiPatternRefs?: readonly string[];
+    /** Principle cards this criterion uses as direction/contrast (`PR-0001`, 0.6.7). */
+    readonly principleRefs?: readonly string[];
 }
 /** The frozen task pack DSH hands to the executor agent. */
 export interface TaskPack {
@@ -134,6 +136,8 @@ export interface Check {
     readonly designRefs?: readonly string[];
     /** Anti-pattern cards this check verified as absent (0.6.4). */
     readonly antiPatternRefs?: readonly string[];
+    /** Principle cards this check used as direction/contrast (0.6.7). */
+    readonly principleRefs?: readonly string[];
 }
 /** One device recorded in an audit report. */
 export interface DeviceEvidence {

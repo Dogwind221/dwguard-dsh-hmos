@@ -46,7 +46,7 @@ test('the plugin declares its identity and injection', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('apply registers fifteen tools, three skills and one policy section', () => {
+test('apply registers fifteen tools, four skills and one policy section', () => {
   const { ctx, registered, skills, sections, disposers } = fakeContext();
   apply(ctx, {});
 
@@ -67,8 +67,9 @@ test('apply registers fifteen tools, three skills and one policy section', () =>
     'dwguard_spec',
     'dwguard_status'
   ]);
-  assert.equal(skills.length, 3);
+  assert.equal(skills.length, 4);
   assert.deepEqual(skills.map((skill) => skill.name).sort(), [
+    'awards-curation',
     'dwguard-hmos',
     'hmos-acceptance-rubric',
     'hmos-audit-playbook'

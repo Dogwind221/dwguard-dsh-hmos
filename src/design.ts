@@ -29,10 +29,10 @@ import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull,
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
-export const DESIGN_ENGINE_VERSION = '0.6.6';
+export const DESIGN_ENGINE_VERSION = '0.6.7';
 
 /** The card sections that become retrievable chunks. */
-export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand'] as const;
+export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand', 'principle'] as const;
 
 /** One retrievable section of a card. */
 export type DesignSection = (typeof DESIGN_SECTIONS)[number];
@@ -99,8 +99,8 @@ export interface DesignCard {
   readonly updatedAt: string;
   /** sha256 of the inbox metadata this card was ingested from (idempotency). */
   readonly ingestKey?: string;
-  /** `pattern` (default) or `anti-pattern`; anti-pattern ids use the AP-* namespace. */
-  readonly kind?: 'pattern' | 'anti-pattern';
+  /** `pattern` (default), `anti-pattern`, or `principle`; anti-pattern ids use AP-*, principles PR-*. */
+  readonly kind?: 'pattern' | 'anti-pattern' | 'principle';
   /** Optional ranked style preferences, e.g. `["极简主义", "玻璃拟态"]`. */
   readonly stylePriority?: readonly string[];
   /** Anti-pattern ids this pattern must avoid (`AP-0001`, …). */
@@ -111,6 +111,16 @@ export interface DesignCard {
   readonly dimensions?: DesignDimensions;
   /** Brand payload when `source.kind === 'brand'`. */
   readonly brand?: DesignBrand;
+  /** Principle statement (`kind: principle`), e.g. `留白是注意力预算`. */
+  readonly principle?: string;
+  /** Perceptual effect the principle is meant to produce. */
+  readonly perceptualEffect?: string;
+  /** Measurable proxies that make the principle testable. */
+  readonly proxies?: readonly string[];
+  /** UI contexts where the principle applies. */
+  readonly applications?: readonly string[];
+  /** Common misuses of the principle (anti-patterns in prose). */
+  readonly misuses?: readonly string[];
 }
 
 /** `manifest.json`. */
@@ -152,7 +162,7 @@ export interface DesignIndex {
 export interface DesignSearchHit {
   readonly cardId: string;
   readonly title: string;
-  readonly kind: 'pattern' | 'anti-pattern' | 'brand';
+  readonly kind: 'pattern' | 'anti-pattern' | 'brand' | 'principle';
   readonly score: number;
   readonly breakdown: {
     readonly bm25: number;
@@ -171,19 +181,21 @@ export interface DesignSearchHit {
   readonly rerankWeight?: number;
 }
 
-/** Retrieval filters applied before ranking (0.6.3 A/B). */
+/** Retrieval filters applied before ranking (0.6.3 A/B, 0.6.7 principle). */
 export interface DesignSearchFilters {
   readonly appType?: string;
   readonly platform?: string;
   readonly style?: string;
-  /** `pattern` (default) excludes anti-pattern and brand cards. */
-  readonly kind?: 'pattern' | 'anti-pattern' | 'brand';
+  /** `pattern` (default) excludes anti-pattern, brand and principle cards. */
+  readonly kind?: 'pattern' | 'anti-pattern' | 'brand' | 'principle';
 }
 
 /** The effective kind of a card, matching the `search` filter vocabulary. */
-export function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand' {
+export function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand' | 'principle' {
   if (card.source.kind === 'brand') return 'brand';
-  return card.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern';
+  if (card.kind === 'anti-pattern') return 'anti-pattern';
+  if (card.kind === 'principle') return 'principle';
+  return 'pattern';
 }
 
 /** Anti-pattern ids a referenced design card contributes to an audit checklist (0.6.5). */
@@ -371,6 +383,15 @@ export function cardChunks(card: DesignCard): DesignChunk[] {
         ]
           .filter((line) => line.trim().length > 0)
           .join('\n');
+  const principleText = [
+    card.principle ?? '',
+    card.perceptualEffect ?? '',
+    (card.proxies ?? []).join('；'),
+    (card.applications ?? []).join('；'),
+    (card.misuses ?? []).join('；')
+  ]
+    .filter((line) => line.trim().length > 0)
+    .join('\n');
   const sections: Array<{ section: DesignSection; text: string }> = [
     { section: 'tokens', text: tokensText(card.tokens) },
     { section: 'rationale', text: [card.title, card.rationale ?? card.summary].join('\n') },
@@ -379,7 +400,8 @@ export function cardChunks(card: DesignCard): DesignChunk[] {
     { section: 'style', text: (card.stylePriority ?? []).join('\n') },
     { section: 'antiPatterns', text: (card.antiPatterns ?? []).join('\n') },
     { section: 'checklist', text: (card.checklist ?? []).join('\n') },
-    { section: 'brand', text: brandText }
+    { section: 'brand', text: brandText },
+    { section: 'principle', text: principleText }
   ];
   const chunks: DesignChunk[] = [];
   for (const { section, text } of sections) {
@@ -519,9 +541,12 @@ async function writeLibrary(paths: SharedPaths, manifest: DesignManifest): Promi
   return [displayPath(paths, paths.designManifest), displayPath(paths, paths.designChunks), displayPath(paths, paths.designIndex)];
 }
 
-/** Next free id in the card's namespace (`DSG-*` patterns/brands, `AP-*` anti-patterns). */
-export function nextDesignId(cards: readonly DesignCard[], kind: 'pattern' | 'anti-pattern' = 'pattern'): string {
-  const prefix = kind === 'anti-pattern' ? 'AP' : 'DSG';
+/** Next free id in the card's namespace (`DSG-*`, `AP-*`, `PR-*`). */
+export function nextDesignId(
+  cards: readonly DesignCard[],
+  kind: 'pattern' | 'anti-pattern' | 'principle' = 'pattern'
+): string {
+  const prefix = kind === 'anti-pattern' ? 'AP' : kind === 'principle' ? 'PR' : 'DSG';
   let max = 0;
   for (const card of cards) {
     const match = new RegExp(`^${prefix}-(\\d+)$`).exec(card.id);
@@ -608,6 +633,11 @@ interface InboxMeta {
   readonly checklist?: unknown;
   readonly dimensions?: unknown;
   readonly brand?: unknown;
+  readonly principle?: unknown;
+  readonly perceptualEffect?: unknown;
+  readonly proxies?: unknown;
+  readonly applications?: unknown;
+  readonly misuses?: unknown;
 }
 
 function dimensionsFrom(raw: unknown): DesignDimensions | undefined {
@@ -753,16 +783,36 @@ export async function inboxCards(
       warnings.push(`${name}: 需要 title、source.license，且 source.kind ∈ official/user/project/brand；已跳过`);
       continue;
     }
-    if (meta.kind !== undefined && meta.kind !== 'pattern' && meta.kind !== 'anti-pattern') {
-      warnings.push(`${name}: kind 只能是 pattern / anti-pattern；已跳过`);
+    if (meta.kind !== undefined && meta.kind !== 'pattern' && meta.kind !== 'anti-pattern' && meta.kind !== 'principle') {
+      warnings.push(`${name}: kind 只能是 pattern / anti-pattern / principle；已跳过`);
       continue;
     }
-    const cardKind: 'pattern' | 'anti-pattern' = meta.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern';
+    const cardKind: 'pattern' | 'anti-pattern' | 'principle' =
+      meta.kind === 'anti-pattern' ? 'anti-pattern' : meta.kind === 'principle' ? 'principle' : 'pattern';
     const rationale = typeof meta.rationale === 'string' && inline(meta.rationale).length > 0 ? inline(meta.rationale) : undefined;
     const summary = typeof meta.summary === 'string' ? inline(meta.summary) : '';
     if (cardKind === 'anti-pattern' && rationale === undefined && summary.length === 0) {
       warnings.push(`${name}: anti-pattern 卡片需要 rationale 或 summary 描述禁止项；已跳过`);
       continue;
+    }
+    const principle = typeof meta.principle === 'string' && inline(meta.principle).length > 0 ? inline(meta.principle) : undefined;
+    const perceptualEffect =
+      typeof meta.perceptualEffect === 'string' && inline(meta.perceptualEffect).length > 0
+        ? inline(meta.perceptualEffect)
+        : undefined;
+    const proxies = stringArray(meta.proxies, 16);
+    const applications = stringArray(meta.applications, 12);
+    const misuses = stringArray(meta.misuses, 12);
+    const checklist = stringArray(meta.checklist, 16);
+    if (cardKind === 'principle') {
+      if (principle === undefined && rationale === undefined && summary.length === 0) {
+        warnings.push(`${name}: principle 卡片需要 principle 或 rationale/summary 说明原则；已跳过`);
+        continue;
+      }
+      if (proxies.length === 0 && checklist.length === 0) {
+        warnings.push(`${name}: principle 卡片至少需要一个 proxies 或 checklist 可测项（否则只是形容词）；已跳过`);
+        continue;
+      }
     }
     let brand: DesignBrand | undefined;
     if (sourceKind === 'brand') {
@@ -797,7 +847,6 @@ export async function inboxCards(
     }
     const id = nextDesignId([...existing, ...cards], cardKind);
     const stylePriority = stringArray(meta.stylePriority, 12);
-    const checklist = stringArray(meta.checklist, 16);
     const dimensions = dimensionsFrom(meta.dimensions);
     cards.push({
       id,
@@ -824,7 +873,12 @@ export async function inboxCards(
       ...(validAntiPatterns.length === 0 ? {} : { antiPatterns: validAntiPatterns }),
       ...(checklist.length === 0 ? {} : { checklist }),
       ...(dimensions === undefined ? {} : { dimensions }),
-      ...(brand === undefined ? {} : { brand })
+      ...(brand === undefined ? {} : { brand }),
+      ...(principle === undefined ? {} : { principle }),
+      ...(perceptualEffect === undefined ? {} : { perceptualEffect }),
+      ...(proxies.length === 0 ? {} : { proxies }),
+      ...(applications.length === 0 ? {} : { applications }),
+      ...(misuses.length === 0 ? {} : { misuses })
     });
   }
   return { cards, skipped, warnings, files };
@@ -1962,6 +2016,8 @@ export interface DesignBriefResult {
   readonly query: string;
   readonly hits: readonly DesignSearchHit[];
   readonly brands: readonly DesignCard[];
+  /** Principle cards that set the direction (0.6.7). */
+  readonly principles: readonly DesignCard[];
   readonly result: DesignSearchResult;
   /** Targeted retrieval driven by the previous failed aesthetic audit. */
   readonly rework?: {
@@ -2001,6 +2057,11 @@ function renderCardDetail(card: DesignCard): string[] {
     ].filter((item) => item.length > 0);
     if (dims.length > 0) lines.push(`- 维度：${dims.join(' · ')}`);
   }
+  if (card.principle !== undefined) lines.push(`- 原则：${truncate(card.principle, 240)}`);
+  if (card.perceptualEffect !== undefined) lines.push(`- 感知效果：${card.perceptualEffect}`);
+  if (card.proxies !== undefined && card.proxies.length > 0) lines.push(`- 可测代理：${card.proxies.join('；')}`);
+  if (card.applications !== undefined && card.applications.length > 0) lines.push(`- 适用：${card.applications.join('；')}`);
+  if (card.misuses !== undefined && card.misuses.length > 0) lines.push(`- 误用：${card.misuses.join('；')}`);
   if (card.rationale !== undefined) lines.push(`- 理由：${truncate(card.rationale, 240)}`);
   if (card.dos.length > 0) lines.push(`- Do：${card.dos.join('；')}`);
   if (card.donts.length > 0) lines.push(`- Don't：${card.donts.join('；')}`);
@@ -2033,12 +2094,34 @@ function renderBrandSection(brands: readonly DesignCard[]): string[] {
   return lines;
 }
 
+function renderPrincipleSection(principles: readonly DesignCard[]): string[] {
+  if (principles.length === 0) return [];
+  const lines = [
+    '## 0.2 设计原则（方向）',
+    '',
+    '> 原则负责“往哪走”，具体布局/token 仍以参考卡片与任务包为准；原则不能直接当验收判据。',
+    ''
+  ];
+  for (const principle of principles) {
+    lines.push(`### \`${principle.id}\` · ${principle.title}`, '');
+    if (principle.principle !== undefined) lines.push(`- 原则：${truncate(principle.principle, 240)}`);
+    if (principle.perceptualEffect !== undefined) lines.push(`- 感知效果：${principle.perceptualEffect}`);
+    if ((principle.proxies?.length ?? 0) > 0) lines.push(`- 可测代理：${principle.proxies?.join('；') ?? ''}`);
+    if ((principle.applications?.length ?? 0) > 0) lines.push(`- 适用：${principle.applications?.join('；') ?? ''}`);
+    if ((principle.misuses?.length ?? 0) > 0) lines.push(`- 误用：${principle.misuses?.join('；') ?? ''}`);
+    if ((principle.checklist?.length ?? 0) > 0) lines.push(`- 检查项：${principle.checklist?.join('；') ?? ''}`);
+    lines.push('');
+  }
+  return lines;
+}
+
 /** Render `tasks/design-brief.md`. */
 export function renderDesignBriefMarkdown(
   pack: TaskPack,
   result: DesignSearchResult,
   cards: readonly DesignCard[],
   brands: readonly DesignCard[],
+  principles: readonly DesignCard[],
   now: string,
   rework?: { readonly suggestions: readonly DesignReworkSuggestion[]; readonly cards: readonly DesignCard[] }
 ): string {
@@ -2048,7 +2131,8 @@ export function renderDesignBriefMarkdown(
     `> 任务包 v${pack.specVersion} · ${now} · 查询：\`${result.query}\` · 排序 ${result.ranker} · 命中 ${result.results.length} 张`,
     '> **参考是证据不是判据**：DSH 仍然独立取证；参考卡片不能替代设备上的验收证据。',
     '',
-    ...renderBrandSection(brands)
+    ...renderBrandSection(brands),
+    ...renderPrincipleSection(principles)
   ];
   if (result.notes.length > 0) lines.push(...result.notes.map((note) => `> ${note}`), '');
   const reworkLines =
@@ -2133,6 +2217,19 @@ export async function generateDesignBrief(
   const brands = manifest.cards
     .filter((card) => card.source.kind === 'brand' && card.status === 'active')
     .slice(0, options.designBrandCards);
+  const principleResult = await searchDesignWithRanker(
+    paths,
+    options,
+    manifest,
+    index,
+    chunks,
+    query,
+    options.designPrincipleCards,
+    { licenseRequired: options.designLicenseRequired, filters: { kind: 'principle' } }
+  );
+  const principles = principleResult.results
+    .map((hit) => manifest.cards.find((card) => card.id === hit.cardId))
+    .filter((card): card is DesignCard => card !== undefined);
   const queue = await readDesignReworkQueue(paths, pack.specVersion);
   let rework: DesignBriefResult['rework'];
   if (queue !== null && queue.suggestions.length > 0) {
@@ -2156,12 +2253,13 @@ export async function generateDesignBrief(
       .filter((card): card is DesignCard => card !== undefined);
     rework = { suggestions: queue.suggestions, hits: extraHits, cards: reworkCards };
   }
-  await writeTextAtomic(paths.designBriefMd, renderDesignBriefMarkdown(pack, result, cards, brands, now, rework));
+  await writeTextAtomic(paths.designBriefMd, renderDesignBriefMarkdown(pack, result, cards, brands, principles, now, rework));
   return {
     file: paths.designBriefMd,
     query,
     hits: result.results,
     brands,
+    principles,
     result,
     ...(rework === undefined ? {} : { rework })
   };
@@ -2468,7 +2566,7 @@ export function renderQueryCli(): string {
     '  for (const card of manifest.cards) {',
     "    if (card.status !== 'active') continue;",
     "    if (licenseRequired && card.source.license.toLowerCase() === 'unknown') continue;",
-    "    const cardKind = card.source.kind === 'brand' ? 'brand' : (card.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern');",
+    "    const cardKind = card.source.kind === 'brand' ? 'brand' : (card.kind === 'anti-pattern' ? 'anti-pattern' : (card.kind === 'principle' ? 'principle' : 'pattern'));",
     '    if (cardKind !== filters.kind) continue;',
     '    if (filters.appType !== undefined) {',
     '      const value = card.dimensions && card.dimensions.appType;',
@@ -2533,7 +2631,7 @@ export function renderQueryCli(): string {
     'const query = words.join(" ").trim();',
     'if (query.length === 0) { console.error("usage: node query.mjs \\"<query>\\" [--top N] [--kind pattern|anti-pattern|brand] [--app-type X] [--platform X] [--style X] [--json]"); process.exit(2); }',
     'if (!Number.isFinite(top) || top < 1) { console.error("invalid --top"); process.exit(2); }',
-    'if (kind !== "pattern" && kind !== "anti-pattern" && kind !== "brand") { console.error("invalid --kind"); process.exit(2); }',
+    'if (kind !== "pattern" && kind !== "anti-pattern" && kind !== "brand" && kind !== "principle") { console.error("invalid --kind"); process.exit(2); }',
     'let manifest; let index; let chunks;',
     'try {',
     '  manifest = JSON.parse(await readFile(join(DIR, "manifest.json"), "utf8"));',

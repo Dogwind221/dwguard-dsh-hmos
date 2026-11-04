@@ -1,5 +1,5 @@
 /**
- * The three bundled skills.
+ * The four bundled skills.
  *
  * Bodies live in `skills/*.md` so they can be read, reviewed and edited like
  * ordinary documentation. They are loaded synchronously at module load; a

@@ -1,5 +1,5 @@
 /**
- * The three bundled skills.
+ * The four bundled skills.
  *
  * Bodies live in `skills/*.md` so they can be read, reviewed and edited like
  * ordinary documentation. They are loaded synchronously at module load; a
@@ -72,6 +72,20 @@ DSH 负责写任务包、预审、派发、独立审计；DevEco Code 负责编�
 5. 性能：DevEco Profiler 启动/帧率/内存 + 包体大小。
 6. 无障碍：对比度计算、触控尺寸、焦点走查、字体放大重截。
 7. 每条判据一段证据；禁止用执行者截图。`
+  },
+  {
+    name: 'awards-curation',
+    description:
+      '把 Apple Design Awards / iF / Core77 / A\' Design 等获奖作品策展成 principle（PR-*）、pattern（DSG-*）与 anti-pattern（AP-*）卡：字段模板、版权规则、原则→可测代理翻译、基准查询与质量闸门。',
+    whenToUse: '要学习奖项/传统艺术/装置艺术并沉淀为设计卡，或要判断一个“审美原则”能否进入验收流程时。',
+    file: 'awards-curation.md',
+    fallback: `# 奖项 → 可执行设计卡策展
+
+- principle（PR-*）给方向：必须有 principle + 至少一个 proxy/checklist + misuse；
+- pattern（DSG-*）给实现：tokens/checklist/dimensions/Do-Don't；
+- anti-pattern（AP-*）给闸门：写清触发场景与替代做法；
+- 只存事实、原则、token、链接；截图/描述需授权，license 不明默认不进检索；
+- 一条卡一个模式，至少 2 个作品支撑再提权重；奖项是参考不是验收标准。`
   }
 ];
 

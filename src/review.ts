@@ -76,6 +76,8 @@ export interface CheckInput {
   readonly designRefs?: readonly string[];
   /** Anti-pattern cards this check verified as absent (0.6.4). */
   readonly antiPatternRefs?: readonly string[];
+  /** Principle cards this check used as direction/contrast (0.6.7). */
+  readonly principleRefs?: readonly string[];
 }
 
 /** Gate outcome. */
@@ -145,6 +147,15 @@ export interface DesignAntiPatternAuditRef {
   readonly inheritedFrom?: string;
 }
 
+/** One principle reference recorded by an audit (0.6.7). */
+export interface DesignPrincipleAuditRef {
+  readonly criterionId: string;
+  readonly principleRef: string;
+  readonly status: 'active' | 'blocked' | 'missing';
+  readonly title?: string;
+  readonly proxies?: string;
+}
+
 /** Aesthetic evidence attached to an audit report (0.6.1). */
 export interface AestheticAuditSummary {
   readonly profileRefs: readonly AestheticAuditRef[];
@@ -157,6 +168,8 @@ export interface DesignAuditSummary {
   readonly refs: readonly DesignAuditRef[];
   /** Anti-pattern references (0.6.4). */
   readonly antiPatterns?: readonly DesignAntiPatternAuditRef[];
+  /** Principle references (0.6.7). */
+  readonly principles?: readonly DesignPrincipleAuditRef[];
 }
 
 /** A persisted delivery audit. */
@@ -241,6 +254,9 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
     ...(item.antiPatternRefs === undefined || item.antiPatternRefs.length === 0
       ? {}
       : { antiPatternRefs: [...new Set(item.antiPatternRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
+    ...(item.principleRefs === undefined || item.principleRefs.length === 0
+      ? {}
+      : { principleRefs: [...new Set(item.principleRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
     ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
       ? {}
       : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
@@ -520,14 +536,16 @@ export function gateDelivery(
   // Design references (0.6.2 P2): a ref that does not resolve to an active card
   // cannot be used as an acceptance basis. A missing library is an error only
   // when a pack/check actually names a ref.
-  const designRefs: Array<{ ref: string; owner: string; label: '设计参考' | '反模式' }> = [];
+  const designRefs: Array<{ ref: string; owner: string; label: '设计参考' | '反模式' | '设计原则' }> = [];
   for (const criterion of pack.criteria) {
     for (const ref of criterion.designRefs ?? []) designRefs.push({ ref, owner: `判据 \`${criterion.id}\``, label: '设计参考' });
     for (const ref of criterion.antiPatternRefs ?? []) designRefs.push({ ref, owner: `判据 \`${criterion.id}\``, label: '反模式' });
+    for (const ref of criterion.principleRefs ?? []) designRefs.push({ ref, owner: `判据 \`${criterion.id}\``, label: '设计原则' });
   }
   for (const check of checks) {
     for (const ref of check.designRefs ?? []) designRefs.push({ ref, owner: `检查 \`${check.criterionId}\``, label: '设计参考' });
     for (const ref of check.antiPatternRefs ?? []) designRefs.push({ ref, owner: `检查 \`${check.criterionId}\``, label: '反模式' });
+    for (const ref of check.principleRefs ?? []) designRefs.push({ ref, owner: `检查 \`${check.criterionId}\``, label: '设计原则' });
   }
   if (designRefs.length > 0) {
     if (design === undefined) {
@@ -822,6 +840,22 @@ function antiPatternCell(
     .join('<br>');
 }
 
+/** One cell for the principle column (0.6.7). */
+function principleCell(
+  refs: readonly string[] | undefined,
+  design: ReadonlyMap<string, DesignCard> | undefined
+): string {
+  if (refs === undefined || refs.length === 0) return '—';
+  return refs
+    .map((ref) => {
+      const card = design?.get(ref);
+      if (card === undefined) return `\`${ref}\`<br>缺失`;
+      const proxies = (card.proxies ?? []).slice(0, 2).join('；');
+      return `\`${ref}\`<br>${card.title}${proxies.length === 0 ? '' : `<br>${proxies}`}`;
+    })
+    .join('<br>');
+}
+
 /** Render `artifacts/audit-<n>.md`. */
 export function renderAuditMarkdown(
   report: AuditReport,
@@ -850,6 +884,7 @@ export function renderAuditMarkdown(
         ),
         design
       ),
+      principleCell(check.principleRefs ?? criterion?.principleRefs, design),
       RESULT_LABELS[check.result],
       criterion?.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
       check.actual === undefined ? '—' : check.actual,
@@ -910,7 +945,7 @@ export function renderAuditMarkdown(
     report.checks.length === 0
       ? '（无）'
       : table(
-          ['判据', '维度', '设备', '屏幕族', '审美档案', '参考对照', '反模式对照', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
+          ['判据', '维度', '设备', '屏幕族', '审美档案', '参考对照', '反模式对照', '原则对照', '结论', '断言', '实测值', '断言判定', '证据', '证据文件', '备注'],
           checkRows
         ),
     '',
@@ -1067,6 +1102,7 @@ export function renderAcceptanceMarkdown(
         ),
         design
       ),
+      principleCell(check.principleRefs ?? criterion?.principleRefs, design),
       check.evidence
     ];
   });
@@ -1092,7 +1128,7 @@ export function renderAcceptanceMarkdown(
     '',
     '## 2. 证据索引',
     '',
-    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '审美档案', '参考对照', '反模式对照', '独立证据'], rows),
+    table(['判据', '维度', '判据原文', '断言', '实测值', '设备', '审美档案', '参考对照', '反模式对照', '原则对照', '独立证据'], rows),
     '',
     '### 2.1 屏幕族矩阵',
     '',

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "name": "awards-2026",
+  "description": "20 条奖项/原则基准查询：用于验证 design library 的 top-3 召回是否稳定；expectTags 为人工标注的相关标签，命中任一即视为相关。",
+  "queries": [
+    { "id": "Q-01", "kind": "pattern", "query": "阅读类 安静 大字号 留白", "expectTags": ["reading", "ada"] },
+    { "id": "Q-02", "kind": "pattern", "query": "金融后台 高对比 数据看板 侧边导航", "expectTags": ["finance", "dashboard"] },
+    { "id": "Q-03", "kind": "principle", "query": "留白 注意力 预算 克制", "expectTags": ["principle", "space"] },
+    { "id": "Q-04", "kind": "principle", "query": "明暗 层次 材质 诚实", "expectTags": ["principle", "light"] },
+    { "id": "Q-05", "kind": "pattern", "query": "茶饮会员 年轻化 积分 优惠券", "expectTags": ["brand", "member"] },
+    { "id": "Q-06", "kind": "pattern", "query": "运动数据 高能量 渐变 动效", "expectTags": ["sport", "motion"] },
+    { "id": "Q-07", "kind": "anti-pattern", "query": "紫粉渐变 廉价 无意义动效", "expectTags": ["anti-pattern", "gradient"] },
+    { "id": "Q-08", "kind": "pattern", "query": "健康记录 温柔 低饱和 圆角", "expectTags": ["health", "soft"] },
+    { "id": "Q-09", "kind": "pattern", "query": "工具型 高密度 表格 清晰层级", "expectTags": ["tool", "dense"] },
+    { "id": "Q-10", "kind": "principle", "query": "节奏 重复 网格 秩序", "expectTags": ["principle", "rhythm"] },
+    { "id": "Q-11", "kind": "pattern", "query": "空态 插图 引导 主操作", "expectTags": ["empty-state", "onboarding"] },
+    { "id": "Q-12", "kind": "pattern", "query": "深色模式 低亮度 夜间 护眼", "expectTags": ["dark", "reading"] },
+    { "id": "Q-13", "kind": "principle", "query": "空间序列 渐进披露 转场", "expectTags": ["principle", "sequence"] },
+    { "id": "Q-14", "kind": "pattern", "query": "老年用户 大字号 高对比 简单操作", "expectTags": ["accessibility", "elder"] },
+    { "id": "Q-15", "kind": "anti-pattern", "query": "信息过载 假 loading 装饰性粒子", "expectTags": ["anti-pattern", "overload"] },
+    { "id": "Q-16", "kind": "pattern", "query": "杂志排版 编辑感 大图 衬线标题", "expectTags": ["editorial", "magazine"] },
+    { "id": "Q-17", "kind": "principle", "query": "焦点 对比 视觉重量 单一主操作", "expectTags": ["principle", "focus"] },
+    { "id": "Q-18", "kind": "pattern", "query": "折叠屏 分栏 自适应 布局", "expectTags": ["harmonyos", "foldable"] },
+    { "id": "Q-19", "kind": "pattern", "query": "品牌 门店 首页 会员 城市限定", "expectTags": ["brand", "store"] },
+    { "id": "Q-20", "kind": "principle", "query": "材质 光线 触感 物理隐喻", "expectTags": ["principle", "material"] }
+  ]
+}

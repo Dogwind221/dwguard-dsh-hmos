@@ -36,6 +36,7 @@ import type {
   DesignAntiPatternAuditRef,
   DesignAuditRef,
   DesignAuditSummary,
+  DesignPrincipleAuditRef,
   FindingInput
 } from '../review.js';
 import {
@@ -89,7 +90,8 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
       family: optionalEnum(item, 'family', SCREEN_FAMILIES, label),
       profileRef: optionalString(item, 'profileRef', label, 40),
       designRefs: optionalStringArray(item, 'designRefs', label, 8),
-      antiPatternRefs: optionalStringArray(item, 'antiPatternRefs', label, 8)
+      antiPatternRefs: optionalStringArray(item, 'antiPatternRefs', label, 8),
+      principleRefs: optionalStringArray(item, 'principleRefs', label, 8)
     };
   });
 }
@@ -221,6 +223,37 @@ function collectAntiPatternRefs(
   return [...refs.values()];
 }
 
+/** Resolve every `principleRef` named by the pack/checks into a report entry (0.6.7). */
+function collectPrincipleRefs(
+  pack: TaskPack,
+  checks: readonly Check[],
+  design: ReadonlyMap<string, DesignCard> | undefined
+): DesignPrincipleAuditRef[] {
+  const refs = new Map<string, DesignPrincipleAuditRef>();
+  const add = (criterionId: string, principleRef: string): void => {
+    if (refs.has(principleRef)) return;
+    const card = design?.get(principleRef);
+    refs.set(principleRef, {
+      criterionId,
+      principleRef,
+      status: card === undefined ? 'missing' : card.status,
+      ...(card === undefined
+        ? {}
+        : {
+            title: card.title,
+            ...((card.proxies?.length ?? 0) === 0 ? {} : { proxies: card.proxies?.slice(0, 2).join('；') })
+          })
+    });
+  };
+  for (const criterion of pack.criteria) {
+    for (const ref of criterion.principleRefs ?? []) add(criterion.id, ref);
+  }
+  for (const check of checks) {
+    for (const ref of check.principleRefs ?? []) add(check.criterionId, ref);
+  }
+  return [...refs.values()];
+}
+
 /**
  * Targeted retrieval suggestions for the next brief: one per failed aesthetic
  * criterion (0.6.3 F). This is what turns B's rejection into A's next query.
@@ -302,6 +335,12 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               items: { type: 'string' },
               description:
                 '反模式卡 ID（0.6.4，如 `AP-0001`）。引用不存在或已 block 的反模式会被闸门拒绝；报告渲染「反模式对照」。'
+            },
+            principleRefs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '设计原则卡 ID（0.6.7，如 `PR-0001`）。只做方向/对照；引用不存在或已 block 的原则会被拒绝，报告渲染「原则对照」。'
             },
             evidenceFiles: {
               type: 'array',
@@ -420,12 +459,14 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       };
       const designRefs = collectDesignRefs(pack, checks, designCards);
       const antiPatternRefs = collectAntiPatternRefs(pack, checks, designCards);
+      const principleRefs = collectPrincipleRefs(pack, checks, designCards);
       const design: DesignAuditSummary | undefined =
-        designRefs.length === 0 && antiPatternRefs.length === 0
+        designRefs.length === 0 && antiPatternRefs.length === 0 && principleRefs.length === 0
           ? undefined
           : {
               refs: designRefs,
-              ...(antiPatternRefs.length === 0 ? {} : { antiPatterns: antiPatternRefs })
+              ...(antiPatternRefs.length === 0 ? {} : { antiPatterns: antiPatternRefs }),
+              ...(principleRefs.length === 0 ? {} : { principles: principleRefs })
             };
       const report: AuditReport = {
         id,

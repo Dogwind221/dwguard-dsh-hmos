@@ -39,6 +39,8 @@ export interface Options {
     readonly designBriefCards: number;
     /** Brand cards force-injected into every brief. */
     readonly designBrandCards: number;
+    /** Principle cards injected into every brief. */
+    readonly designPrincipleCards: number;
     /** Audit rounds allowed per round (hard stop). */
     readonly maxAuditRounds: number;
     /** Design searches allowed per round (hard stop). */

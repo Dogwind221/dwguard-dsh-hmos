@@ -68,6 +68,8 @@ export const Config = z.object({
   designBriefCards: z.number().default(5),
   /** Brand cards force-injected into every brief (0.6.3 B). */
   designBrandCards: z.number().default(3),
+  /** Principle cards injected into the brief's direction section (0.6.7). */
+  designPrincipleCards: z.number().default(3),
   /** Hard stop: audits allowed in one round before the orchestrator must ask the user (0.6.3 C). */
   maxAuditRounds: z.number().default(5),
   /** Hard stop: design searches allowed in one round (0.6.3 C). */
@@ -129,6 +131,8 @@ export interface Options {
   readonly designBriefCards: number;
   /** Brand cards force-injected into every brief. */
   readonly designBrandCards: number;
+  /** Principle cards injected into every brief. */
+  readonly designPrincipleCards: number;
   /** Audit rounds allowed per round (hard stop). */
   readonly maxAuditRounds: number;
   /** Design searches allowed per round (hard stop). */
@@ -172,6 +176,7 @@ const DEFAULTS: Options = {
   designRanker: 'lexical',
   designBriefCards: 5,
   designBrandCards: 3,
+  designPrincipleCards: 3,
   maxAuditRounds: 5,
   maxDesignSearches: 12,
   designEmbeddingEndpoint: '',
@@ -245,6 +250,7 @@ export function resolveOptions(raw: unknown): Options {
     designRanker: input['designRanker'] === 'hybrid' ? 'hybrid' : 'lexical',
     designBriefCards: positiveInt(input['designBriefCards'], DEFAULTS.designBriefCards, 1),
     designBrandCards: positiveInt(input['designBrandCards'], DEFAULTS.designBrandCards, 0),
+    designPrincipleCards: positiveInt(input['designPrincipleCards'], DEFAULTS.designPrincipleCards, 0),
     maxAuditRounds: positiveInt(input['maxAuditRounds'], DEFAULTS.maxAuditRounds, 1),
     maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
     designEmbeddingEndpoint: typeof input['designEmbeddingEndpoint'] === 'string' ? input['designEmbeddingEndpoint'].trim() : DEFAULTS.designEmbeddingEndpoint,

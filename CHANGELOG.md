@@ -4,6 +4,36 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.7 — 2026-11-04
+
+The principle-layer release: abstract aesthetics from art/award curation become a
+first-class card type with measurable proxies, while pattern cards keep owning
+implementation and anti-patterns keep owning the hard gate.
+
+### Added
+
+- **`kind: principle` cards** (`PR-*` namespace) with `principle`,
+  `perceptualEffect`, `proxies`, `applications`, `misuses` and optional
+  `checklist`/`antiPatterns`. Ingest refuses a principle without at least one
+  proxy/checklist item, so an unfalsifiable adjective cannot enter the library.
+- **Dual-channel brief**: `tasks/design-brief.md` now has
+  「0.2 设计原则（方向）」 (up to `designPrincipleCards`, default 3) next to brand
+  constraints and pattern cards; principles never mix into the pattern result
+  list, and dispatch inherits the same brief.
+- **`principleRefs`**: aesthetic criteria/checks can reference `PR-*` cards as
+  direction/contrast. Spec/audit validate reference integrity (format, existence,
+  active status) and render a 「原则对照」 column plus
+  `audit-<n>.json`'s `design.principles[]`; principle text itself is **not** a
+  hard pass/fail criterion.
+- **`awards-curation` skill** (4th bundled skill) and
+  `benchmarks/awards-2026.json` with 20 benchmark queries for recall evaluation.
+- `DESIGN_ENGINE_VERSION` → `0.6.7`.
+
+### Tests
+
+- New principle round-trip/brief/spec/audit case plus a benchmark schema test;
+  suite is now 131/131.
+
 ## 0.6.6 — 2026-11-03
 
 The multimodal-embedding release: DashScope native multimodal embeddings become a

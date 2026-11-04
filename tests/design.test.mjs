@@ -1107,6 +1107,97 @@ test('0.6.5 PK: design packs export/import cards and images across projects', as
   assert.equal(badName.ok, false);
 });
 
+test('0.6.7 PR: principle cards drive the brief and gate principleRefs as contrast only', async () => {
+  const cwd = await workspace();
+  await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+  await writeMeta(cwd, 'a-principle.meta.json', {
+    kind: 'principle',
+    title: '负空间即注意力预算',
+    principle: '留白不是空，是引导视线和降低认知负荷的手段；深色背景尤其需要克制的圆角与留白',
+    perceptualEffect: '安静、聚焦、高级感',
+    proxies: ['空白占比 ≥ 35%', '首屏主操作 = 1'],
+    applications: ['阅读类首屏', '深色模式卡片'],
+    misuses: ['为了留白牺牲信息密度', '在工具型界面强行极简'],
+    checklist: ['首屏只有一个主 CTA', '正文/背景对比 ≥ 4.5:1'],
+    dimensions: { appType: '阅读', platform: 'harmonyos', style: '极简' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, 'b-pattern.meta.json', {
+    title: '深色阅读卡片',
+    summary: '深色背景、16vp 圆角、大字号正文',
+    rationale: '深色模式 卡片 圆角 16vp 大字号 留白',
+    tokens: { palette: [{ name: 'bg', value: '#121212' }], radius: [{ name: 'card', value: 16, unit: 'vp' }] },
+    dimensions: { appType: '阅读', platform: 'harmonyos', style: '极简' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  const ingested = await tool.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(cwd));
+  assert.equal(ingested.ok, true, ingested.detail);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const principle = manifest.cards.find((card) => card.title === '负空间即注意力预算');
+  const pattern = manifest.cards.find((card) => card.title === '深色阅读卡片');
+  assert.ok(principle !== undefined && pattern !== undefined);
+  assert.match(principle.id, /^PR-\d{4}$/);
+  assert.equal(principle.kind, 'principle');
+  assert.deepEqual(principle.proxies, ['空白占比 ≥ 35%', '首屏主操作 = 1']);
+  assert.deepEqual(principle.misuses, ['为了留白牺牲信息密度', '在工具型界面强行极简']);
+
+  const defaultSearch = await tool.execute({ action: 'search', query: '留白 注意力' }, exec(cwd));
+  assert.ok(!defaultSearch.detail.includes(principle.id), '默认 pattern 检索不应混入 principle');
+  const principleSearch = await tool.execute(
+    { action: 'search', query: '留白 注意力', kind: 'principle' },
+    exec(cwd)
+  );
+  assert.equal(principleSearch.ok, true, principleSearch.detail);
+  assert.ok(principleSearch.detail.includes(principle.id));
+
+  await writeMeta(cwd, 'c-bad-principle.meta.json', {
+    kind: 'principle',
+    title: '空泛原则',
+    principle: '要好看',
+    source: { kind: 'user', license: 'internal' }
+  });
+  const badIngest = await tool.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(cwd));
+  assert.match(badIngest.detail, /至少需要一个 proxies 或 checklist/);
+  const afterBad = await readDesignManifest(paths(cwd));
+  assert.equal(afterBad?.cards.length, manifest.cards.length);
+
+  const spec = await writeSpec(cwd, { principleRefs: [principle.id], designRefs: [pattern.id] });
+  assert.equal(spec.ok, true, spec.detail);
+  const specMarkdown = await readFile(paths(cwd).specMd, 'utf8');
+  assert.match(specMarkdown, new RegExp(principle.id));
+
+  const brief = await tool.execute({ action: 'brief' }, exec(cwd));
+  assert.equal(brief.ok, true, brief.detail);
+  assert.match(brief.detail, /原则卡：1 张/);
+  const briefMarkdown = await readFile(paths(cwd).designBriefMd, 'utf8');
+  assert.match(briefMarkdown, /设计原则（方向）/);
+  assert.match(briefMarkdown, /负空间即注意力预算/);
+  assert.match(briefMarkdown, /空白占比 ≥ 35%/);
+  assert.match(briefMarkdown, /为了留白牺牲信息密度/);
+
+  const unknown = await writeSpec(cwd, { principleRefs: ['PR-9999'], designRefs: [pattern.id] });
+  assert.equal(unknown.ok, false);
+  assert.match(unknown.detail, /PR-9999|不存在/);
+
+  const audit = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audit.ok, true, audit.detail);
+  const report = await readFile(join(paths(cwd).shared, 'artifacts', 'acceptance-report.md'), 'utf8');
+  assert.match(report, /原则对照/);
+  assert.match(report, new RegExp(principle.id));
+  assert.match(report, /负空间即注意力预算/);
+  const json = JSON.parse(await readFile(join(paths(cwd).shared, 'artifacts', 'audit-1.json'), 'utf8'));
+  assert.equal(json.design.principles[0].principleRef, principle.id);
+  assert.equal(json.design.principles[0].status, 'active');
+
+  const raw = JSON.parse(await readFile(paths(cwd).designManifest, 'utf8'));
+  raw.cards = raw.cards.map((card) => (card.id === principle.id ? { ...card, status: 'blocked' } : card));
+  await writeFile(paths(cwd).designManifest, `${JSON.stringify(raw, null, 2)}\n`, 'utf8');
+  const blocked = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(blocked.ok, false);
+  assert.match(blocked.detail, /block/);
+});
+
 test('0.6.5 AP-I: design cards inherit their anti-patterns into spec and audit', async () => {
   const cwd = await workspace();
   const { byTitle } = await buildStructuredFixture(cwd);

@@ -22,6 +22,7 @@ import {
   criteriaByDimension,
   isAntiPatternRefId,
   isDesignRefId,
+  isPrincipleRefId,
   normalizeAssertion,
   parseTaskPack,
   renderSpecMarkdown,
@@ -82,6 +83,7 @@ function parseCriteria(raw: Record<string, unknown>): CriterionInput[] {
       profileRef: optionalString(item, 'profileRef', label, 40),
       designRefs: optionalStringArray(item, 'designRefs', label, 8),
       antiPatternRefs: optionalStringArray(item, 'antiPatternRefs', label, 8),
+      principleRefs: optionalStringArray(item, 'principleRefs', label, 8),
       ...(assertion === undefined ? {} : { assertion })
     };
   });
@@ -107,10 +109,17 @@ async function designRefIssues(
     manifest = await readDesignManifest(paths);
   } catch (error) {
     if (!(error instanceof DesignLibraryError)) throw error;
-    if (pack.criteria.some((criterion) => (criterion.designRefs?.length ?? 0) > 0)) {
+    if (
+      pack.criteria.some(
+        (criterion) =>
+          (criterion.designRefs?.length ?? 0) > 0 ||
+          (criterion.antiPatternRefs?.length ?? 0) > 0 ||
+          (criterion.principleRefs?.length ?? 0) > 0
+      )
+    ) {
       warnings.push({
         code: 'W_DESIGN_LIBRARY_UNREADABLE',
-        message: `设计库不可读（${error.message}），本轮无法校验 designRefs；修好库后重跑 \`dwguard_spec\` 复检。`
+        message: `设计库不可读（${error.message}），本轮无法校验 designRefs / antiPatternRefs / principleRefs；修好库后重跑 \`dwguard_spec\` 复检。`
       });
     }
     return { errors, warnings, inherited: new Map() };
@@ -128,6 +137,13 @@ async function designRefIssues(
         errors.push({
           code: 'E_ANTIPATTERN_LIBRARY_MISSING',
           message: `判据 \`${criterion.id}\` 引用了反模式，但设计库还没初始化；先 \`dwguard_design\` 的 \`library init\` + \`library ingest\`。`,
+          criterionId: criterion.id
+        });
+      }
+      if ((criterion.principleRefs?.length ?? 0) > 0) {
+        errors.push({
+          code: 'E_PRINCIPLE_LIBRARY_MISSING',
+          message: `判据 \`${criterion.id}\` 引用了设计原则，但设计库还没初始化；先 \`dwguard_design\` 的 \`library init\` + \`library ingest\`。`,
           criterionId: criterion.id
         });
       }
@@ -173,6 +189,29 @@ async function designRefIssues(
         errors.push({
           code: 'E_ANTIPATTERN_REF_BLOCKED',
           message: `判据 \`${criterion.id}\` 引用的反模式 \`${ref}\` 已被 block，不能作为验收依据。`,
+          criterionId: criterion.id
+        });
+      }
+    }
+    for (const ref of criterion.principleRefs ?? []) {
+      if (!isPrincipleRefId(ref)) continue; // format error already reported
+      const card = cards.get(ref);
+      if (card === undefined) {
+        errors.push({
+          code: 'E_PRINCIPLE_REF_UNKNOWN',
+          message: `判据 \`${criterion.id}\` 引用的设计原则 \`${ref}\` 不存在；先在 \`library inbox\` 里 ingest 原则卡。`,
+          criterionId: criterion.id
+        });
+      } else if (card.status !== 'active') {
+        errors.push({
+          code: 'E_PRINCIPLE_REF_BLOCKED',
+          message: `判据 \`${criterion.id}\` 引用的设计原则 \`${ref}\` 已被 block，不能作为验收依据。`,
+          criterionId: criterion.id
+        });
+      } else if (!isPrincipleRefId(card.id)) {
+        errors.push({
+          code: 'E_PRINCIPLE_REF_KIND',
+          message: `判据 \`${criterion.id}\` 引用的 \`${ref}\` 不是原则卡；原则引用只能指向 kind=principle 的卡片。`,
           criterionId: criterion.id
         });
       }
@@ -290,6 +329,12 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
               items: { type: 'string' },
               description:
                 '反模式卡 ID（0.6.4，如 `AP-0001`）：只有审美判据应带；写入/审计时校验反模式存在且 active，报告渲染「反模式对照」。'
+            },
+            principleRefs: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                '设计原则卡 ID（0.6.7，如 `PR-0001`）：只做方向/对照，不直接当硬判据；写入/审计校验原则存在且 active，报告渲染「原则对照」。'
             },
             weight: {
               type: 'string',

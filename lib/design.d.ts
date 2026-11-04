@@ -14,9 +14,9 @@ import { type ClipConfig } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
-export declare const DESIGN_ENGINE_VERSION = "0.6.6";
+export declare const DESIGN_ENGINE_VERSION = "0.6.7";
 /** The card sections that become retrievable chunks. */
-export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand"];
+export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand", "principle"];
 /** One retrievable section of a card. */
 export type DesignSection = (typeof DESIGN_SECTIONS)[number];
 /** A numeric token (spacing/radius/type/motion). */
@@ -79,8 +79,8 @@ export interface DesignCard {
     readonly updatedAt: string;
     /** sha256 of the inbox metadata this card was ingested from (idempotency). */
     readonly ingestKey?: string;
-    /** `pattern` (default) or `anti-pattern`; anti-pattern ids use the AP-* namespace. */
-    readonly kind?: 'pattern' | 'anti-pattern';
+    /** `pattern` (default), `anti-pattern`, or `principle`; anti-pattern ids use AP-*, principles PR-*. */
+    readonly kind?: 'pattern' | 'anti-pattern' | 'principle';
     /** Optional ranked style preferences, e.g. `["极简主义", "玻璃拟态"]`. */
     readonly stylePriority?: readonly string[];
     /** Anti-pattern ids this pattern must avoid (`AP-0001`, …). */
@@ -91,6 +91,16 @@ export interface DesignCard {
     readonly dimensions?: DesignDimensions;
     /** Brand payload when `source.kind === 'brand'`. */
     readonly brand?: DesignBrand;
+    /** Principle statement (`kind: principle`), e.g. `留白是注意力预算`. */
+    readonly principle?: string;
+    /** Perceptual effect the principle is meant to produce. */
+    readonly perceptualEffect?: string;
+    /** Measurable proxies that make the principle testable. */
+    readonly proxies?: readonly string[];
+    /** UI contexts where the principle applies. */
+    readonly applications?: readonly string[];
+    /** Common misuses of the principle (anti-patterns in prose). */
+    readonly misuses?: readonly string[];
 }
 /** `manifest.json`. */
 export interface DesignManifest {
@@ -131,7 +141,7 @@ export interface DesignIndex {
 export interface DesignSearchHit {
     readonly cardId: string;
     readonly title: string;
-    readonly kind: 'pattern' | 'anti-pattern' | 'brand';
+    readonly kind: 'pattern' | 'anti-pattern' | 'brand' | 'principle';
     readonly score: number;
     readonly breakdown: {
         readonly bm25: number;
@@ -149,16 +159,16 @@ export interface DesignSearchHit {
     /** Weight used for the semantic blend (0.6.4). */
     readonly rerankWeight?: number;
 }
-/** Retrieval filters applied before ranking (0.6.3 A/B). */
+/** Retrieval filters applied before ranking (0.6.3 A/B, 0.6.7 principle). */
 export interface DesignSearchFilters {
     readonly appType?: string;
     readonly platform?: string;
     readonly style?: string;
-    /** `pattern` (default) excludes anti-pattern and brand cards. */
-    readonly kind?: 'pattern' | 'anti-pattern' | 'brand';
+    /** `pattern` (default) excludes anti-pattern, brand and principle cards. */
+    readonly kind?: 'pattern' | 'anti-pattern' | 'brand' | 'principle';
 }
 /** The effective kind of a card, matching the `search` filter vocabulary. */
-export declare function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand';
+export declare function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand' | 'principle';
 /** Anti-pattern ids a referenced design card contributes to an audit checklist (0.6.5). */
 export declare function inheritedAntiPatterns(card: DesignCard | undefined): string[];
 /** `search` output; the generated CLI prints the same shape. */
@@ -204,8 +214,8 @@ export declare function readDesignIndex(paths: SharedPaths): Promise<{
     index: DesignIndex;
     chunks: readonly DesignChunk[];
 }>;
-/** Next free id in the card's namespace (`DSG-*` patterns/brands, `AP-*` anti-patterns). */
-export declare function nextDesignId(cards: readonly DesignCard[], kind?: 'pattern' | 'anti-pattern'): string;
+/** Next free id in the card's namespace (`DSG-*`, `AP-*`, `PR-*`). */
+export declare function nextDesignId(cards: readonly DesignCard[], kind?: 'pattern' | 'anti-pattern' | 'principle'): string;
 /** Create the library skeleton (idempotent) and the read-only query CLI. */
 export declare function initDesignLibrary(paths: SharedPaths, now: string): Promise<{
     manifest: DesignManifest;
@@ -437,6 +447,8 @@ export interface DesignBriefResult {
     readonly query: string;
     readonly hits: readonly DesignSearchHit[];
     readonly brands: readonly DesignCard[];
+    /** Principle cards that set the direction (0.6.7). */
+    readonly principles: readonly DesignCard[];
     readonly result: DesignSearchResult;
     /** Targeted retrieval driven by the previous failed aesthetic audit. */
     readonly rework?: {
@@ -446,7 +458,7 @@ export interface DesignBriefResult {
     };
 }
 /** Render `tasks/design-brief.md`. */
-export declare function renderDesignBriefMarkdown(pack: TaskPack, result: DesignSearchResult, cards: readonly DesignCard[], brands: readonly DesignCard[], now: string, rework?: {
+export declare function renderDesignBriefMarkdown(pack: TaskPack, result: DesignSearchResult, cards: readonly DesignCard[], brands: readonly DesignCard[], principles: readonly DesignCard[], now: string, rework?: {
     readonly suggestions: readonly DesignReworkSuggestion[];
     readonly cards: readonly DesignCard[];
 }): string;

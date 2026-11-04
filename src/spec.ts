@@ -42,6 +42,8 @@ export interface CriterionInput {
   readonly designRefs?: readonly string[];
   /** Anti-pattern cards this criterion must not violate (`AP-0001`, 0.6.4). */
   readonly antiPatternRefs?: readonly string[];
+  /** Principle cards this criterion uses as direction (`PR-0001`, 0.6.7). */
+  readonly principleRefs?: readonly string[];
 }
 
 /** The model-supplied shape of a task pack. */
@@ -356,12 +358,34 @@ function criterionIssue(input: CriterionInput, index: number): Issue[] {
     }
   }
 
+  for (const raw of input.principleRefs ?? []) {
+    const ref = inline(raw);
+    if (!isPrincipleRefId(ref)) {
+      issues.push({
+        code: 'E_CRITERION_PRINCIPLE_FORMAT',
+        message: `判据 \`${label}\` 的 principleRef \`${ref}\` 格式不对；应为 \`PR-<四位数字>\`（如 \`PR-0001\`）。`,
+        criterionId: label
+      });
+    } else if (input.dimension !== 'aesthetic') {
+      issues.push({
+        code: 'W_CRITERION_PRINCIPLE_DIMENSION',
+        message: `判据 \`${label}\` 位于「${DIMENSION_LABELS[input.dimension]}」，却引用了原则 \`${ref}\`；只有审美判据应带 principleRefs。`,
+        criterionId: label
+      });
+    }
+  }
+
   return issues;
 }
 
 /** Whether a string is a well-formed anti-pattern id (`AP-0001`). */
 export function isAntiPatternRefId(value: string): boolean {
   return /^AP-\d{4}$/.test(value);
+}
+
+/** Whether a string is a well-formed principle id (`PR-0001`). */
+export function isPrincipleRefId(value: string): boolean {
+  return /^PR-\d{4}$/.test(value);
 }
 
 /** Whether a string is a well-formed design-library id (`DSG-0007`). */
@@ -545,6 +569,11 @@ export function buildTaskPack(
       : {
           antiPatternRefs: dedupe(criterion.antiPatternRefs.map((ref) => inline(ref)).filter((ref) => ref.length > 0))
         }),
+    ...(criterion.principleRefs === undefined || criterion.principleRefs.length === 0
+      ? {}
+      : {
+          principleRefs: dedupe(criterion.principleRefs.map((ref) => inline(ref)).filter((ref) => ref.length > 0))
+        }),
     ...(criterion.assertion === undefined ? {} : { assertion: criterion.assertion })
   }));
   const constraints = dedupe((input.constraints ?? []).map((item) => inline(item)).filter((item) => item.length > 0));
@@ -625,6 +654,14 @@ export function parseTaskPack(raw: string | null): TaskPack | null {
               .filter((item2) => item2.length > 0)
           }
         : {}),
+      ...(Array.isArray(entry['principleRefs'])
+        ? {
+            principleRefs: (entry['principleRefs'] as unknown[])
+              .filter((item2): item2 is string => typeof item2 === 'string')
+              .map((item2) => item2.trim())
+              .filter((item2) => item2.length > 0)
+          }
+        : {}),
       ...(assertion === undefined ? {} : { assertion })
     });
   }
@@ -685,6 +722,9 @@ export function renderSpecMarkdown(
         criterion.antiPatternRefs === undefined || criterion.antiPatternRefs.length === 0
           ? '—'
           : criterion.antiPatternRefs.map((ref) => `\`${ref}\``).join('<br>'),
+        criterion.principleRefs === undefined || criterion.principleRefs.length === 0
+          ? '—'
+          : criterion.principleRefs.map((ref) => `\`${ref}\``).join('<br>'),
         criterion.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
         criterion.statement,
         criterion.verify
@@ -718,7 +758,7 @@ export function renderSpecMarkdown(
     '',
     `共 ${pack.criteria.length} 条（must ${must} / should ${should}）。验收由 DSH 独立取证，不采信执行者自述。`,
     '',
-    table(['ID', '维度', '权重', '规则', '审美档案', '设计参考', '反模式', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
+    table(['ID', '维度', '权重', '规则', '审美档案', '设计参考', '反模式', '原则', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
     '',
     ...(inherited === undefined || inherited.size === 0
       ? []
