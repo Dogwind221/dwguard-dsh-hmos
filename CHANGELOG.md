@@ -4,6 +4,26 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.7.1 — 2026-11-04
+
+Documentation patch only. No runtime, API, schema or recommendation behavior changed.
+
+### Fixed
+
+- Architecture diagram now includes the design-reference/paradigm-pack branch above
+  `## 安装`; the acceptance-only ASCII flow and DshHoms screenshot are labelled as
+  the acceptance main loop (not the full current map).
+- Stale “three skills” comments in `cordis.patch.yml`, the agent preset and the
+  plugin entry comment are now “four skills”.
+- `docs/benchmark-integrations.md` and `docs/learning-backlog.md` are clearly
+  marked as 0.3 baseline snapshots, so their old tool counts/“weakness” notes are
+  not read as 0.7.x behavior.
+- Install/publish notes updated for the published 0.7.x packages.
+
+### Tests
+
+- No code change; suite remains 135/135.
+
 ## 0.7.0 — 2026-11-04
 
 The pack lifecycle release: paradigm packs get a registry, supersedes, schema v2
