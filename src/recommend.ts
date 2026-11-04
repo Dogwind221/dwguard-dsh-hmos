@@ -57,6 +57,9 @@ export interface DesignRecommendOption {
   readonly platform?: string;
   readonly tone?: string;
   readonly density?: DesignDensity;
+  /** Present when this option represents an accepted paradigm pack (0.6.8 learning). */
+  readonly packRef?: string;
+  readonly componentIds?: readonly string[];
 }
 
 /** Persisted recommendations consumed by `capture-pack`. */
@@ -85,6 +88,18 @@ export interface CapturePackInput {
   readonly choice: string;
   readonly name: string;
   readonly preview?: string;
+  /** Latest passed audit + user confirmation hashes (0.6.8 learning gate). */
+  readonly evidence: CapturePackEvidence;
+}
+
+/** Evidence that a paradigm pack passed the four-dimension gate. */
+export interface CapturePackEvidence {
+  readonly auditReport: string;
+  readonly auditSha256: string;
+  readonly auditPass: true;
+  readonly confirmation: string;
+  readonly confirmationSha256: string;
+  readonly userDecision: string;
 }
 
 /** Result of `captureDesignPack`. */
@@ -165,6 +180,7 @@ function scoreCard(
   if (includesTag(card.tone, tone)) score += 0.18;
   if (input.density !== undefined && card.density === input.density) score += 0.12;
   if (brandTemp !== undefined && card.colorProfile?.temperature === brandTemp) score += 0.08;
+  if (card.packRef !== undefined) score += 0.1;
   return Number(Math.min(1, score * Math.min(1.5, Math.max(0.5, card.weight))).toFixed(4));
 }
 
@@ -175,7 +191,9 @@ function pickDiverse(
   const picked: Array<{ card: DesignCard; score: number }> = [];
   const signatures = new Set<string>();
   const signature = (card: DesignCard): string =>
-    (card.stylePriority?.[0] ?? card.tone?.[0] ?? card.dimensions?.style ?? 'default').trim().toLowerCase();
+    card.packRef !== undefined
+      ? `pack:${card.packRef}`
+      : (card.stylePriority?.[0] ?? card.tone?.[0] ?? card.dimensions?.style ?? 'default').trim().toLowerCase();
   for (const item of ranked) {
     if (picked.length >= limit) break;
     const key = signature(item.card);
@@ -216,6 +234,8 @@ function renderOptionsMarkdown(
       option.antiPatternIds.length === 0 ? '- 禁止项：—' : `- 禁止项：${option.antiPatternIds.map((id) => `\`${id}\``).join('、')}`,
       `- tokens：${anchor === undefined ? '—' : tokenSummary(anchor)}`,
       option.preview === undefined ? '- 预览：—' : `- 预览：\`${option.preview}\`（仅视觉参考，不复制代码）`,
+      option.packRef === undefined ? '- 范式包：—' : `- 范式包：\`${option.packRef}\`（已审计 + 用户确认）`,
+      option.componentIds === undefined ? '' : `- 卡组：${option.componentIds.map((id) => `\`${id}\``).join('、')}`,
       '',
       '**为什么：**',
       ...option.why.map((item) => `- ${item}`),
@@ -273,8 +293,16 @@ export async function recommendDesign(
     ranked.set(card.id, { card, score: 0 });
   }
   const sorted = [...ranked.values()].sort((left, right) => right.score - left.score);
+  const packComponentIds = new Set(
+    sorted
+      .filter((item) => item.card.packRef !== undefined)
+      .flatMap((item) => item.card.componentIds ?? [])
+  );
+  const withoutPackDuplicates = sorted.filter(
+    (item) => item.card.packRef !== undefined || !packComponentIds.has(item.card.id)
+  );
   const topK = Math.min(3, Math.max(1, input.topK ?? 3));
-  const picked = pickDiverse(sorted, topK);
+  const picked = pickDiverse(withoutPackDuplicates.length >= topK ? withoutPackDuplicates : sorted, topK);
 
   // Principles are shared direction cards; pick the closest ones once.
   const principleResult = await searchDesignWithRanker(paths, options, manifest, index, chunks, query, 3, {
@@ -300,6 +328,10 @@ export async function recommendDesign(
     if (includesTag(card.tone, tone)) why.push(`气质匹配：${tone}`);
     if (input.density !== undefined && card.density === input.density) why.push(`密度匹配：${input.density}`);
     if (brandTemp !== undefined && card.colorProfile?.temperature === brandTemp) why.push(`品牌色温度匹配：${brandTemp}`);
+    if (card.packRef !== undefined) why.push(`源自范式包 ${card.packRef}（已通过四维审计 + 用户确认）`);
+    if (card.componentIds !== undefined && card.componentIds.length > 0) {
+      why.push(`卡组：${card.componentIds.map((id) => `\`${id}\``).join('、')}`);
+    }
     if (card.stylePriority !== undefined && card.stylePriority.length > 0) why.push(`风格：${card.stylePriority.join(' > ')}`);
     if (why.length === 0) why.push('与当前模块/语义匹配较弱，作为对照方向');
     const optionModule = includesTag(card.moduleTags, module) ? module : card.moduleTags?.[0];
@@ -314,6 +346,7 @@ export async function recommendDesign(
     if (card.donts.length > 0) cost.push(`实现时避免：${card.donts.join('；')}`);
     if (card.preview === undefined) cost.push('没有 preview，需要截图/说明确认');
     if (brandColors.length > 0) cost.push('色值需替换为品牌色，并在 HarmonyOS 真机重测对比度');
+    if (card.packRef !== undefined) cost.push('范式包是来源证据，新项目仍需重新跑四维审计');
     if (item.score === 0) cost.push('与当前模块/语义匹配较弱，仅作对照方向');
     const antiPatternIds = card.antiPatterns ?? [];
     return {
@@ -330,7 +363,9 @@ export async function recommendDesign(
       ...(optionAppType === undefined ? {} : { appType: optionAppType }),
       ...(optionPlatform === undefined ? {} : { platform: optionPlatform }),
       ...(optionTone === undefined ? {} : { tone: optionTone }),
-      ...(optionDensity === undefined ? {} : { density: optionDensity })
+      ...(optionDensity === undefined ? {} : { density: optionDensity }),
+      ...(card.packRef === undefined ? {} : { packRef: card.packRef }),
+      ...(card.componentIds === undefined ? {} : { componentIds: card.componentIds })
     };
   });
 
@@ -362,7 +397,9 @@ function renderPackReadme(
   recommendation: DesignRecommendation,
   option: DesignRecommendOption,
   cards: readonly DesignCard[],
+  cardFiles: ReadonlyArray<{ readonly file: string; readonly sourceId: string; readonly role: string }>,
   preview: string | undefined,
+  evidence: CapturePackEvidence,
   now: string
 ): string {
   const anchor = cards.find((card) => card.id === option.patternIds[0]);
@@ -378,7 +415,18 @@ function renderPackReadme(
     option.tone === undefined ? '' : `- 气质：${option.tone}`,
     option.density === undefined ? '' : `- 密度：${option.density}`,
     preview === undefined ? '- 预览：—' : `- 预览：\`${preview}\`（仅视觉参考，不复制代码）`,
+    `- 审计：\`${evidence.auditReport}\`（sha256 ${evidence.auditSha256}）`,
+    `- 确认：\`${evidence.confirmation}\`（sha256 ${evidence.confirmationSha256} · ${evidence.userDecision}）`,
     `- 卡片：${cards.map((card) => `\`${card.id}\` ${card.title}`).join('；')}`,
+    '',
+    '## 卡组',
+    '',
+    '| 文件 | 原卡片 | 角色 | 标题 |',
+    '| --- | --- | --- | --- |',
+    ...cardFiles.map((entry) => {
+      const card = cards.find((item) => item.id === entry.sourceId);
+      return `| \`${entry.file}\` | \`${entry.sourceId}\` | ${entry.role} | ${card?.title ?? '—'} |`;
+    }),
     '',
     '## 为什么',
     '',
@@ -399,6 +447,51 @@ function renderPackReadme(
     lines.push('## 锚点卡片 tokens', '', tokenSummary(anchor), '');
   }
   return `${lines.join('\n')}\n`;
+}
+
+function slugify(value: string): string {
+  const ascii = value
+    .normalize('NFKD')
+    .replace(/[^\w-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  return (ascii.length === 0 ? 'card' : ascii).slice(0, 48);
+}
+
+function roleOf(cardId: string, option: DesignRecommendOption): string {
+  if (option.patternIds[0] === cardId) return 'anchor';
+  if (option.patternIds.includes(cardId)) return 'support';
+  if (option.principleIds.includes(cardId)) return 'principle';
+  return 'anti-pattern';
+}
+
+/** Convert an internal card into an inbox-compatible meta (portable, no ids/status). */
+export function cardToInboxMeta(card: DesignCard): Record<string, unknown> {
+  return {
+    kind: card.kind ?? 'pattern',
+    title: card.title,
+    summary: card.summary,
+    tags: card.tags,
+    tokens: card.tokens,
+    source: card.source,
+    dos: card.dos,
+    donts: card.donts,
+    ...(card.rationale === undefined ? {} : { rationale: card.rationale }),
+    ...(card.stylePriority === undefined ? {} : { stylePriority: card.stylePriority }),
+    ...(card.antiPatterns === undefined ? {} : { antiPatterns: card.antiPatterns }),
+    ...(card.checklist === undefined ? {} : { checklist: card.checklist }),
+    ...(card.dimensions === undefined ? {} : { dimensions: card.dimensions }),
+    ...(card.brand === undefined ? {} : { brand: card.brand }),
+    ...(card.principle === undefined ? {} : { principle: card.principle }),
+    ...(card.perceptualEffect === undefined ? {} : { perceptualEffect: card.perceptualEffect }),
+    ...(card.proxies === undefined ? {} : { proxies: card.proxies }),
+    ...(card.applications === undefined ? {} : { applications: card.applications }),
+    ...(card.misuses === undefined ? {} : { misuses: card.misuses }),
+    ...(card.moduleTags === undefined ? {} : { moduleTags: card.moduleTags }),
+    ...(card.tone === undefined ? {} : { tone: card.tone }),
+    ...(card.density === undefined ? {} : { density: card.density })
+  };
 }
 
 /** Freeze the selected recommendation into a local design pack (0.6.8). */
@@ -429,7 +522,7 @@ export async function captureDesignPack(
   const manifest = await readDesignManifest(paths);
   if (manifest === null) throw new Error('设计库尚未初始化。');
   const cards = cardMap(manifest);
-  const ids = [...option.patternIds, ...option.principleIds, ...option.antiPatternIds];
+  const ids = [...new Set([...option.patternIds, ...option.principleIds, ...option.antiPatternIds])];
   const selected = ids.map((id) => cards.get(id)).filter((card): card is DesignCard => card !== undefined);
   if (selected.length === 0) throw new Error('候选卡片都不存在；重新 recommend 或重建设计库。');
   const packDir = join(paths.designPacksLocalDir, input.name);
@@ -451,9 +544,16 @@ export async function captureDesignPack(
 
   await ensureDir(join(packDir, 'cards'));
   const files: string[] = [];
-  for (const card of selected) {
-    const file = join(packDir, 'cards', `${card.id}.meta.json`);
-    await writeTextAtomic(file, `${JSON.stringify(card, null, 2)}\n`);
+  const cardFiles = selected.map((card, index) => ({
+    file: `cards/${String(index + 1).padStart(2, '0')}-${slugify(card.title)}.meta.json`,
+    sourceId: card.id,
+    role: roleOf(card.id, option)
+  }));
+  for (const [index, card] of selected.entries()) {
+    const entry = cardFiles[index];
+    if (entry === undefined) continue;
+    const file = join(packDir, entry.file);
+    await writeTextAtomic(file, `${JSON.stringify(cardToInboxMeta(card), null, 2)}\n`);
     files.push(displayPath(paths, file));
   }
   const pack: DesignPack = {
@@ -461,21 +561,38 @@ export async function captureDesignPack(
     name: input.name,
     createdAt: now,
     engineVersion: DESIGN_ENGINE_VERSION,
-    cards: selected
+    cards: selected,
+    status: 'paradigm',
+    specVersion,
+    requirement: recommendation.requirement,
+    ...(option.module === undefined ? {} : { module: option.module }),
+    ...(option.appType === undefined ? {} : { appType: option.appType }),
+    ...(option.platform === undefined ? {} : { platform: option.platform }),
+    ...(option.tone === undefined ? {} : { tone: option.tone }),
+    ...(option.density === undefined ? {} : { density: option.density }),
+    brandColors: recommendation.brandColors,
+    ...(previewRelative === undefined ? {} : { preview: previewRelative }),
+    why: option.why,
+    cost: option.cost,
+    cardFiles,
+    evidence: input.evidence
   };
   await writeTextAtomic(join(packDir, 'pack.json'), `${JSON.stringify(pack, null, 2)}\n`);
   files.push(displayPath(paths, join(packDir, 'pack.json')));
   const readme = join(packDir, 'README.md');
-  await writeTextAtomic(readme, renderPackReadme(input.name, recommendation, option, selected, previewRelative, now));
+  await writeTextAtomic(
+    readme,
+    renderPackReadme(input.name, recommendation, option, selected, cardFiles, previewRelative, input.evidence, now)
+  );
   files.push(displayPath(paths, readme));
 
   const anchor = selected.find((card) => option.patternIds.includes(card.id)) ?? selected[0];
   if (anchor === undefined) throw new Error('候选里没有锚点卡片。');
   const projectCard: DesignCard = {
     id: nextDesignId(manifest.cards, 'pattern'),
-    title: `项目模式 · ${input.name}`,
+    title: `范式包 · ${input.name}`,
     summary: recommendation.requirement,
-    tags: [...new Set([...anchor.tags, 'project', 'captured'])].slice(0, 12),
+    tags: [...new Set([...anchor.tags, 'project', 'captured', 'paradigm'])].slice(0, 12),
     source: { kind: 'project', ref: `design-pack:${input.name}`, license: 'internal' },
     tokens: anchor.tokens,
     rationale: option.why.join('；'),
@@ -483,7 +600,7 @@ export async function captureDesignPack(
     donts: anchor.donts,
     images: [],
     status: 'active',
-    weight: 1.1,
+    weight: 1.2,
     createdAt: now,
     updatedAt: now,
     ingestKey: sha256(`pack|${input.name}|${anchor.id}|${recommendation.requirement}`),
@@ -498,7 +615,9 @@ export async function captureDesignPack(
     ...(option.tone === undefined ? (anchor.tone === undefined ? {} : { tone: anchor.tone }) : { tone: [option.tone] }),
     ...(option.density === undefined ? (anchor.density === undefined ? {} : { density: anchor.density }) : { density: option.density }),
     ...(deriveColorProfile(anchor.tokens) === undefined ? {} : { colorProfile: deriveColorProfile(anchor.tokens) }),
-    ...(previewRelative === undefined ? {} : { preview: previewRelative })
+    ...(previewRelative === undefined ? {} : { preview: previewRelative }),
+    packRef: input.name,
+    componentIds: selected.map((card) => card.id)
   };
   const nextManifest: DesignManifest = {
     ...manifest,

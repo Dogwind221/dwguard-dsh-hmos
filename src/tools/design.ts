@@ -10,7 +10,7 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { resolve, sep } from 'node:path';
+import { relative, resolve, sep } from 'node:path';
 
 import { AREA_LABELS, readProfile, type AestheticArea } from '../aesthetic.js';
 import type { Options } from '../config.js';
@@ -47,7 +47,7 @@ import { captureDesignPack, recommendDesign } from '../recommend.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { ensureShared } from '../scaffold.js';
 import { readLatestJson, readState, updateState } from '../state.js';
-import { readTextOrNull, fileExists } from '../util/fs.js';
+import { readTextOrNull, fileExists, sha256File } from '../util/fs.js';
 import { nowIso } from '../util/md.js';
 import {
   arrayOfRecords,
@@ -172,7 +172,7 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Design reference library (0.6.2–0.6.8): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`, metadata incl. moduleTags/tone/density, derived colorProfile and an HTML preview path), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts, optional hybrid semantic recall (openai/dashscope embeddings), search-by-image (`image`) and multimodal text→image (`imageText`); `brief` writes `tasks/design-brief.md` with brand constraints, principle cards (direction) and pattern cards (implementation), `recommend` writes 3 diverse design options (`tasks/design-options.md` + recommendations.json), `capture-pack` freezes the user-confirmed choice into `.shared/design-packs/<name>/` and adds a project card for future recommendations, `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `pack` exports/imports card packs across projects, `stats` summarizes coverage. ' +
+      'Design reference library (0.6.2–0.6.8): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`, metadata incl. moduleTags/tone/density, derived colorProfile and an HTML preview path), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts, optional hybrid semantic recall (openai/dashscope embeddings), search-by-image (`image`) and multimodal text→image (`imageText`); `brief` writes `tasks/design-brief.md` with brand constraints, principle cards (direction) and pattern cards (implementation), `recommend` writes 3 diverse design options (`tasks/design-options.md` + recommendations.json), `capture-pack` freezes the user-confirmed choice — after the four-dimension audit passes and `dwguard_confirm` records the decision — into `.shared/design-packs/<name>/` (inbox-compatible cards + pack evidence) and adds a paradigm card for future recommendations, `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `pack` exports/imports card packs across projects, `stats` summarizes coverage. ' +
       'No network, no model calls, no extra dependencies; the same input always produces the same index and ranking. 参考是证据不是判据。',
     parameters: {
       action: {
@@ -471,35 +471,68 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
           const pack = await requireSpec(paths, options, TOOL);
           if (!optionalBoolean(args, 'confirmed', false)) {
             return fail('`capture-pack` 需要用户确认（`confirmed: true`）。', {
-              detail: '冻结设计包会写入项目卡并影响后续 recommend；必须先让用户看过候选/实现结果。',
+              detail: '冻结范式包会写入项目卡并影响后续 recommend；必须先让用户看过审计结果并确认。',
               next: '用户确认后带 `confirmed: true` 重试。'
+            });
+          }
+          type AuditRecord = { gate?: { pass?: boolean }; specVersion?: number };
+          const audit = await readLatestJson<AuditRecord>(paths.artifactsDir, 'audit');
+          if (audit === null || audit.value.gate?.pass !== true) {
+            return fail('还没有通过的四维审计，不能冻结范式包。', {
+              next: '先跑一次通过的 `dwguard_audit`（功能/审美/性能/无障碍齐全）。'
+            });
+          }
+          if (audit.value.specVersion !== pack.specVersion) {
+            return fail(`最近一次审计属于任务包 v${audit.value.specVersion ?? '?'}，与当前 v${pack.specVersion} 不一致；先审计当前版本。`);
+          }
+          type ConfirmationRecord = { specVersion?: number; decision?: string };
+          const confirmation = await readLatestJson<ConfirmationRecord>(paths.artifactsDir, 'confirmation');
+          if (confirmation === null || confirmation.value.specVersion !== pack.specVersion) {
+            return fail('缺少本轮用户确认（`artifacts/confirmation-<n>.json`），不能冻结范式包。', {
+              next: '先用 `dwguard_confirm` 记录用户决定。'
             });
           }
           const choice = requiredString(args, 'choice', TOOL, 20);
           const name = requiredString(args, 'name', TOOL, 60);
           const preview = optionalString(args, 'preview', TOOL, 300);
+          const auditFile = audit.file.replace(/\//g, sep);
+          const confirmationFile = confirmation.file.replace(/\//g, sep);
+          const auditSha256 = await sha256File(auditFile);
+          const confirmationSha256 = await sha256File(confirmationFile);
+          const auditRelative = relative(paths.shared, auditFile).split(sep).join('/');
+          const confirmationRelative = relative(paths.shared, confirmationFile).split(sep).join('/');
           const result = await captureDesignPack(
             paths,
             pack.specVersion,
             {
               choice,
               name,
-              ...(preview === undefined ? {} : { preview })
+              ...(preview === undefined ? {} : { preview }),
+              evidence: {
+                auditReport: auditRelative,
+                auditSha256,
+                auditPass: true,
+                confirmation: confirmationRelative,
+                confirmationSha256,
+                userDecision: confirmation.value.decision ?? 'unknown'
+              }
             },
             now
           );
           return ok(
-            `已冻结设计包 \`${name}\`（项目卡 \`${result.cardId}\`）。`,
+            `已冻结范式包 \`${name}\`（范式卡 \`${result.cardId}\`）。`,
             {
               detail: [
                 `- 目录：\`${displayPath(paths, result.dir)}/\``,
                 `- README：\`${result.readme}\``,
                 result.preview === undefined ? '- 预览：—' : `- 预览：\`${result.preview}\`（仅视觉参考，不复制代码）`,
                 `- 学习卡：\`${result.cardId}\`（下次 recommend 可命中）`,
-                '- 包内：README.md + cards/*.meta.json + pack.json + 可选 preview/index.html'
+                `- 审计：\`${auditRelative}\`（sha256 ${auditSha256.slice(0, 12)}…）`,
+                `- 确认：\`${confirmationRelative}\`（${confirmation.value.decision ?? 'unknown'}）`,
+                '- 包内：README.md + cards/*.meta.json（inbox 兼容） + pack.json + 可选 preview/index.html'
               ].join('\n'),
               files: result.files,
-              next: '用 `brief`/`dispatch` 把这个包带进任务；下一轮 recommend 会优先考虑 project 卡。'
+              next: '用 `brief`/`dispatch` 把这个范式包带进任务；新项目仍需重新跑四维审计。'
             }
           );
         }

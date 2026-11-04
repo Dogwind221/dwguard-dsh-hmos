@@ -140,6 +140,10 @@ export interface DesignCard {
   readonly colorProfile?: DesignColorProfile;
   /** Relative `.shared` path to an HTML visual reference (0.6.8); not production code. */
   readonly preview?: string;
+  /** Name of the accepted paradigm pack this project card represents (0.6.8 learning). */
+  readonly packRef?: string;
+  /** Source card ids that make up the paradigm pack (0.6.8 learning). */
+  readonly componentIds?: readonly string[];
 }
 
 /** `manifest.json`. */
@@ -1882,6 +1886,28 @@ export interface DesignPack {
   readonly createdAt: string;
   readonly engineVersion: string;
   readonly cards: readonly DesignCard[];
+  /** Paradigm metadata (0.6.8 learning; optional for older packs). */
+  readonly status?: 'draft' | 'paradigm';
+  readonly specVersion?: number;
+  readonly requirement?: string;
+  readonly module?: string;
+  readonly appType?: string;
+  readonly platform?: string;
+  readonly tone?: string;
+  readonly density?: DesignDensity;
+  readonly brandColors?: readonly string[];
+  readonly preview?: string;
+  readonly why?: readonly string[];
+  readonly cost?: readonly string[];
+  readonly cardFiles?: ReadonlyArray<{ readonly file: string; readonly sourceId: string; readonly role: string }>;
+  readonly evidence?: {
+    readonly auditReport: string;
+    readonly auditSha256: string;
+    readonly auditPass: boolean;
+    readonly confirmation: string;
+    readonly confirmationSha256: string;
+    readonly userDecision: string;
+  };
 }
 
 /** One row of `pack list`. */

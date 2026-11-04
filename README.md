@@ -250,7 +250,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_audit_dimension` | 审计取证 | 单个维度子代理返回后立刻记录（`passed` / `failed` / `note`） | 写 `artifacts/audit-progress.json`；面板据此让四张卡**逐张落地**，而不是同时亮 |
 | `dwguard_audit` | 外部审计 | 汇总逐条检查与发现，自动出返工单或验收报告 | must 全覆盖、四维全评估、无未关闭 blocker/major、失败项不许记成 unverified；带 `assertion` 的判据必须给 `actual` 实测值，闸门重算断言并拒绝矛盾结论；matrix 模式（主机内存 ≥32GB）下 checks 必须带 `device`+`family`，审美/无障碍缺屏族会被拒绝；`profileRef` 引用不存在/已 superseded 的审美档案 → error；证据文件缺失或**超过 20MB/份、100MB/包**整次拒绝；完成后清空进度文件；每次审计自动记账 |
 | `dwguard_aesthetic` | 审美学习（0.6.1–0.6.4） | `profile`、`baseline`、`compare`、`learn`、`template`（list/get/export/import 跨项目审美模板） | 写档案必须带 `source` + `confidence`，改已有领域的值需 `confirmed: true`；`learn` 默认只提议不落盘，`apply` 必须 `confirmed: true`；`baseline save` 必须有通过审计 + 用户确认；`template import` 必须 `confirmed: true`（merge 会 supersede 本地冲突） |
-| `dwguard_design` | 设计参考库（0.6.2–0.6.8） | `library init/ingest/list`、`search`（关键词 + 维度/模块/气质/密度过滤 + `image` 以图搜图 + `imageText` 多模态文本→图 + `kind: principle`）、`brief`（品牌/原则/模式三通道）、`recommend`（3 套候选）、`capture-pack`（用户确认后冻结设计包）、`feedback`、`capture`、`pack list/export/import`、`stats` | 默认 `lexical` 零网络；`hybrid` 支持 `openai`/`dashscope` provider；原则卡必须有 `proxies`/`checklist`；`preview` 只是视觉参考；`capture`/`capture-pack`/`pack import` 必须 `confirmed: true`；检索/审计轮次受预算硬停 |
+| `dwguard_design` | 设计参考库（0.6.2–0.6.8） | `library init/ingest/list`、`search`（关键词 + 维度/模块/气质/密度过滤 + `image` 以图搜图 + `imageText` 多模态文本→图 + `kind: principle`）、`brief`（品牌/原则/模式三通道）、`recommend`（3 套候选）、`capture-pack`（审计通过 + 用户确认后冻结范式包）、`feedback`、`capture`、`pack list/export/import`、`stats` | 默认 `lexical` 零网络；`hybrid` 支持 `openai`/`dashscope` provider；原则卡必须有 `proxies`/`checklist`；`preview` 只是视觉参考；`capture`/`capture-pack`/`pack import` 必须 `confirmed: true`（capture-pack 还需四维审计通过 + 用户确认记录）；检索/审计轮次受预算硬停 |
 | `dwguard_calibration` | 收尾 | 闸门准确率账本：`report` 算四维漏检率，`miss` 记录"审计通过但用户后来发现问题" | `miss` 必须针对已通过的审计；账本 `knowledge/calibration.jsonl` 只追加 |
 | `dwguard_confirm` | 收尾 | 记录用户对验收报告的决定：`accept` 结束本轮，`new_round` 迭代号 +1 | 必须有通过的审计与 acceptance-report；写 `artifacts/confirmation-<n>.json` 并更新 state |
 | `dwguard_knowledge` | 沉淀 | 追加到 `knowledge/<topic>.md` | 索引按 kind+结论去重 |
@@ -285,13 +285,13 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 10. **跨项目模板（0.6.4）**：`dwguard_aesthetic template export/import` 把 active 审美档案存到全局目录（默认 `~/.dsh/dwguard/aesthetic-templates`）；import 必须 `confirmed: true`，merge 会 supersede 本地冲突；
 11. **多模态 embedding（0.6.5–0.6.6）**：`designClipProvider: "dashscope"` 时走 DashScope 原生 `multimodal-embedding` 端点，`qwen3-vl-embedding` / `tongyi-embedding-vision-flash` **同一个模型同时给文本和图片出向量**；`search image` 把 pHash 与语义分融合（`designClipWeight`），`search imageText: "红色海报"` 直接文本→图；向量缓存在 `clip-embeddings.json`，失败时以图搜图回退 pHash、文本→图明确报错；
 12. **卡片包（0.6.5）**：`pack export/import` 把整个库的 active 卡片（含图片）打包到全局 `designPacksDir`；import 需 `confirmed: true`，自动重映射 id、按语义去重并重建索引；
-13. **推荐与冻结（0.6.8）**：`recommend` 按需求/模块/气质/密度/品牌色给最多 3 套候选（含 tokens、为什么、代价、preview），写 `tasks/design-options.md` + `recommendations.json`；用户选定后 `capture-pack choice:"opt-1" name:"..." confirmed:true` 冻结到 `.shared/design-packs/<name>/`（README.md + cards + pack.json + 可选 preview），并向设计库追加 `project` 卡，下一轮推荐优先考虑；
+13. **推荐与冻结（0.6.8）**：`recommend` 按需求/模块/气质/密度/品牌色给最多 3 套候选（含 tokens、为什么、代价、preview），写 `tasks/design-options.md` + `recommendations.json`；用户选定并实现后，**四维审计通过 + `dwguard_confirm` 记录**，再 `capture-pack choice:"opt-1" name:"..." confirmed:true` 冻结到 `.shared/design-packs/<name>/`（README.md + inbox 兼容 `cards/*.meta.json` + pack.json + 可选 preview），并向设计库追加一张 `范式包` 卡（带 `packRef`/`componentIds`），下一轮推荐优先考虑。没有审计/确认时 capture-pack 拒绝；
 14. **两个读者**：DSH 用 `dwguard_design`；DevEco 在 IDE 终端直接跑
    `node .shared/design-library/query.mjs "深色 卡片 间距" --top 5 --json`（支持 `--app-type` / `--platform` / `--style` / `--kind`），词法排序与工具 parity；hybrid、以图搜图、多模态、recommend 只在 DSH 侧（CLI 无端点/凭据/创作上下文），以简报/工具结果为准。
 
 **principle 卡（0.6.7）**：`kind: "principle"`（`PR-*`）把传统艺术/奖项的抽象审美变成方向卡，必须有 `principle` + 至少一个 `proxies`/`checklist`，并写清 `misuses`；`brief` 新增「0.2 设计原则（方向）」通道（pattern 仍负责实现），审美判据可用 `principleRefs` 做「原则对照」——只校验引用完整性，不把原则文本本身当硬判据。
 
-**推荐闭环（0.6.8）**：卡片新增 `moduleTags` / `tone` / `density` / 自动推导的 `colorProfile` 与 `preview`；`recommend` 输出 3 套可解释候选（不是“唯一最佳”），用户选定后用 `capture-pack` 冻结为设计包并写回一张 project 卡。`.md` 是给 DevEco 的表达层，JSON 卡是检索/审计层，preview HTML 只作视觉参考、不复制代码。
+**推荐闭环（0.6.8）**：卡片新增 `moduleTags` / `tone` / `density` / 自动推导的 `colorProfile` 与 `preview`；`recommend` 输出 3 套可解释候选（不是“唯一最佳”）。用户选定并实现后，必须**四维审计通过 + `dwguard_confirm` 记录**，`capture-pack` 才能冻结为范式包；包内 `cards/*.meta.json` 是 inbox 兼容格式，可直接投回空库 re-ingest；`pack.json` 带审计/确认哈希、角色与适用维度；同时写回一张 `范式包` 卡供下一轮推荐。`.md` 是给 DevEco 的表达层，JSON 卡是检索/审计层，preview HTML 只作视觉参考、不复制代码。
 
 设计取舍与分阶段路线见 [docs/0.6.2-plan.md](docs/0.6.2-plan.md)、[docs/0.6.3-plan.md](docs/0.6.3-plan.md)、[docs/0.6.4-plan.md](docs/0.6.4-plan.md)、[docs/0.6.5-plan.md](docs/0.6.5-plan.md)、[docs/0.6.6-plan.md](docs/0.6.6-plan.md)、[docs/0.6.7-plan.md](docs/0.6.7-plan.md) 与 [docs/0.6.8-plan.md](docs/0.6.8-plan.md)。
 
@@ -503,7 +503,7 @@ CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（133 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 冻结与 project 卡学习）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
+2. `npm test` 全绿（133 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 四维审计+确认门禁、inbox 可移植 cards、范式卡学习）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

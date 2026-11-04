@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { cp, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -1947,6 +1947,24 @@ test('0.6.8 RC/CP: recommend 3 diverse options and capture-pack freezes + learns
   assert.equal(unconfirmed.ok, false);
   assert.match(unconfirmed.summary, /confirmed: true/);
 
+  const noAudit = await tool.execute(
+    { action: 'capture-pack', choice: 'opt-1', name: 'silver-member-v1', confirmed: true },
+    exec(cwd)
+  );
+  assert.equal(noAudit.ok, false);
+  assert.match(noAudit.summary, /四维审计/);
+
+  const audited = await auditTool.execute({ checks }, exec(cwd));
+  assert.equal(audited.ok, true, audited.detail);
+  const noConfirmation = await tool.execute(
+    { action: 'capture-pack', choice: 'opt-1', name: 'silver-member-v1', confirmed: true },
+    exec(cwd)
+  );
+  assert.equal(noConfirmation.ok, false);
+  assert.match(noConfirmation.summary, /用户确认/);
+  const confirmed = await confirmTool.execute({ decision: 'accept', note: '用户确认会员中心方向' }, exec(cwd));
+  assert.equal(confirmed.ok, true, confirmed.detail);
+
   const captured = await tool.execute(
     { action: 'capture-pack', choice: 'opt-1', name: 'silver-member-v1', confirmed: true },
     exec(cwd)
@@ -1957,28 +1975,78 @@ test('0.6.8 RC/CP: recommend 3 diverse options and capture-pack freezes + learns
   assert.match(readme, /设计包 · silver-member-v1/);
   assert.match(readme, /仅视觉参考，不复制代码/);
   assert.match(readme, /会员中心首屏/);
+  assert.match(readme, /audit-\d+\.json/);
+  assert.match(readme, /confirmation-\d+\.json/);
   const pack = JSON.parse(await readFile(join(packDir, 'pack.json'), 'utf8'));
   assert.equal(pack.schemaVersion, 1);
+  assert.equal(pack.status, 'paradigm');
   assert.ok(pack.cards.length >= 3);
+  assert.equal(pack.evidence.auditPass, true);
+  assert.equal(pack.evidence.userDecision, 'accept');
+  assert.ok(pack.cardFiles.length >= 3);
+  const anchorFile = pack.cardFiles.find((entry) => entry.role === 'anchor');
+  assert.ok(anchorFile !== undefined);
+  assert.match(anchorFile.file, /^cards\/.+\.meta\.json$/);
+  const anchorMeta = JSON.parse(await readFile(join(packDir, anchorFile.file), 'utf8'));
+  assert.equal(anchorMeta.title, '银白极简 · 会员中心首页');
+  assert.equal(anchorMeta.kind, 'pattern');
+  assert.equal(anchorMeta.id, undefined, 'portable meta 不应带内部 id');
+  assert.ok(anchorMeta.moduleTags.includes('member-center'));
   assert.ok(await readFile(join(packDir, 'preview', 'index.html'), 'utf8').then((text) => text.includes('sculptural')));
-  const cardFile = await readFile(join(packDir, 'cards', `${home.id}.meta.json`), 'utf8');
-  assert.match(cardFile, /银白极简 · 会员中心首页/);
+
+  const freshCwd = await workspace();
+  await tool.execute({ action: 'library', op: 'init' }, exec(freshCwd));
+  await mkdir(paths(freshCwd).designInboxDir, { recursive: true });
+  for (const entry of await readdir(join(packDir, 'cards'))) {
+    await cp(join(packDir, 'cards', entry), join(paths(freshCwd).designInboxDir, entry));
+  }
+  const freshIngest = await tool.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(freshCwd));
+  assert.equal(freshIngest.ok, true, freshIngest.detail);
+  const freshManifest = await readDesignManifest(paths(freshCwd));
+  const freshHome = freshManifest?.cards.find((card) => card.title === '银白极简 · 会员中心首页');
+  assert.ok(freshHome !== undefined, 'pack cards 应可直接投回空库');
+  assert.ok(freshHome.moduleTags.includes('member-center'));
+  assert.equal(freshHome.density, 'low');
+  assert.ok(freshHome.kind === 'pattern');
+  assert.ok(freshManifest.cards.some((card) => card.kind === 'principle'));
+  assert.ok(freshManifest.cards.some((card) => card.kind === 'anti-pattern'));
 
   const after = await readDesignManifest(paths(cwd));
   assert.ok(after !== null);
-  const project = after.cards.find((card) => card.title === '项目模式 · silver-member-v1');
+  const project = after.cards.find((card) => card.title === '范式包 · silver-member-v1');
   assert.ok(project !== undefined);
   assert.equal(project.source.kind, 'project');
-  assert.equal(project.weight, 1.1);
+  assert.equal(project.weight, 1.2);
   assert.deepEqual(project.moduleTags, ['member-center']);
   assert.deepEqual(project.tone, ['calm']);
   assert.equal(project.density, 'low');
   assert.equal(project.preview, 'design-packs/silver-member-v1/preview/index.html');
+  assert.equal(project.packRef, 'silver-member-v1');
+  assert.ok(project.componentIds !== undefined && project.componentIds.length >= 3);
 
   const learned = await tool.execute(
-    { action: 'search', query: '项目模式', module: 'member-center' },
+    { action: 'search', query: '范式包', module: 'member-center' },
     exec(cwd)
   );
   assert.equal(learned.ok, true, learned.detail);
   assert.ok(learned.detail.includes(project.id));
+
+  const learnedRecommend = await tool.execute(
+    {
+      action: 'recommend',
+      requirement: '会员中心首屏要显示等级和积分，保留银白极简的留白，但主 CTA 必须清晰',
+      module: 'member-center',
+      tone: 'calm',
+      density: 'low',
+      appType: '会员',
+      platform: 'harmonyos'
+    },
+    exec(cwd)
+  );
+  assert.equal(learnedRecommend.ok, true, learnedRecommend.detail);
+  const learnedOptions = JSON.parse(await readFile(paths(cwd).designRecommendations, 'utf8'));
+  assert.ok(learnedOptions.options.some((option) => option.packRef === 'silver-member-v1'));
+  const learnedPackOption = learnedOptions.options.find((option) => option.packRef === 'silver-member-v1');
+  assert.ok(learnedPackOption.componentIds.length >= 3);
+  assert.ok(learnedPackOption.why.some((item) => item.includes('范式包')));
 });

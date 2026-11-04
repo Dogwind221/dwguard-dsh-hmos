@@ -20,10 +20,13 @@ an HTML visual reference, and the accepted design freezes into a reusable pack.
   module, app type, platform, tone, density and brand colours; each option carries
   anchor/principle/anti-pattern ids, tokens, why, cost and preview. Writes
   `tasks/design-options.md` + `.shared/design-library/recommendations.json`.
-- **`capture-pack`**: with `confirmed: true`, freezes the selected option into
-  `.shared/design-packs/<name>/` (`README.md`, `cards/*.meta.json`, `pack.json`,
-  optional `preview/index.html`), then appends a `project` card (`项目模式 · <name>`,
-  weight 1.1) so later recommendations can learn from the accepted version.
+- **`capture-pack`**: with `confirmed: true` **and** a passed four-dimension audit
+  plus a matching `dwguard_confirm` record, freezes the selected option into
+  `.shared/design-packs/<name>/` (`README.md`, inbox-compatible
+  `cards/*.meta.json`, `pack.json` with audit/confirmation hashes, optional
+  `preview/index.html`), then appends a `paradigm` card (`范式包 · <name>`,
+  weight 1.2, `packRef`/`componentIds`) so later recommendations can learn from
+  the accepted version. Without the gates, capture-pack refuses.
 - Brief card details now render module/tone/density/color profile and the preview
   path, with an explicit “visual reference, do not copy code” note.
 - `dwguard_design` description/params updated; the recommendation and capture flow
