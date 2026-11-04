@@ -6,6 +6,8 @@
 
 **DSH 侧的鸿蒙双 Agent 编排与外部审计插件。** 它把「DSH 编排 + DevEco Code 执行」的协作方式，从一份提示词文档变成一组**有闸门的工程动作**：任务包冻结、派发前对抗预审、Goal 模式派发、四维外部审计、返工单、验收报告、知识沉淀。
 
+0.6.2–0.7.0 在此之上加入**设计参考与范式包闭环**：`dwguard_design` 先 `recommend` 最多 3 套方向，`brief` 注入品牌/原则/模式；实现经四维审计 + 用户确认后 `capture-pack` 冻结范式包，`registry`/`supersedes`/`feedback`/`benchmark` 让下一轮推荐持续变好。
+
 核心主张只有一句：**交付物必须自己证明自己，DSH 不采信执行者的自述结论。**
 
 > English: [README.en.md](README.en.md) · 变更记录：[CHANGELOG.md](CHANGELOG.md)
@@ -26,23 +28,36 @@
 
 ```mermaid
 flowchart TD
-    U["用户需求"] --> S["dwguard_spec<br/>冻结任务包（四维判据）"]
+    U["用户需求 / 品牌色 / 模块"] --> DR["dwguard_design<br/>recommend：最多 3 套候选"]
+    DR --> CH["用户选方向<br/>可要求新方向"]
+    CH --> S["dwguard_spec<br/>冻结任务包（四维判据）"]
     S --> P["dwguard_prereview<br/>对抗预审（四视角 + 反驳）"]
     P -- 阻断项未清 --> S
     P -- 通过 --> D["dwguard_dispatch<br/>生成 Goal 简报"]
+    S --> B["design-brief<br/>品牌 / 原则 / 模式"]
     D --> E["DevEco 执行闭环<br/>理解任务包 → 编码 → 构建 → 推设备 → 自验"]
+    B --> E
     E --> C{"自评 / 澄清<br/>双方无异议？"}
     C -- "实现层分歧" --> E
     C -- "任务包层分歧" --> S
     C -- 无异议 --> A["dwguard_audit<br/>独立取证（截图/布局树/日志/数值）"]
     SH["增量② 影子审查<br/>只读中间代码与产物"] -. 结构性风险 .-> C
-    A -- 未通过 --> R["tasks/rework-n.md<br/>返工单"] --> E
+    A -- 未通过 --> R["tasks/rework-n.md<br/>返工单"]
+    R --> E
     A -- 通过 --> ACC["artifacts/acceptance-report.md<br/>验收报告"]
     ACC --> K["dwguard_knowledge<br/>沉淀经验"]
-    K --> U
+    ACC --> CF["dwguard_confirm<br/>用户确认"]
+    CF --> CP["capture-pack<br/>范式包 v2：cards + registry + evidence"]
+    CP --> LIB[("design-library<br/>cards / packs / feedback")]
+    LIB -. 检索 / 排序 .-> DR
+    FB["pack-feedback / benchmark"] -.-> LIB
     Q["dwguard_status<br/>阶段 / 未读交付 / 下一步"] -.-> S
     Q -.-> A
+    Q -.-> CP
+    K --> U
 ```
+
+主环仍是**四维验收**；设计参考层是旁路：`recommend` 给方向、`brief` 给规则，`capture-pack` 只在审计通过 + 用户确认后冻结范式包；`preview` 不是判据。
 
 两个回环，不要混：
 
@@ -59,13 +74,15 @@ flowchart TD
 | ③ 外部审计（不采信自验） | `dwguard_audit`（逐条 `checks` + 独立证据 + 四维覆盖闸门；**四维各派一个子代理并行取证**） |
 | ④ 知识沉淀 | `dwguard_knowledge`（按主题归档，索引去重） |
 
+**0.6.2–0.7.0 新增设计参考层**（不在原始四增量内）：`dwguard_design` 先 `recommend` 最多 3 套方向，选定后 `brief` 注入品牌/原则/模式；实现经四维审计 + 用户确认后 `capture-pack` 冻结范式包；`registry`/`supersedes`/`pack-feedback`/`benchmark` 让下一轮推荐优先命中。它只提供方向与对照，不替代四维判据。
+
 ---
 
 ## 安装
 
 要求：DSH `0.2.1-rc.x`（`engines.dsh: >=0.2.1-rc.0 <0.3.0`）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-已发布到 npm：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.7.0）。
+npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.7.0）。
 
 > **0.7.0 尚未发布到 npm**（npm 最新为 0.6.6）。发布前安装请省略 `@0.7.0`，或显式使用 `@0.6.6`；下文的固定版本示例对应源码版本。
 
@@ -79,7 +96,7 @@ flowchart TD
 | 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.7.0` |
 | 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.7.0` |
 
-安装器会从 npm registry 解析版本；想跟最新版就省略 `@0.6.6`。下文分别说明桌面版与 CLI profile 的细节。
+安装器会从 npm registry 解析版本；想跟最新版就省略版本号。下文分别说明桌面版与 CLI profile 的细节。
 
 先确认你跑的是哪种入口——**`desktop` profile 由桌面应用独占管理，命令行改不了它**（`dsh plugin --profile desktop …` 会被明确拒绝），所以两种入口的安装方式不同：
 
@@ -201,6 +218,8 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
  └──────────────────────────────────────────────┴──┘
    左栏：任务包层回退        右栏：实现层回退（返工）
 ```
+
+这张 ASCII 图只画**验收主环**；设计参考层是旁路：`recommend` → `design-brief` → 四维审计 + 用户确认 → `capture-pack`，不改变主环的闸门顺序。下图是 DshHoms 审计中的实际看板，同样只展示验收主环。
 
 ![审计中：两个维度已回、两个还在跑（640px）](docs/flow-live.png)
 ![还没有任务包时的灰态全景（640px）](docs/flow-empty.png)

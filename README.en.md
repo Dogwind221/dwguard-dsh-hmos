@@ -28,10 +28,31 @@ This plugin makes the hand-off explicit:
   one writes the acceptance report and waits for an explicit user decision.
 - **Calibration** — the plugin records every gate verdict and every later
   "this passed but the user found a bug", so the miss rate is measurable.
+- **Design reference (0.6.2–0.7.0)** — `dwguard_design` recommends up to three
+  directions, injects brand/principle/pattern rules into the brief, freezes an
+  accepted paradigm pack only after a passed audit + user confirmation, and
+  learns from pack feedback/benchmarks.
+
+## Design reference loop
+
+```text
+requirement + module + brand colours
+  → recommend (up to 3 directions)
+  → user chooses
+  → spec + design-brief
+  → DevEco implements with ArkUI
+  → four-dimension audit
+  → dwguard_confirm
+  → capture-pack (cards + pack.json + registry + optional preview)
+  → next recommend prefers the accepted pack
+```
+
+The preview HTML is a visual reference only — not production code and not
+acceptance evidence. Design cards/refs are contrast evidence, not criteria.
 
 ## Install
 
-Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.7.0).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.7.0).
 
 > **0.7.0 is not published to npm yet** (latest is 0.6.6). Until it is, omit `@0.7.0` or pin `@0.6.6` when installing; the fixed-version examples below track the source version.
 
@@ -47,7 +68,7 @@ Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh
 | CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.7.0` |
 | No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.7.0` |
 
-Omit `@0.6.6` to follow the latest release.
+Omit the version to follow the latest release.
 
 The `desktop` profile is managed **exclusively by the desktop app** — the CLI
 refuses `dsh plugin --profile desktop …`. Pick the path that matches how you run
