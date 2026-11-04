@@ -4,6 +4,36 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.6.8 — 2026-11-04
+
+The recommendation loop: cards now know their module, tone and density, can carry
+an HTML visual reference, and the accepted design freezes into a reusable pack.
+
+### Added
+
+- **Card metadata**: `moduleTags`, `tone`, `density` (`low|medium|high`) and a
+  `preview` path (`.shared`-relative HTML, visual reference only). `colorProfile`
+  (`temperature` / `contrast`) is derived from `tokens.palette`, never hand-written.
+  Ingest normalizes tags, ignores invalid density/preview fields with warnings, and
+  the new fields participate in `search` filters and ranking context.
+- **`recommend`**: builds up to 3 diverse, explainable options from requirement,
+  module, app type, platform, tone, density and brand colours; each option carries
+  anchor/principle/anti-pattern ids, tokens, why, cost and preview. Writes
+  `tasks/design-options.md` + `.shared/design-library/recommendations.json`.
+- **`capture-pack`**: with `confirmed: true`, freezes the selected option into
+  `.shared/design-packs/<name>/` (`README.md`, `cards/*.meta.json`, `pack.json`,
+  optional `preview/index.html`), then appends a `project` card (`项目模式 · <name>`,
+  weight 1.1) so later recommendations can learn from the accepted version.
+- Brief card details now render module/tone/density/color profile and the preview
+  path, with an explicit “visual reference, do not copy code” note.
+- `dwguard_design` description/params updated; the recommendation and capture flow
+  is covered by two new tests.
+
+### Tests
+
+- New metadata/colour-profile/filter case and a recommend → capture-pack → learned
+  project-card case; suite is now 133/133.
+
 ## 0.6.7 — 2026-11-04
 
 The principle-layer release: abstract aesthetics from art/award curation become a

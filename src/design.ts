@@ -29,10 +29,10 @@ import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull,
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
-export const DESIGN_ENGINE_VERSION = '0.6.7';
+export const DESIGN_ENGINE_VERSION = '0.6.8';
 
 /** The card sections that become retrievable chunks. */
-export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand', 'principle'] as const;
+export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand', 'principle', 'context'] as const;
 
 /** One retrievable section of a card. */
 export type DesignSection = (typeof DESIGN_SECTIONS)[number];
@@ -71,6 +71,15 @@ export interface DesignDimensions {
   readonly appType?: string;
   readonly platform?: string;
   readonly style?: string;
+}
+
+/** Layout density a card is designed for (0.6.8). */
+export type DesignDensity = 'low' | 'medium' | 'high';
+
+/** Colour character derived from `tokens.palette` (0.6.8; not hand-written). */
+export interface DesignColorProfile {
+  readonly temperature: 'warm' | 'cool' | 'neutral';
+  readonly contrast: 'low' | 'medium' | 'high';
 }
 
 /** Brand / business payload carried by `source.kind: brand` cards (0.6.3 B). */
@@ -121,6 +130,16 @@ export interface DesignCard {
   readonly applications?: readonly string[];
   /** Common misuses of the principle (anti-patterns in prose). */
   readonly misuses?: readonly string[];
+  /** Use-case tags such as `member-center` / `dashboard` / `onboarding` (0.6.8). */
+  readonly moduleTags?: readonly string[];
+  /** Mood tags such as `calm` / `energetic` / `luxury` (0.6.8). */
+  readonly tone?: readonly string[];
+  /** Information density the card is intended for (0.6.8). */
+  readonly density?: DesignDensity;
+  /** Derived from the palette; never hand-written (0.6.8). */
+  readonly colorProfile?: DesignColorProfile;
+  /** Relative `.shared` path to an HTML visual reference (0.6.8); not production code. */
+  readonly preview?: string;
 }
 
 /** `manifest.json`. */
@@ -188,6 +207,12 @@ export interface DesignSearchFilters {
   readonly style?: string;
   /** `pattern` (default) excludes anti-pattern, brand and principle cards. */
   readonly kind?: 'pattern' | 'anti-pattern' | 'brand' | 'principle';
+  /** Match any `moduleTags` entry (0.6.8). */
+  readonly module?: string;
+  /** Match any `tone` entry (0.6.8). */
+  readonly tone?: string;
+  /** Exact density match (0.6.8). */
+  readonly density?: DesignDensity;
 }
 
 /** The effective kind of a card, matching the `search` filter vocabulary. */
@@ -223,6 +248,15 @@ function matchesDesignFilters(card: DesignCard, filters: DesignSearchFilters): b
     const ranked = (card.stylePriority ?? []).some((style) => NORMALIZE_FILTER(style) === wanted);
     if ((dimension === undefined || NORMALIZE_FILTER(dimension) !== wanted) && !ranked) return false;
   }
+  if (filters.module !== undefined) {
+    const wanted = NORMALIZE_FILTER(filters.module);
+    if (!(card.moduleTags ?? []).some((tag) => NORMALIZE_FILTER(tag) === wanted)) return false;
+  }
+  if (filters.tone !== undefined) {
+    const wanted = NORMALIZE_FILTER(filters.tone);
+    if (!(card.tone ?? []).some((tag) => NORMALIZE_FILTER(tag) === wanted)) return false;
+  }
+  if (filters.density !== undefined && card.density !== filters.density) return false;
   return true;
 }
 
@@ -290,6 +324,54 @@ const SYNONYM_GROUPS: ReadonlyArray<readonly string[]> = [
 
 function sha256Text(text: string): string {
   return createHash('sha256').update(text).digest('hex');
+}
+
+function hexRgb(value: string): { r: number; g: number; b: number } | undefined {
+  const match = /^#([0-9a-f]{6})$/i.exec(value.trim());
+  if (match?.[1] === undefined) return undefined;
+  const hex = match[1];
+  return {
+    r: Number.parseInt(hex.slice(0, 2), 16),
+    g: Number.parseInt(hex.slice(2, 4), 16),
+    b: Number.parseInt(hex.slice(4, 6), 16)
+  };
+}
+
+function channelLuminance(value: number): number {
+  const c = value / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+function rgbLuminance(rgb: { r: number; g: number; b: number }): number {
+  return 0.2126 * channelLuminance(rgb.r) + 0.7152 * channelLuminance(rgb.g) + 0.0722 * channelLuminance(rgb.b);
+}
+
+/** Derive `colorProfile` from the palette (0.6.8); no palette means no profile. */
+export function deriveColorProfile(tokens: DesignTokens): DesignColorProfile | undefined {
+  const colors = tokens.palette.map((token) => hexRgb(token.value)).filter((rgb): rgb is { r: number; g: number; b: number } => rgb !== undefined);
+  if (colors.length === 0) return undefined;
+  const average = colors.reduce(
+    (acc, rgb) => ({ r: acc.r + rgb.r / colors.length, g: acc.g + rgb.g / colors.length, b: acc.b + rgb.b / colors.length }),
+    { r: 0, g: 0, b: 0 }
+  );
+  const delta = average.r - average.b;
+  const temperature: DesignColorProfile['temperature'] = delta > 12 ? 'warm' : delta < -12 ? 'cool' : 'neutral';
+  const luminances = colors.map(rgbLuminance);
+  const max = Math.max(...luminances);
+  const min = Math.min(...luminances);
+  const ratio = (max + 0.05) / (min + 0.05);
+  const contrast: DesignColorProfile['contrast'] = ratio >= 7 ? 'high' : ratio >= 3 ? 'medium' : 'low';
+  return { temperature, contrast };
+}
+
+/** Normalize a `.shared`-relative HTML preview path (0.6.8). */
+export function normalizePreviewPath(raw: unknown): string | undefined | null {
+  if (typeof raw !== 'string') return undefined;
+  const value = raw.trim().replace(/\\/g, '/');
+  if (value.length === 0) return undefined;
+  if (!value.toLowerCase().endsWith('.html')) return null;
+  if (value.startsWith('/') || /^[a-z]:/i.test(value) || value.split('/').includes('..')) return null;
+  return value.slice(0, 300);
 }
 
 /** Collapse whitespace and lowercase for stable hashing and indexing. */
@@ -401,7 +483,11 @@ export function cardChunks(card: DesignCard): DesignChunk[] {
     { section: 'antiPatterns', text: (card.antiPatterns ?? []).join('\n') },
     { section: 'checklist', text: (card.checklist ?? []).join('\n') },
     { section: 'brand', text: brandText },
-    { section: 'principle', text: principleText }
+    { section: 'principle', text: principleText },
+    {
+      section: 'context',
+      text: [...(card.moduleTags ?? []), ...(card.tone ?? []), card.density ?? ''].filter((line) => line.length > 0).join('\n')
+    }
   ];
   const chunks: DesignChunk[] = [];
   for (const { section, text } of sections) {
@@ -532,6 +618,7 @@ async function writeLibrary(paths: SharedPaths, manifest: DesignManifest): Promi
   const index = buildDesignIndex(chunks, manifest.updatedAt);
   const withCounts: DesignManifest = {
     ...manifest,
+    engineVersion: DESIGN_ENGINE_VERSION,
     counts: { cards: manifest.cards.length, chunks: chunks.length }
   };
   await ensureDir(paths.designDir);
@@ -539,6 +626,11 @@ async function writeLibrary(paths: SharedPaths, manifest: DesignManifest): Promi
   await writeTextAtomic(paths.designChunks, `${chunks.map((chunk) => JSON.stringify(chunk)).join('\n')}\n`);
   await writeTextAtomic(paths.designIndex, `${JSON.stringify(index, null, 2)}\n`);
   return [displayPath(paths, paths.designManifest), displayPath(paths, paths.designChunks), displayPath(paths, paths.designIndex)];
+}
+
+/** Persist a manifest and rebuild chunks/index (used by capture-pack, 0.6.8). */
+export async function writeDesignLibrary(paths: SharedPaths, manifest: DesignManifest): Promise<string[]> {
+  return writeLibrary(paths, manifest);
 }
 
 /** Next free id in the card's namespace (`DSG-*`, `AP-*`, `PR-*`). */
@@ -638,6 +730,10 @@ interface InboxMeta {
   readonly proxies?: unknown;
   readonly applications?: unknown;
   readonly misuses?: unknown;
+  readonly moduleTags?: unknown;
+  readonly tone?: unknown;
+  readonly density?: unknown;
+  readonly preview?: unknown;
 }
 
 function dimensionsFrom(raw: unknown): DesignDimensions | undefined {
@@ -848,6 +944,20 @@ export async function inboxCards(
     const id = nextDesignId([...existing, ...cards], cardKind);
     const stylePriority = stringArray(meta.stylePriority, 12);
     const dimensions = dimensionsFrom(meta.dimensions);
+    const moduleTags = stringArray(meta.moduleTags, 12).map((tag) => tag.toLowerCase());
+    const tone = stringArray(meta.tone, 12).map((tag) => tag.toLowerCase());
+    const densityRaw = typeof meta.density === 'string' ? meta.density.trim().toLowerCase() : undefined;
+    const density: DesignDensity | undefined =
+      densityRaw === 'low' || densityRaw === 'medium' || densityRaw === 'high' ? densityRaw : undefined;
+    if (densityRaw !== undefined && density === undefined) {
+      warnings.push(`${name}: density 只能是 low / medium / high，已忽略`);
+    }
+    const preview = normalizePreviewPath(meta.preview);
+    if (preview === null) {
+      warnings.push(`${name}: preview 必须是 .shared 内、以 .html 结尾的相对路径，已忽略`);
+    }
+    const tokens = normalizeTokens(meta.tokens);
+    const colorProfile = deriveColorProfile(tokens);
     cards.push({
       id,
       title,
@@ -858,7 +968,7 @@ export async function inboxCards(
         ...(typeof source['ref'] === 'string' && source['ref'].trim().length > 0 ? { ref: source['ref'].trim() } : {}),
         license
       },
-      tokens: normalizeTokens(meta.tokens),
+      tokens,
       ...(rationale === undefined ? {} : { rationale }),
       dos: stringArray(meta.dos, 12),
       donts: stringArray(meta.donts, 12),
@@ -878,7 +988,12 @@ export async function inboxCards(
       ...(perceptualEffect === undefined ? {} : { perceptualEffect }),
       ...(proxies.length === 0 ? {} : { proxies }),
       ...(applications.length === 0 ? {} : { applications }),
-      ...(misuses.length === 0 ? {} : { misuses })
+      ...(misuses.length === 0 ? {} : { misuses }),
+      ...(moduleTags.length === 0 ? {} : { moduleTags }),
+      ...(tone.length === 0 ? {} : { tone }),
+      ...(density === undefined ? {} : { density }),
+      ...(colorProfile === undefined ? {} : { colorProfile }),
+      ...(preview === null || preview === undefined ? {} : { preview })
     });
   }
   return { cards, skipped, warnings, files };
@@ -1111,13 +1226,18 @@ export function renderDesignCardsMarkdown(manifest: DesignManifest): string {
       `\`${card.id}\``,
       card.title,
       designCardKind(card),
+      [...(card.moduleTags ?? []), ...(card.tone ?? []), card.density ?? ''].filter((item) => item.length > 0).join('/') || '—',
       card.source.kind,
       card.source.license,
       card.status,
       card.weight.toFixed(1),
       String(cardChunks(card).length)
     ]);
-  return ['| ID | 标题 | kind | 来源 | license | 状态 | 权重 | 块数 |', '| --- | --- | --- | --- | --- | --- | --- | --- |', ...rows.map((row) => `| ${row.join(' | ')} |`)].join('\n');
+  return [
+    '| ID | 标题 | kind | 模块/气质/密度 | 来源 | license | 状态 | 权重 | 块数 |',
+    '| --- | --- | --- | --- | --- | --- | --- | --- | --- |',
+    ...rows.map((row) => `| ${row.join(' | ')} |`)
+  ].join('\n');
 }
 
 /** One-line token summary used by spec/audit reports (0.6.2 P2). */
@@ -1919,7 +2039,8 @@ export async function importDesignPack(
       await copyFileTo(from, join(paths.designDir, storedAs));
       images.push({ ...image, path: storedAs, sha256: sha });
     }
-    const kind = sourceCard.kind === 'anti-pattern' ? 'anti-pattern' : 'pattern';
+    const kind =
+      sourceCard.kind === 'anti-pattern' ? 'anti-pattern' : sourceCard.kind === 'principle' ? 'principle' : 'pattern';
     const id = nextDesignId(cards, kind);
     const card: DesignCard = {
       ...sourceCard,
@@ -2056,6 +2177,15 @@ function renderCardDetail(card: DesignCard): string[] {
       card.dimensions.style === undefined ? '' : `style=${card.dimensions.style}`
     ].filter((item) => item.length > 0);
     if (dims.length > 0) lines.push(`- 维度：${dims.join(' · ')}`);
+  }
+  if (card.moduleTags !== undefined && card.moduleTags.length > 0) lines.push(`- 模块：${card.moduleTags.join('、')}`);
+  if (card.tone !== undefined && card.tone.length > 0) lines.push(`- 气质：${card.tone.join('、')}`);
+  if (card.density !== undefined) lines.push(`- 密度：${card.density}`);
+  if (card.colorProfile !== undefined) {
+    lines.push(`- 色彩特征：${card.colorProfile.temperature} / ${card.colorProfile.contrast} contrast`);
+  }
+  if (card.preview !== undefined) {
+    lines.push(`- 预览（仅视觉参考，不复制代码）：\`${card.preview}\``);
   }
   if (card.principle !== undefined) lines.push(`- 原则：${truncate(card.principle, 240)}`);
   if (card.perceptualEffect !== undefined) lines.push(`- 感知效果：${card.perceptualEffect}`);
@@ -2471,7 +2601,8 @@ export async function captureDesignCard(
     weight: 1,
     createdAt: now,
     updatedAt: now,
-    ingestKey
+    ingestKey,
+    ...(deriveColorProfile(tokens) === undefined ? {} : { colorProfile: deriveColorProfile(tokens) })
   };
   const nextManifest: DesignManifest = { ...manifest, updatedAt: now, cards: [...manifest.cards, card] };
   const files = await writeLibrary(paths, nextManifest);

@@ -196,6 +196,77 @@ async function ingest(cwd, sources) {
   return tool.execute({ action: 'library', op: 'ingest', ...(sources === undefined ? {} : { sources }) }, exec(cwd));
 }
 
+async function seedSculptural(cwd) {
+  await mkdir(join(paths(cwd).shared, 'reference'), { recursive: true });
+  await writeFile(join(paths(cwd).shared, 'reference', 'sculptural.html'), '<!doctype html><title>reference</title><h1>sculptural</h1>\n', 'utf8');
+  await writeMeta(cwd, '00-ap-mirror.meta.json', {
+    kind: 'anti-pattern',
+    title: '镜面金属与玻璃拟态滥用',
+    rationale: '大面积镜面反射会破坏正文对比度。',
+    checklist: ['正文区 0 镜面模糊'],
+    dimensions: { platform: 'harmonyos', style: '银白极简' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, '01-pr-space.meta.json', {
+    kind: 'principle',
+    title: '负空间即注意力预算',
+    principle: '留白是引导视线和降低认知负荷的手段',
+    proxies: ['空白占比 ≥ 35%', '首屏主操作 = 1'],
+    checklist: ['首屏只有一个主 CTA'],
+    dimensions: { appType: '会员', platform: 'harmonyos', style: '银白极简' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, '02-home.meta.json', {
+    title: '银白极简 · 会员中心首页',
+    summary: '银白画布、中心 hero、单一主 CTA',
+    rationale: '会员中心 首屏 银白 极简 留白 会员等级 积分 主 CTA',
+    tokens: {
+      palette: [{ name: 'canvas', value: '#F5F6F7' }, { name: 'ink', value: '#16191B' }],
+      radius: [{ name: 'hero', value: 30, unit: 'vp' }]
+    },
+    moduleTags: ['member-center', 'home'],
+    tone: ['calm', 'luxury'],
+    density: 'low',
+    stylePriority: ['银白极简'],
+    checklist: ['主 CTA 首屏可见'],
+    antiPatterns: ['AP-0001'],
+    dimensions: { appType: '会员', platform: 'harmonyos', style: '银白极简' },
+    preview: 'reference/sculptural.html',
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, '03-dashboard.meta.json', {
+    title: '深色数据看板',
+    summary: '高密度卡片、深色底、图表优先',
+    rationale: '数据看板 高密度 深色 图表 指标',
+    tokens: {
+      palette: [{ name: 'bg', value: '#101820' }, { name: 'text', value: '#D8E8F2' }],
+      radius: [{ name: 'card', value: 12, unit: 'vp' }]
+    },
+    moduleTags: ['dashboard'],
+    tone: ['energetic'],
+    density: 'high',
+    stylePriority: ['深色金属'],
+    dimensions: { appType: '数据', platform: 'harmonyos', style: '深色金属' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  await writeMeta(cwd, '04-reading.meta.json', {
+    title: '暖灰阅读卡片',
+    summary: '暖灰底、大字号、低密度',
+    rationale: '阅读 大字号 暖灰 低密度 长文',
+    tokens: {
+      palette: [{ name: 'bg', value: '#2A2320' }, { name: 'text', value: '#E8DED2' }],
+      radius: [{ name: 'card', value: 20, unit: 'vp' }]
+    },
+    moduleTags: ['reading'],
+    tone: ['calm'],
+    density: 'low',
+    stylePriority: ['暖灰极简'],
+    dimensions: { appType: '阅读', platform: 'harmonyos', style: '暖灰极简' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  return ingest(cwd, ['inbox']);
+}
+
 const targets = [
   {
     name: 't1.meta.json',
@@ -1755,4 +1826,159 @@ test('0.6.3 F: failed aesthetic audit feeds the next brief, passing clears it', 
   const passing = await auditTool.execute({ checks }, exec(cwd));
   assert.equal(passing.ok, true, passing.detail);
   await assert.rejects(readFile(paths(cwd).designReworkQueue, 'utf8'));
+});
+
+test('0.6.8 MD: module/tone/density/preview metadata and derived colorProfile drive retrieval', async () => {
+  const cwd = await workspace();
+  await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+  const seeded = await seedSculptural(cwd);
+  assert.equal(seeded.ok, true, seeded.detail);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const home = manifest.cards.find((card) => card.title === '银白极简 · 会员中心首页');
+  const dashboard = manifest.cards.find((card) => card.title === '深色数据看板');
+  const reading = manifest.cards.find((card) => card.title === '暖灰阅读卡片');
+  assert.ok(home !== undefined && dashboard !== undefined && reading !== undefined);
+  assert.deepEqual(home.moduleTags, ['member-center', 'home']);
+  assert.deepEqual(home.tone, ['calm', 'luxury']);
+  assert.equal(home.density, 'low');
+  assert.equal(home.preview, 'reference/sculptural.html');
+  assert.equal(home.colorProfile?.temperature, 'neutral');
+  assert.equal(home.colorProfile?.contrast, 'high');
+  assert.equal(dashboard.colorProfile?.temperature, 'cool');
+  assert.equal(reading.colorProfile?.temperature, 'warm');
+
+  const byModule = await tool.execute({ action: 'search', query: '会员中心', module: 'member-center' }, exec(cwd));
+  assert.equal(byModule.ok, true, byModule.detail);
+  assert.ok(byModule.detail.includes(home.id));
+  assert.ok(!byModule.detail.includes(dashboard.id));
+
+  const byTone = await tool.execute({ action: 'search', query: '看板', tone: 'energetic' }, exec(cwd));
+  assert.equal(byTone.ok, true, byTone.detail);
+  assert.ok(byTone.detail.includes(dashboard.id));
+  assert.ok(!byTone.detail.includes(home.id));
+
+  const byDensity = await tool.execute({ action: 'search', query: '会员中心 阅读 卡片', density: 'low' }, exec(cwd));
+  assert.equal(byDensity.ok, true, byDensity.detail);
+  assert.ok(byDensity.detail.includes(home.id));
+  assert.ok(byDensity.detail.includes(reading.id));
+  assert.ok(!byDensity.detail.includes(dashboard.id));
+
+  await writeMeta(cwd, '99-bad-meta.meta.json', {
+    title: '非法元数据卡片',
+    summary: '用于验证 density/preview 校验',
+    density: 'dense',
+    preview: '../outside.html',
+    dimensions: { platform: 'harmonyos' },
+    source: { kind: 'user', license: 'internal' }
+  });
+  const bad = await tool.execute({ action: 'library', op: 'ingest', sources: ['inbox'] }, exec(cwd));
+  assert.equal(bad.ok, true, bad.detail);
+  assert.match(bad.detail, /density 只能是 low \/ medium \/ high/);
+  assert.match(bad.detail, /preview 必须是 \.shared 内、以 \.html 结尾的相对路径/);
+  const afterBad = await readDesignManifest(paths(cwd));
+  assert.equal(afterBad?.cards.length, manifest.cards.length + 1, '非法卡片仍可入库，但元数据被忽略');
+  const illegal = afterBad?.cards.find((card) => card.title === '非法元数据卡片');
+  assert.ok(illegal !== undefined);
+  assert.equal(illegal.density, undefined);
+  assert.equal(illegal.preview, undefined);
+});
+
+test('0.6.8 RC/CP: recommend 3 diverse options and capture-pack freezes + learns', async () => {
+  const cwd = await workspace();
+  await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+  const seeded = await seedSculptural(cwd);
+  assert.equal(seeded.ok, true, seeded.detail);
+  const spec = await specTool.execute(
+    {
+      action: 'write',
+      title: '会员中心',
+      requirement: '会员中心首屏展示等级、积分与主 CTA，采用银白极简，主操作必须清晰。',
+      spec: '会员中心首页使用 hero 状态、单一主 CTA、四宫格入口与卡片；正文区保持可读，不用金属纹理。',
+      constraints: ['compatibleSdkVersion 5.0.0(12)'],
+      criteria
+    },
+    exec(cwd)
+  );
+  assert.equal(spec.ok, true, spec.detail);
+
+  const recommended = await tool.execute(
+    {
+      action: 'recommend',
+      requirement: '会员中心首屏要显示等级和积分，保留银白极简的留白，但主 CTA 必须清晰',
+      module: 'member-center',
+      tone: 'calm',
+      density: 'low',
+      appType: '会员',
+      platform: 'harmonyos',
+      brandColors: ['#E8DED2', '#2A2320']
+    },
+    exec(cwd)
+  );
+  assert.equal(recommended.ok, true, recommended.detail);
+  assert.match(recommended.summary, /已生成 3 套设计候选/);
+  const options = JSON.parse(await readFile(paths(cwd).designRecommendations, 'utf8'));
+  assert.equal(options.schemaVersion, 1);
+  assert.equal(options.options.length, 3);
+  assert.equal(options.options[0].patternIds.length, 1);
+  assert.match(options.options[0].id, /^opt-\d$/);
+  assert.ok(options.options[0].why.length > 0);
+  assert.ok(options.options[0].cost.length > 0);
+  assert.equal(options.options[0].preview, 'reference/sculptural.html');
+  const home = (await readDesignManifest(paths(cwd)))?.cards.find((card) => card.title === '银白极简 · 会员中心首页');
+  assert.ok(home !== undefined);
+  assert.deepEqual(options.options[0].patternIds, [home.id]);
+  assert.ok(options.options[0].principleIds.some((id) => id.startsWith('PR-')));
+  const optionsMd = await readFile(paths(cwd).designOptionsMd, 'utf8');
+  assert.match(optionsMd, /为什么/);
+  assert.match(optionsMd, /代价/);
+  assert.match(optionsMd, /仅视觉参考，不复制代码/);
+
+  const brief = await tool.execute({ action: 'brief' }, exec(cwd));
+  assert.equal(brief.ok, true, brief.detail);
+  const briefMd = await readFile(paths(cwd).designBriefMd, 'utf8');
+  assert.match(briefMd, /预览（仅视觉参考，不复制代码）/);
+  assert.match(briefMd, /reference\/sculptural\.html/);
+
+  const unconfirmed = await tool.execute(
+    { action: 'capture-pack', choice: 'opt-1', name: 'silver-member-v1' },
+    exec(cwd)
+  );
+  assert.equal(unconfirmed.ok, false);
+  assert.match(unconfirmed.summary, /confirmed: true/);
+
+  const captured = await tool.execute(
+    { action: 'capture-pack', choice: 'opt-1', name: 'silver-member-v1', confirmed: true },
+    exec(cwd)
+  );
+  assert.equal(captured.ok, true, captured.detail);
+  const packDir = join(paths(cwd).designPacksLocalDir, 'silver-member-v1');
+  const readme = await readFile(join(packDir, 'README.md'), 'utf8');
+  assert.match(readme, /设计包 · silver-member-v1/);
+  assert.match(readme, /仅视觉参考，不复制代码/);
+  assert.match(readme, /会员中心首屏/);
+  const pack = JSON.parse(await readFile(join(packDir, 'pack.json'), 'utf8'));
+  assert.equal(pack.schemaVersion, 1);
+  assert.ok(pack.cards.length >= 3);
+  assert.ok(await readFile(join(packDir, 'preview', 'index.html'), 'utf8').then((text) => text.includes('sculptural')));
+  const cardFile = await readFile(join(packDir, 'cards', `${home.id}.meta.json`), 'utf8');
+  assert.match(cardFile, /银白极简 · 会员中心首页/);
+
+  const after = await readDesignManifest(paths(cwd));
+  assert.ok(after !== null);
+  const project = after.cards.find((card) => card.title === '项目模式 · silver-member-v1');
+  assert.ok(project !== undefined);
+  assert.equal(project.source.kind, 'project');
+  assert.equal(project.weight, 1.1);
+  assert.deepEqual(project.moduleTags, ['member-center']);
+  assert.deepEqual(project.tone, ['calm']);
+  assert.equal(project.density, 'low');
+  assert.equal(project.preview, 'design-packs/silver-member-v1/preview/index.html');
+
+  const learned = await tool.execute(
+    { action: 'search', query: '项目模式', module: 'member-center' },
+    exec(cwd)
+  );
+  assert.equal(learned.ok, true, learned.detail);
+  assert.ok(learned.detail.includes(project.id));
 });

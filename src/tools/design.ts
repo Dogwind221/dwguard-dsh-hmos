@@ -43,6 +43,7 @@ import {
 } from '../design.js';
 import { appendOutboxDsh, parseOutbox } from '../dispatch.js';
 import { displayPath } from '../paths.js';
+import { captureDesignPack, recommendDesign } from '../recommend.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { ensureShared } from '../scaffold.js';
 import { readLatestJson, readState, updateState } from '../state.js';
@@ -62,7 +63,7 @@ import {
 import { pathsOf, requireSpec } from './common.js';
 
 const TOOL = 'dwguard_design';
-const ACTIONS = ['library', 'search', 'brief', 'feedback', 'capture', 'pack', 'stats'] as const;
+const ACTIONS = ['library', 'search', 'brief', 'recommend', 'capture-pack', 'feedback', 'capture', 'pack', 'stats'] as const;
 const PACK_OPS = ['list', 'export', 'import'] as const;
 const LIBRARY_OPS = ['init', 'ingest', 'list'] as const;
 const INGEST_SOURCES = ['rules', 'inbox'] as const;
@@ -144,6 +145,7 @@ function statsDetail(manifest: DesignManifest): string {
     `- 类型：pattern ${cards.filter((card) => designCardKind(card) === 'pattern').length} / anti-pattern ${cards.filter((card) => designCardKind(card) === 'anti-pattern').length} / principle ${cards.filter((card) => designCardKind(card) === 'principle').length} / brand ${cards.filter((card) => designCardKind(card) === 'brand').length}`,
     `- 块：${manifest.counts.chunks}`,
     `- 引擎：${manifest.engineVersion}`,
+    `- 元数据覆盖：module ${active.filter((card) => (card.moduleTags ?? []).length > 0).length}/${active.length} · tone ${active.filter((card) => (card.tone ?? []).length > 0).length}/${active.length} · density ${active.filter((card) => card.density !== undefined).length}/${active.length} · preview ${active.filter((card) => card.preview !== undefined).length}/${active.length}`,
     `- 更新时间：${manifest.updatedAt}`,
     '',
     '**来源/许可**',
@@ -170,14 +172,14 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Design reference library (0.6.2–0.6.7): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts, optional hybrid semantic recall (openai/dashscope embeddings), search-by-image (`image`) and multimodal text→image (`imageText`); `brief` writes `tasks/design-brief.md` with brand constraints, principle cards (direction) and pattern cards (implementation), `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `pack` exports/imports card packs across projects, `stats` summarizes coverage. ' +
+      'Design reference library (0.6.2–0.6.8): `library init` writes `.shared/design-library/` plus a dependency-free read-only `query.mjs`, `library ingest` seeds cards from the aesthetic rule catalog and `inbox/*.meta.json` (images copied into `refs/`, metadata incl. moduleTags/tone/density, derived colorProfile and an HTML preview path), `library list` prints the cards, `search` runs deterministic BM25 + structured boosts, optional hybrid semantic recall (openai/dashscope embeddings), search-by-image (`image`) and multimodal text→image (`imageText`); `brief` writes `tasks/design-brief.md` with brand constraints, principle cards (direction) and pattern cards (implementation), `recommend` writes 3 diverse design options (`tasks/design-options.md` + recommendations.json), `capture-pack` freezes the user-confirmed choice into `.shared/design-packs/<name>/` and adds a project card for future recommendations, `feedback` applies useful/off/block/unblock verdicts, `capture` turns a passing baseline into a project card (needs `confirmed: true`), `pack` exports/imports card packs across projects, `stats` summarizes coverage. ' +
       'No network, no model calls, no extra dependencies; the same input always produces the same index and ranking. 参考是证据不是判据。',
     parameters: {
       action: {
         type: 'string',
         required: true,
         enum: [...ACTIONS],
-        description: 'library / search / brief / feedback / capture / pack / stats。'
+        description: 'library / search / brief / recommend / capture-pack / feedback / capture / pack / stats。'
       },
       op: {
         type: 'string',
@@ -202,6 +204,25 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
       appType: { type: 'string', description: 'search 过滤：App 类型（如 `金融后台`），命中 dimensions.appType。' },
       platform: { type: 'string', description: 'search 过滤：平台（如 `harmonyos`），命中 dimensions.platform。' },
       style: { type: 'string', description: 'search 过滤：风格（命中 dimensions.style 或 stylePriority）。' },
+      module: { type: 'string', description: 'search/recommend：模块标签，如 `member-center` / `dashboard`（0.6.8）。' },
+      tone: { type: 'string', description: 'search/recommend：气质标签，如 `calm` / `energetic` / `luxury`（0.6.8）。' },
+      density: {
+        type: 'string',
+        enum: ['low', 'medium', 'high'],
+        description: 'search/recommend：信息密度（0.6.8）。'
+      },
+      brandColors: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'recommend：品牌色（#RRGGBB，1–8 个）；用于温度匹配与“需替换为品牌色”的代价提示。'
+      },
+      requirement: {
+        type: 'string',
+        description: 'recommend：需求原文；省略时使用任务包里的 requirement。'
+      },
+      choice: { type: 'string', description: 'capture-pack：要冻结的候选 id（opt-1/opt-2/opt-3）。' },
+      name: { type: 'string', description: 'capture-pack：设计包名（字母/数字/`-`/`_`，2–41 字符）。' },
+      preview: { type: 'string', description: 'capture-pack：可选的 `.shared` 内 HTML 参考路径；省略则用卡片自带 preview。' },
       kind: {
         type: 'string',
         enum: ['pattern', 'anti-pattern', 'brand', 'principle'],
@@ -233,7 +254,7 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
       state: { type: 'string', description: 'capture：状态名（默认 default）。' },
       title: { type: 'string', description: 'capture：项目卡标题（默认 `项目模式 · page/state`）。' },
       tags: { type: 'array', items: { type: 'string' }, description: 'capture：附加标签。' },
-      confirmed: { type: 'boolean', description: 'capture 与 pack import 必须带 `confirmed: true`。' },
+      confirmed: { type: 'boolean', description: 'capture / capture-pack / pack import 必须带 `confirmed: true`。' },
       packOp: {
         type: 'string',
         enum: [...PACK_OPS],
@@ -380,6 +401,105 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
               ].join('\n'),
               files: [displayPath(paths, brief.file), displayPath(paths, paths.outboxDsh)],
               next: '把 `tasks/design-brief.md` 交给 DevEco（dispatch 也会自动生成并引用）；它可以用 query.mjs 自服务，或写 `design-request` 让你补参考。'
+            }
+          );
+        }
+
+        if (action === 'recommend') {
+          const pack = await requireSpec(paths, options, TOOL);
+          const budget = await searchBudgetGuard(paths, options, now);
+          if (budget !== null) return budget;
+          const requirement = optionalString(args, 'requirement', TOOL, 600) ?? pack.requirement;
+          const module = optionalString(args, 'module', TOOL, 40);
+          const tone = optionalString(args, 'tone', TOOL, 40);
+          const density = optionalEnum(args, 'density', ['low', 'medium', 'high'] as const, TOOL);
+          const appType = optionalString(args, 'appType', TOOL, 40);
+          const platform = optionalString(args, 'platform', TOOL, 40);
+          const brandColors = optionalStringArray(args, 'brandColors', TOOL, 8);
+          const topK = optionalInt(args, 'topK', 3, TOOL, 1, 3);
+          const result = await recommendDesign(
+            paths,
+            options,
+            pack.specVersion,
+            {
+              requirement,
+              ...(module === undefined ? {} : { module }),
+              ...(tone === undefined ? {} : { tone }),
+              ...(density === undefined ? {} : { density }),
+              ...(appType === undefined ? {} : { appType }),
+              ...(platform === undefined ? {} : { platform }),
+              ...(brandColors === undefined ? {} : { brandColors }),
+              topK
+            },
+            now
+          );
+          await consumeSearchBudget(paths, now);
+          const optionsRows = result.recommendation.options.map((option) => [
+            `\`${option.id}\``,
+            option.title,
+            option.score.toFixed(2),
+            option.patternIds.map((id) => `\`${id}\``).join(' '),
+            option.preview === undefined ? '—' : `\`${option.preview}\``
+          ]);
+          if (result.recommendation.options.length === 0) {
+            return fail('没有可推荐的 pattern 卡片。', {
+              next: '先 `library ingest` 加入带 tokens/dimensions 的卡片，再重试 recommend。'
+            });
+          }
+          return ok(
+            `已生成 ${result.recommendation.options.length} 套设计候选，写入 \`${displayPath(paths, result.file)}\`。`,
+            {
+              detail: [
+                `- 需求：${requirement}`,
+                module === undefined ? '' : `- 模块：\`${module}\``,
+                brandColors === undefined || brandColors.length === 0 ? '' : `- 品牌色：${brandColors.join(' / ')}`,
+                '',
+                ['| 选项 | 方向 | 评分 | 卡片 | 预览 |', '| --- | --- | --- | --- | --- |', ...optionsRows.map((row) => `| ${row.join(' | ')} |`)].join('\n'),
+                '',
+                `- 机器可读：\`${displayPath(paths, paths.designRecommendations)}\``,
+                '- 推荐不承诺唯一最佳；请让用户选一套，再带 `capture-pack choice:"opt-1" name:"..." confirmed:true` 冻结。'
+              ]
+                .filter((line) => line.length > 0)
+                .join('\n'),
+              files: [displayPath(paths, result.file), displayPath(paths, paths.designRecommendations)],
+              next: '把候选表交给用户选；选定后用 `capture-pack` 冻结为设计包，再生成 brief/spec。'
+            }
+          );
+        }
+
+        if (action === 'capture-pack') {
+          const pack = await requireSpec(paths, options, TOOL);
+          if (!optionalBoolean(args, 'confirmed', false)) {
+            return fail('`capture-pack` 需要用户确认（`confirmed: true`）。', {
+              detail: '冻结设计包会写入项目卡并影响后续 recommend；必须先让用户看过候选/实现结果。',
+              next: '用户确认后带 `confirmed: true` 重试。'
+            });
+          }
+          const choice = requiredString(args, 'choice', TOOL, 20);
+          const name = requiredString(args, 'name', TOOL, 60);
+          const preview = optionalString(args, 'preview', TOOL, 300);
+          const result = await captureDesignPack(
+            paths,
+            pack.specVersion,
+            {
+              choice,
+              name,
+              ...(preview === undefined ? {} : { preview })
+            },
+            now
+          );
+          return ok(
+            `已冻结设计包 \`${name}\`（项目卡 \`${result.cardId}\`）。`,
+            {
+              detail: [
+                `- 目录：\`${displayPath(paths, result.dir)}/\``,
+                `- README：\`${result.readme}\``,
+                result.preview === undefined ? '- 预览：—' : `- 预览：\`${result.preview}\`（仅视觉参考，不复制代码）`,
+                `- 学习卡：\`${result.cardId}\`（下次 recommend 可命中）`,
+                '- 包内：README.md + cards/*.meta.json + pack.json + 可选 preview/index.html'
+              ].join('\n'),
+              files: result.files,
+              next: '用 `brief`/`dispatch` 把这个包带进任务；下一轮 recommend 会优先考虑 project 卡。'
             }
           );
         }
@@ -630,6 +750,9 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
         const appType = optionalString(args, 'appType', TOOL, 40);
         const platform = optionalString(args, 'platform', TOOL, 40);
         const style = optionalString(args, 'style', TOOL, 40);
+        const moduleFilter = optionalString(args, 'module', TOOL, 40);
+        const toneFilter = optionalString(args, 'tone', TOOL, 40);
+        const densityFilter = optionalEnum(args, 'density', ['low', 'medium', 'high'] as const, TOOL);
         const kind = optionalEnum(args, 'kind', ['pattern', 'anti-pattern', 'brand', 'principle'] as const, TOOL);
         const { index, chunks } = await readDesignIndex(paths);
         const profile = await readProfile(paths);
@@ -643,7 +766,10 @@ export function createDesignTool(options: Options, ctx?: PluginContext): ToolDef
             kind: kind ?? 'pattern',
             ...(appType === undefined ? {} : { appType }),
             ...(platform === undefined ? {} : { platform }),
-            ...(style === undefined ? {} : { style })
+            ...(style === undefined ? {} : { style }),
+            ...(moduleFilter === undefined ? {} : { module: moduleFilter }),
+            ...(toneFilter === undefined ? {} : { tone: toneFilter }),
+            ...(densityFilter === undefined ? {} : { density: densityFilter })
           }
         });
         await consumeSearchBudget(paths, now);

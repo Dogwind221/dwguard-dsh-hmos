@@ -14,9 +14,9 @@ import { type ClipConfig } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
-export declare const DESIGN_ENGINE_VERSION = "0.6.7";
+export declare const DESIGN_ENGINE_VERSION = "0.6.8";
 /** The card sections that become retrievable chunks. */
-export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand", "principle"];
+export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand", "principle", "context"];
 /** One retrievable section of a card. */
 export type DesignSection = (typeof DESIGN_SECTIONS)[number];
 /** A numeric token (spacing/radius/type/motion). */
@@ -49,6 +49,13 @@ export interface DesignDimensions {
     readonly appType?: string;
     readonly platform?: string;
     readonly style?: string;
+}
+/** Layout density a card is designed for (0.6.8). */
+export type DesignDensity = 'low' | 'medium' | 'high';
+/** Colour character derived from `tokens.palette` (0.6.8; not hand-written). */
+export interface DesignColorProfile {
+    readonly temperature: 'warm' | 'cool' | 'neutral';
+    readonly contrast: 'low' | 'medium' | 'high';
 }
 /** Brand / business payload carried by `source.kind: brand` cards (0.6.3 B). */
 export interface DesignBrand {
@@ -101,6 +108,16 @@ export interface DesignCard {
     readonly applications?: readonly string[];
     /** Common misuses of the principle (anti-patterns in prose). */
     readonly misuses?: readonly string[];
+    /** Use-case tags such as `member-center` / `dashboard` / `onboarding` (0.6.8). */
+    readonly moduleTags?: readonly string[];
+    /** Mood tags such as `calm` / `energetic` / `luxury` (0.6.8). */
+    readonly tone?: readonly string[];
+    /** Information density the card is intended for (0.6.8). */
+    readonly density?: DesignDensity;
+    /** Derived from the palette; never hand-written (0.6.8). */
+    readonly colorProfile?: DesignColorProfile;
+    /** Relative `.shared` path to an HTML visual reference (0.6.8); not production code. */
+    readonly preview?: string;
 }
 /** `manifest.json`. */
 export interface DesignManifest {
@@ -166,6 +183,12 @@ export interface DesignSearchFilters {
     readonly style?: string;
     /** `pattern` (default) excludes anti-pattern, brand and principle cards. */
     readonly kind?: 'pattern' | 'anti-pattern' | 'brand' | 'principle';
+    /** Match any `moduleTags` entry (0.6.8). */
+    readonly module?: string;
+    /** Match any `tone` entry (0.6.8). */
+    readonly tone?: string;
+    /** Exact density match (0.6.8). */
+    readonly density?: DesignDensity;
 }
 /** The effective kind of a card, matching the `search` filter vocabulary. */
 export declare function designCardKind(card: DesignCard): 'pattern' | 'anti-pattern' | 'brand' | 'principle';
@@ -184,6 +207,10 @@ export interface DesignSearchResult {
 /** Raised when the library on disk cannot be read or is inconsistent. */
 export declare class DesignLibraryError extends Error {
 }
+/** Derive `colorProfile` from the palette (0.6.8); no palette means no profile. */
+export declare function deriveColorProfile(tokens: DesignTokens): DesignColorProfile | undefined;
+/** Normalize a `.shared`-relative HTML preview path (0.6.8). */
+export declare function normalizePreviewPath(raw: unknown): string | undefined | null;
 /** Collapse whitespace and lowercase for stable hashing and indexing. */
 export declare function normalizeDesignText(text: string): string;
 /**
@@ -214,6 +241,8 @@ export declare function readDesignIndex(paths: SharedPaths): Promise<{
     index: DesignIndex;
     chunks: readonly DesignChunk[];
 }>;
+/** Persist a manifest and rebuild chunks/index (used by capture-pack, 0.6.8). */
+export declare function writeDesignLibrary(paths: SharedPaths, manifest: DesignManifest): Promise<string[]>;
 /** Next free id in the card's namespace (`DSG-*`, `AP-*`, `PR-*`). */
 export declare function nextDesignId(cards: readonly DesignCard[], kind?: 'pattern' | 'anti-pattern' | 'principle'): string;
 /** Create the library skeleton (idempotent) and the read-only query CLI. */

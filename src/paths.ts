@@ -51,6 +51,12 @@ export interface SharedPaths {
   readonly designBriefMd: string;
   /** Suggestions from the last failed aesthetic audit (0.6.3 F). */
   readonly designReworkQueue: string;
+  /** Recommended design options written for the user (0.6.8). */
+  readonly designOptionsMd: string;
+  /** Machine-readable recommendations consumed by capture-pack (0.6.8). */
+  readonly designRecommendations: string;
+  /** Local frozen design packs (0.6.8). */
+  readonly designPacksLocalDir: string;
   /** Embedding cache for hybrid rerank (0.6.4). */
   readonly designEmbeddings: string;
   /** Image feature cache for search-by-image (0.6.4). */
@@ -98,6 +104,9 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     designQueryScript: resolve(shared, 'design-library', 'query.mjs'),
     designBriefMd: resolve(shared, 'tasks', 'design-brief.md'),
     designReworkQueue: resolve(shared, 'design-library', 'rework-suggestions.json'),
+    designOptionsMd: resolve(shared, 'tasks', 'design-options.md'),
+    designRecommendations: resolve(shared, 'design-library', 'recommendations.json'),
+    designPacksLocalDir: resolve(shared, 'design-packs'),
     designEmbeddings: resolve(shared, 'design-library', 'embeddings.json'),
     designImageFeatures: resolve(shared, 'design-library', 'image-features.json'),
     designClipEmbeddings: resolve(shared, 'design-library', 'clip-embeddings.json'),
