@@ -29,7 +29,7 @@ import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull,
 import { inline, truncate } from './util/md.js';
 
 /** Version stamped into the manifest/index so a future format change is visible. */
-export const DESIGN_ENGINE_VERSION = '0.6.8';
+export const DESIGN_ENGINE_VERSION = '0.7.0';
 
 /** The card sections that become retrievable chunks. */
 export const DESIGN_SECTIONS = ['tokens', 'rationale', 'dos', 'donts', 'style', 'antiPatterns', 'checklist', 'brand', 'principle', 'context'] as const;
@@ -144,6 +144,8 @@ export interface DesignCard {
   readonly packRef?: string;
   /** Source card ids that make up the paradigm pack (0.6.8 learning). */
   readonly componentIds?: readonly string[];
+  /** Set when a newer paradigm pack supersedes this one (0.7.0). */
+  readonly supersededBy?: string;
 }
 
 /** `manifest.json`. */
@@ -1249,6 +1251,45 @@ export function designCardTokenSummary(card: DesignCard): string {
   return tokensText(card.tokens).split('\n').join('；');
 }
 
+/** Safe ASCII file slug for pack card files (0.7.0). */
+export function slugifyDesign(value: string): string {
+  const ascii = value
+    .normalize('NFKD')
+    .replace(/[^\w-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+  return (ascii.length === 0 ? 'card' : ascii).slice(0, 48);
+}
+
+/** Convert an internal card into an inbox-compatible meta (portable, no ids/status). */
+export function designCardToInboxMeta(card: DesignCard): Record<string, unknown> {
+  return {
+    kind: card.kind ?? 'pattern',
+    title: card.title,
+    summary: card.summary,
+    tags: card.tags,
+    tokens: card.tokens,
+    source: card.source,
+    dos: card.dos,
+    donts: card.donts,
+    ...(card.rationale === undefined ? {} : { rationale: card.rationale }),
+    ...(card.stylePriority === undefined ? {} : { stylePriority: card.stylePriority }),
+    ...(card.antiPatterns === undefined ? {} : { antiPatterns: card.antiPatterns }),
+    ...(card.checklist === undefined ? {} : { checklist: card.checklist }),
+    ...(card.dimensions === undefined ? {} : { dimensions: card.dimensions }),
+    ...(card.brand === undefined ? {} : { brand: card.brand }),
+    ...(card.principle === undefined ? {} : { principle: card.principle }),
+    ...(card.perceptualEffect === undefined ? {} : { perceptualEffect: card.perceptualEffect }),
+    ...(card.proxies === undefined ? {} : { proxies: card.proxies }),
+    ...(card.applications === undefined ? {} : { applications: card.applications }),
+    ...(card.misuses === undefined ? {} : { misuses: card.misuses }),
+    ...(card.moduleTags === undefined ? {} : { moduleTags: card.moduleTags }),
+    ...(card.tone === undefined ? {} : { tone: card.tone }),
+    ...(card.density === undefined ? {} : { density: card.density })
+  };
+}
+
 /** Embedding endpoint settings for hybrid rerank (0.6.4). */
 export interface DesignEmbeddingConfig {
   readonly endpoint: string;
@@ -1879,15 +1920,33 @@ export function defaultDesignPacksDir(): string {
   return join(homedir(), '.dsh', 'dwguard', 'design-packs');
 }
 
+/** Audit + confirmation evidence attached to a paradigm pack. */
+export interface DesignPackEvidence {
+  readonly auditReport: string;
+  readonly auditSha256: string;
+  readonly auditPass: boolean;
+  readonly confirmation: string;
+  readonly confirmationSha256: string;
+  readonly userDecision: string;
+}
+
+/** Pack-level feedback (0.7.0). */
+export interface DesignPackFeedback {
+  readonly useful: number;
+  readonly off: number;
+  /** Bounded score added to recommendation ranking (useful +, off −). */
+  readonly score: number;
+}
+
 /** One exported design pack. */
 export interface DesignPack {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly name: string;
   readonly createdAt: string;
   readonly engineVersion: string;
   readonly cards: readonly DesignCard[];
   /** Paradigm metadata (0.6.8 learning; optional for older packs). */
-  readonly status?: 'draft' | 'paradigm';
+  readonly status?: 'draft' | 'paradigm' | 'superseded';
   readonly specVersion?: number;
   readonly requirement?: string;
   readonly module?: string;
@@ -1900,14 +1959,36 @@ export interface DesignPack {
   readonly why?: readonly string[];
   readonly cost?: readonly string[];
   readonly cardFiles?: ReadonlyArray<{ readonly file: string; readonly sourceId: string; readonly role: string }>;
-  readonly evidence?: {
-    readonly auditReport: string;
-    readonly auditSha256: string;
-    readonly auditPass: boolean;
-    readonly confirmation: string;
-    readonly confirmationSha256: string;
-    readonly userDecision: string;
-  };
+  readonly evidence?: DesignPackEvidence;
+  readonly supersedes?: string;
+  readonly supersededBy?: string;
+  readonly feedback?: DesignPackFeedback;
+}
+
+/** Local pack registry entry (`.shared/design-packs/index.json`, 0.7.0). */
+export interface DesignPackRegistryEntry {
+  readonly name: string;
+  readonly status: 'draft' | 'paradigm' | 'superseded';
+  readonly createdAt: string;
+  readonly specVersion?: number;
+  readonly module?: string;
+  readonly appType?: string;
+  readonly platform?: string;
+  readonly tone?: string;
+  readonly density?: DesignDensity;
+  readonly preview?: string;
+  readonly cardIds: readonly string[];
+  readonly evidence?: DesignPackEvidence;
+  readonly supersedes?: string;
+  readonly supersededBy?: string;
+  readonly feedback?: DesignPackFeedback;
+}
+
+/** Independent local pack registry. */
+export interface DesignPackRegistry {
+  readonly schemaVersion: 1;
+  readonly updatedAt: string;
+  readonly packs: readonly DesignPackRegistryEntry[];
 }
 
 /** One row of `pack list`. */
@@ -1916,6 +1997,13 @@ export interface DesignPackSummary {
   readonly cards: number;
   readonly createdAt: string;
   readonly path: string;
+  readonly schemaVersion?: 1 | 2;
+  readonly status?: 'draft' | 'paradigm' | 'superseded';
+  readonly module?: string;
+  readonly tone?: string;
+  readonly supersedes?: string;
+  readonly supersededBy?: string;
+  readonly feedback?: DesignPackFeedback;
 }
 
 /** Result of `pack export`. */
@@ -1950,12 +2038,19 @@ export async function listDesignPacks(dir: string): Promise<DesignPackSummary[]>
     if (raw === null) continue;
     try {
       const parsed = JSON.parse(raw) as Partial<DesignPack>;
-      if (parsed.schemaVersion !== 1 || typeof parsed.name !== 'string' || !Array.isArray(parsed.cards)) continue;
+      if ((parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) || typeof parsed.name !== 'string' || !Array.isArray(parsed.cards)) continue;
       summaries.push({
         name: parsed.name,
         cards: parsed.cards.length,
         createdAt: typeof parsed.createdAt === 'string' ? parsed.createdAt : '',
-        path: join(dir, name)
+        path: join(dir, name),
+        schemaVersion: parsed.schemaVersion,
+        ...(parsed.status === undefined ? {} : { status: parsed.status }),
+        ...(parsed.module === undefined ? {} : { module: parsed.module }),
+        ...(parsed.tone === undefined ? {} : { tone: parsed.tone }),
+        ...(parsed.supersedes === undefined ? {} : { supersedes: parsed.supersedes }),
+        ...(parsed.supersededBy === undefined ? {} : { supersededBy: parsed.supersededBy }),
+        ...(parsed.feedback === undefined ? {} : { feedback: parsed.feedback })
       });
     } catch {
       // A corrupt pack must not break the others.
@@ -1996,7 +2091,26 @@ export async function exportDesignPack(
     }
     cards.push({ ...card, images });
   }
-  const pack: DesignPack = { schemaVersion: 1, name, createdAt: now, engineVersion: DESIGN_ENGINE_VERSION, cards };
+  const cardFiles = cards.map((card, index) => ({
+    file: `cards/${String(index + 1).padStart(2, '0')}-${slugifyDesign(card.title)}.meta.json`,
+    sourceId: card.id,
+    role: designCardKind(card)
+  }));
+  await ensureDir(join(packDir, 'cards'));
+  for (const [index, card] of cards.entries()) {
+    const entry = cardFiles[index];
+    if (entry === undefined) continue;
+    await writeTextAtomic(join(packDir, entry.file), `${JSON.stringify(designCardToInboxMeta(card), null, 2)}\n`);
+  }
+  const pack: DesignPack = {
+    schemaVersion: 2,
+    name,
+    createdAt: now,
+    engineVersion: DESIGN_ENGINE_VERSION,
+    status: 'draft',
+    cards,
+    cardFiles
+  };
   await ensureDir(packDir);
   await writeTextAtomic(join(packDir, 'pack.json'), `${JSON.stringify(pack, null, 2)}\n`);
   return { dir: packDir, pack, warnings };
@@ -2015,14 +2129,15 @@ export async function readDesignPack(dir: string, name: string): Promise<DesignP
   if (raw === null) return null;
   try {
     const parsed = JSON.parse(raw) as Partial<DesignPack>;
-    if (parsed.schemaVersion !== 1 || typeof parsed.name !== 'string' || !Array.isArray(parsed.cards)) return null;
+    if ((parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) || typeof parsed.name !== 'string' || !Array.isArray(parsed.cards)) return null;
     const cards = parsed.cards.filter((card): card is DesignCard => {
       if (typeof card !== 'object' || card === null) return false;
       const record = card as Record<string, unknown>;
       return typeof record['id'] === 'string' && typeof record['title'] === 'string';
     });
     return {
-      schemaVersion: 1,
+      ...parsed,
+      schemaVersion: parsed.schemaVersion,
       name: parsed.name,
       createdAt: parsed.createdAt ?? '',
       engineVersion: parsed.engineVersion ?? '',
@@ -2031,6 +2146,97 @@ export async function readDesignPack(dir: string, name: string): Promise<DesignP
   } catch {
     return null;
   }
+}
+
+/** Read the local pack registry (0.7.0); null when it does not exist yet. */
+export async function readDesignPackRegistry(paths: SharedPaths): Promise<DesignPackRegistry | null> {
+  const raw = await readTextOrNull(paths.designPacksIndex);
+  if (raw === null) return null;
+  try {
+    const parsed = JSON.parse(raw) as Partial<DesignPackRegistry>;
+    if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.packs)) return null;
+    return {
+      schemaVersion: 1,
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : '',
+      packs: parsed.packs.filter(
+        (entry): entry is DesignPackRegistryEntry =>
+          typeof entry === 'object' && entry !== null && typeof (entry as { name?: unknown }).name === 'string'
+      )
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Persist the local pack registry. */
+export async function writeDesignPackRegistry(paths: SharedPaths, registry: DesignPackRegistry): Promise<string> {
+  await ensureDir(paths.designPacksLocalDir);
+  await writeTextAtomic(paths.designPacksIndex, `${JSON.stringify(registry, null, 2)}\n`);
+  return paths.designPacksIndex;
+}
+
+/** Rebuild the registry from local pack directories, preserving feedback/supersede state. */
+export async function rebuildDesignPackRegistry(paths: SharedPaths, now: string): Promise<DesignPackRegistry> {
+  const previous = await readDesignPackRegistry(paths);
+  const previousByName = new Map((previous?.packs ?? []).map((entry) => [entry.name, entry]));
+  const entries: DesignPackRegistryEntry[] = [];
+  for (const name of (await listDir(paths.designPacksLocalDir)).sort()) {
+    const pack = await readDesignPack(paths.designPacksLocalDir, name);
+    if (pack === null) continue;
+    const prior = previousByName.get(pack.name);
+    const status = prior?.status ?? pack.status ?? 'draft';
+    const supersededBy = pack.supersededBy ?? prior?.supersededBy;
+    const feedback = prior?.feedback ?? pack.feedback;
+    entries.push({
+      name: pack.name,
+      status,
+      createdAt: pack.createdAt,
+      ...(pack.specVersion === undefined ? {} : { specVersion: pack.specVersion }),
+      ...(pack.module === undefined ? {} : { module: pack.module }),
+      ...(pack.appType === undefined ? {} : { appType: pack.appType }),
+      ...(pack.platform === undefined ? {} : { platform: pack.platform }),
+      ...(pack.tone === undefined ? {} : { tone: pack.tone }),
+      ...(pack.density === undefined ? {} : { density: pack.density }),
+      ...(pack.preview === undefined ? {} : { preview: pack.preview }),
+      cardIds: pack.cardFiles?.map((entry) => entry.sourceId) ?? pack.cards.map((card) => card.id),
+      ...(pack.evidence === undefined ? {} : { evidence: pack.evidence }),
+      ...(pack.supersedes === undefined ? {} : { supersedes: pack.supersedes }),
+      ...(supersededBy === undefined ? {} : { supersededBy }),
+      ...(feedback === undefined ? {} : { feedback })
+    });
+  }
+  const registry: DesignPackRegistry = { schemaVersion: 1, updatedAt: now, packs: entries };
+  await writeDesignPackRegistry(paths, registry);
+  return registry;
+}
+
+/** Migrate a v1 pack to v2 (draft unless it already has evidence). */
+export async function migrateDesignPack(dir: string, name: string): Promise<DesignPack> {
+  const existing = await readDesignPack(dir, name);
+  if (existing === null) throw new DesignLibraryError(`设计包 \`${name}\` 不存在或格式不正确。`);
+  if (existing.schemaVersion === 2) return existing;
+  const packDir = join(dir, name);
+  const cardFiles = existing.cards.map((card, index) => ({
+    file: `cards/${String(index + 1).padStart(2, '0')}-${slugifyDesign(card.title)}.meta.json`,
+    sourceId: card.id,
+    role: designCardKind(card)
+  }));
+  await ensureDir(join(packDir, 'cards'));
+  for (const [index, card] of existing.cards.entries()) {
+    const entry = cardFiles[index];
+    if (entry === undefined) continue;
+    await writeTextAtomic(join(packDir, entry.file), `${JSON.stringify(designCardToInboxMeta(card), null, 2)}\n`);
+  }
+  const migrated: DesignPack = {
+    ...existing,
+    schemaVersion: 2,
+    status: existing.evidence === undefined ? 'draft' : 'paradigm',
+    engineVersion: existing.engineVersion.length === 0 ? DESIGN_ENGINE_VERSION : existing.engineVersion,
+    cards: existing.cards,
+    cardFiles
+  };
+  await writeTextAtomic(join(packDir, 'pack.json'), `${JSON.stringify(migrated, null, 2)}\n`);
+  return migrated;
 }
 
 /** Import a pack into the local library (new ids, deduped by semantic key). */
@@ -2048,6 +2254,22 @@ export async function importDesignPack(
   const imported: DesignCard[] = [];
   const files: string[] = [];
   let skipped = 0;
+  let localPreview: string | undefined;
+  if (pack.preview !== undefined) {
+    let relative = pack.preview.replace(/\\/g, '/');
+    const prefix = `design-packs/${pack.name}/`;
+    if (relative.startsWith(prefix)) relative = relative.slice(prefix.length);
+    if (relative.endsWith('.html') && !relative.split('/').includes('..')) {
+      const source = join(dir, pack.name, relative);
+      if (await fileExists(source)) {
+        localPreview = `design-packs/${pack.name}/preview/index.html`;
+        const target = join(paths.designPacksLocalDir, pack.name, 'preview', 'index.html');
+        await ensureDir(join(paths.designPacksLocalDir, pack.name, 'preview'));
+        await copyFileTo(source, target);
+        files.push(displayPath(paths, target));
+      }
+    }
+  }
   for (const sourceCard of pack.cards) {
     const key = packCardKey(pack.name, sourceCard);
     if (knownKeys.has(key)) {
@@ -2068,13 +2290,18 @@ export async function importDesignPack(
     const kind =
       sourceCard.kind === 'anti-pattern' ? 'anti-pattern' : sourceCard.kind === 'principle' ? 'principle' : 'pattern';
     const id = nextDesignId(cards, kind);
+    const { preview: sourcePreview, ...rest } = sourceCard;
+    const usablePreview =
+      localPreview ??
+      (sourcePreview !== undefined && (await fileExists(join(paths.shared, sourcePreview))) ? sourcePreview : undefined);
     const card: DesignCard = {
-      ...sourceCard,
+      ...rest,
       id,
       images,
       status: 'active',
       updatedAt: now,
-      ingestKey: key
+      ingestKey: key,
+      ...(usablePreview === undefined ? {} : { preview: usablePreview })
     };
     cards.push(card);
     imported.push(card);

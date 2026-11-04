@@ -1,5 +1,6 @@
 import type { Options } from './config.js';
-import type { DesignCard, DesignDensity } from './design.js';
+import type { DesignDensity } from './design.js';
+import { type DesignPackRegistryEntry } from './design.js';
 import type { SharedPaths } from './paths.js';
 /** Input for `dwguard_design recommend` (0.6.8). */
 export interface DesignRecommendInput {
@@ -11,6 +12,8 @@ export interface DesignRecommendInput {
     readonly density?: DesignDensity;
     readonly brandColors?: readonly string[];
     readonly topK?: number;
+    /** Recommendation benchmark uses false to avoid overwriting tasks/design-options.md. */
+    readonly persist?: boolean;
 }
 /** One recommended direction. */
 export interface DesignRecommendOption {
@@ -56,6 +59,7 @@ export interface CapturePackInput {
     readonly choice: string;
     readonly name: string;
     readonly preview?: string;
+    readonly supersedes?: string;
     /** Latest passed audit + user confirmation hashes (0.6.8 learning gate). */
     readonly evidence: CapturePackEvidence;
 }
@@ -78,7 +82,42 @@ export interface CapturePackResult {
 }
 /** Recommend up to 3 diverse directions from the library (0.6.8). */
 export declare function recommendDesign(paths: SharedPaths, options: Options, specVersion: number, input: DesignRecommendInput, now: string): Promise<DesignRecommendResult>;
-/** Convert an internal card into an inbox-compatible meta (portable, no ids/status). */
-export declare function cardToInboxMeta(card: DesignCard): Record<string, unknown>;
+/** Result of pack-level feedback. */
+export interface PackFeedbackResult {
+    readonly entry: DesignPackRegistryEntry;
+    readonly cardId?: string;
+    readonly files: string[];
+}
+/** Apply useful/off to a pack: registry score + learned card weight (bounded). */
+export declare function applyPackFeedback(paths: SharedPaths, packName: string, verdict: 'useful' | 'off', note: string | undefined, now: string): Promise<PackFeedbackResult>;
+/** One recommendation benchmark query (0.7.0). */
+export interface RecommendBenchmarkQuery extends Omit<DesignRecommendInput, 'persist' | 'topK'> {
+    readonly id: string;
+    readonly expectPack?: string;
+    readonly expectCard?: string;
+}
+/** Recommendation benchmark suite (0.7.0). */
+export interface RecommendBenchmarkSuite {
+    readonly schemaVersion: 1;
+    readonly queries: readonly RecommendBenchmarkQuery[];
+}
+/** Per-query benchmark row. */
+export interface RecommendBenchmarkRow {
+    readonly id: string;
+    readonly expected: string;
+    readonly hit: boolean;
+    readonly rank?: number;
+    readonly actual: readonly string[];
+}
+/** Result of evaluating a recommendation benchmark. */
+export interface RecommendBenchmarkResult {
+    readonly file: string;
+    readonly total: number;
+    readonly hits: number;
+    readonly hitRate: number;
+    readonly rows: readonly RecommendBenchmarkRow[];
+}
+/** Evaluate top-3 pack/card hit rate against a recommendation suite (0.7.0). */
+export declare function evaluateRecommendBenchmark(paths: SharedPaths, options: Options, specVersion: number, suite: RecommendBenchmarkSuite, now: string): Promise<RecommendBenchmarkResult>;
 /** Freeze the selected recommendation into a local design pack (0.6.8). */
 export declare function captureDesignPack(paths: SharedPaths, specVersion: number, input: CapturePackInput, now: string): Promise<CapturePackResult>;

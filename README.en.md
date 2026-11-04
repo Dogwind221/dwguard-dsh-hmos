@@ -31,9 +31,9 @@ This plugin makes the hand-off explicit:
 
 ## Install
 
-Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.6.8).
+Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.7.0).
 
-> **0.6.8 is not published to npm yet** (latest is 0.6.6). Until it is, omit `@0.6.8` or pin `@0.6.6` when installing; the fixed-version examples below track the source version.
+> **0.7.0 is not published to npm yet** (latest is 0.6.6). Until it is, omit `@0.7.0` or pin `@0.6.6` when installing; the fixed-version examples below track the source version.
 
 ### Install from npm
 
@@ -43,9 +43,9 @@ Published on npm: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.6.8`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.6.8` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.6.8` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.7.0`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.7.0` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.7.0` |
 
 Omit `@0.6.6` to follow the latest release.
 
@@ -54,7 +54,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.6.8`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.7.0`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -63,7 +63,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.6.8   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.7.0   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -125,7 +125,7 @@ self-report never becomes a `pass`.
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
 | `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
 | `dwguard_aesthetic` | Aesthetic learning (0.6.1) + cross-project templates (0.6.4): `profile`, `baseline`, `compare`, `learn`, `template` (list/get/export/import). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; `baseline save` needs a passing audit + user confirmation; `template import` needs `confirmed: true` (`merge` supersedes local conflicts) |
-| `dwguard_design` | Design reference library (0.6.2–0.6.8): `library init/ingest/list`, `search` (filters incl. module/tone/density + `image` + `imageText` + `kind: principle`), `brief` (brand constraints / principles for direction / patterns for implementation), `recommend` (3 options), `capture-pack` (freeze after a passed four-dimension audit + user confirmation), `feedback`, `capture`, `pack list/export/import`, `stats`. `hybrid` supports `openai`/`dashscope` providers; metadata includes `moduleTags`/`tone`/`density`/derived `colorProfile` and a `preview` HTML reference; `capture`/`capture-pack`/`pack import` need `confirmed: true` (capture-pack also needs audit + confirmation evidence); budgets hard-stop |
+| `dwguard_design` | Design reference library (0.6.2–0.7.0): `library init/ingest/list`, `search` (filters incl. module/tone/density + `image` + `imageText` + `kind: principle`), `brief` (brand constraints / principles for direction / patterns for implementation), `recommend` (3 options), `capture-pack` (freeze after audit + confirmation, supports `supersedes`), `pack-feedback` (useful/off), `benchmark` (top-3 pack hit rate), `pack registry/export/import/migrate`, `feedback`, `capture`, `stats`. `hybrid` supports `openai`/`dashscope`; metadata includes `moduleTags`/`tone`/`density`/derived `colorProfile` and `preview`; `capture`/`capture-pack`/`pack import` need `confirmed: true` (capture-pack also needs audit + confirmation evidence); budgets hard-stop |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | Append durable lessons to `knowledge/<topic>.md` |
@@ -309,7 +309,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 133 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 135 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

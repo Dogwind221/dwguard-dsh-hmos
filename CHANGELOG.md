@@ -4,6 +4,43 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.7.0 — 2026-11-04
+
+The pack lifecycle release: paradigm packs get a registry, supersedes, schema v2
+and migration, portable import, pack-level feedback, and a top-3 benchmark.
+
+### Added
+
+- **Pack registry**: `.shared/design-packs/index.json` records status
+  (`draft`/`paradigm`/`superseded`), module/tone/density, card ids, evidence,
+  supersede links and feedback. `pack registry` prints it; `pack list` shows v2
+  status/module columns.
+- **`supersedes`**: `capture-pack supersedes:"old-pack"` marks the old pack
+  `superseded`, records `supersededBy`, blocks its learned card, and keeps the
+  old pack files for audit trail.
+- **Schema v2 + migration**: packs are written as `schemaVersion: 2` with
+  `status`, `cardFiles`, audit/confirmation evidence, preview, why/cost and
+  `feedback`. `pack migrate packName:"..."` upgrades v1 packs to inbox-compatible
+  cards + v2 metadata; without evidence the migrated pack stays `draft`.
+- **Import path rewrite**: `pack import` copies the pack preview into the target
+  project and rewrites card preview paths to
+  `design-packs/<name>/preview/index.html`; missing previews are dropped instead
+  of leaving broken paths.
+- **Pack-level feedback**: `pack-feedback packName:"..." verdict:"useful"|"off"`
+  updates registry counts/score and the learned card weight (bounded), and
+  appends to `.shared/design-packs/feedback.jsonl`; `recommend` includes the
+  feedback score in pack ranking.
+- **Recommendation benchmark**: `benchmark suite:"design-library/benchmarks/recommend.json"`
+  evaluates top-3 pack hits and writes `artifacts/recommend-benchmark.md`;
+  `benchmarks/recommend-2026.json` is the template.
+- Brief/recommend output now understands `packRef`/`componentIds` and
+  `supersededBy`.
+
+### Tests
+
+- Registry/supersedes, pack feedback, v2 migration, import preview rewrite and
+  benchmark cases added; suite is now 135/135.
+
 ## 0.6.8 — 2026-11-04
 
 The recommendation loop: cards now know their module, tone and density, can carry

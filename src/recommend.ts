@@ -18,16 +18,22 @@ import {
   DESIGN_ENGINE_VERSION,
   deriveColorProfile,
   designCardKind,
+  designCardToInboxMeta,
   nextDesignId,
   normalizePreviewPath,
   readDesignIndex,
   readDesignManifest,
+  readDesignPackRegistry,
+  rebuildDesignPackRegistry,
   searchDesignWithRanker,
-  writeDesignLibrary
+  slugifyDesign,
+  writeDesignLibrary,
+  writeDesignPackRegistry,
+  type DesignPackRegistryEntry
 } from './design.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
-import { ensureDir, readTextOrNull, writeTextAtomic } from './util/fs.js';
+import { ensureDir, appendText, readTextOrNull, writeTextAtomic } from './util/fs.js';
 
 /** Input for `dwguard_design recommend` (0.6.8). */
 export interface DesignRecommendInput {
@@ -39,6 +45,8 @@ export interface DesignRecommendInput {
   readonly density?: DesignDensity;
   readonly brandColors?: readonly string[];
   readonly topK?: number;
+  /** Recommendation benchmark uses false to avoid overwriting tasks/design-options.md. */
+  readonly persist?: boolean;
 }
 
 /** One recommended direction. */
@@ -88,6 +96,7 @@ export interface CapturePackInput {
   readonly choice: string;
   readonly name: string;
   readonly preview?: string;
+  readonly supersedes?: string;
   /** Latest passed audit + user confirmation hashes (0.6.8 learning gate). */
   readonly evidence: CapturePackEvidence;
 }
@@ -165,7 +174,8 @@ function scoreCard(
   baseScore: number,
   maxBase: number,
   input: DesignRecommendInput,
-  brandTemp: 'warm' | 'cool' | 'neutral' | undefined
+  brandTemp: 'warm' | 'cool' | 'neutral' | undefined,
+  packFeedbackScore = 0
 ): number {
   const module = normalizeTag(input.module);
   const tone = normalizeTag(input.tone);
@@ -180,7 +190,7 @@ function scoreCard(
   if (includesTag(card.tone, tone)) score += 0.18;
   if (input.density !== undefined && card.density === input.density) score += 0.12;
   if (brandTemp !== undefined && card.colorProfile?.temperature === brandTemp) score += 0.08;
-  if (card.packRef !== undefined) score += 0.1;
+  if (card.packRef !== undefined) score += 0.1 + packFeedbackScore;
   return Number(Math.min(1, score * Math.min(1.5, Math.max(0.5, card.weight))).toFixed(4));
 }
 
@@ -269,26 +279,36 @@ export async function recommendDesign(
     filters: { kind: 'pattern' }
   });
   const cards = cardMap(manifest);
+  let registry = await readDesignPackRegistry(paths);
+  if (registry === null) registry = await rebuildDesignPackRegistry(paths, now);
+  const registryByName = new Map(registry.packs.map((entry) => [entry.name, entry]));
+  const feedbackFor = (card: DesignCard): number =>
+    card.packRef === undefined ? 0 : registryByName.get(card.packRef)?.feedback?.score ?? 0;
+  const packAvailable = (card: DesignCard): boolean => {
+    if (card.packRef === undefined) return true;
+    const entry = registryByName.get(card.packRef);
+    return entry === undefined || entry.status === 'paradigm';
+  };
   const maxBase = Math.max(...base.results.map((hit) => hit.score), 1e-9);
   const ranked = new Map<string, { card: DesignCard; score: number }>();
   for (const hit of base.results) {
     const card = cards.get(hit.cardId);
-    if (card === undefined || designCardKind(card) !== 'pattern' || card.status !== 'active') continue;
-    ranked.set(card.id, { card, score: scoreCard(card, hit.score, maxBase, input, brandTemp) });
+    if (card === undefined || designCardKind(card) !== 'pattern' || card.status !== 'active' || !packAvailable(card)) continue;
+    ranked.set(card.id, { card, score: scoreCard(card, hit.score, maxBase, input, brandTemp, feedbackFor(card)) });
   }
   // Metadata-only candidates: a module/tone match should not depend on BM25.
   for (const card of manifest.cards) {
-    if (designCardKind(card) !== 'pattern' || card.status !== 'active') continue;
+    if (designCardKind(card) !== 'pattern' || card.status !== 'active' || !packAvailable(card)) continue;
     if (ranked.has(card.id)) continue;
     const moduleMatch = includesTag(card.moduleTags, module);
     const toneMatch = includesTag(card.tone, tone);
     if (!moduleMatch && !toneMatch) continue;
-    ranked.set(card.id, { card, score: scoreCard(card, 0, maxBase, input, brandTemp) });
+    ranked.set(card.id, { card, score: scoreCard(card, 0, maxBase, input, brandTemp, feedbackFor(card)) });
   }
   // Always offer up to `topK` directions: fill with remaining active patterns
   // as clearly-labelled low-match alternatives instead of silently returning 1.
   for (const card of manifest.cards) {
-    if (designCardKind(card) !== 'pattern' || card.status !== 'active') continue;
+    if (designCardKind(card) !== 'pattern' || card.status !== 'active' || !packAvailable(card)) continue;
     if (ranked.has(card.id)) continue;
     ranked.set(card.id, { card, score: 0 });
   }
@@ -329,6 +349,10 @@ export async function recommendDesign(
     if (input.density !== undefined && card.density === input.density) why.push(`密度匹配：${input.density}`);
     if (brandTemp !== undefined && card.colorProfile?.temperature === brandTemp) why.push(`品牌色温度匹配：${brandTemp}`);
     if (card.packRef !== undefined) why.push(`源自范式包 ${card.packRef}（已通过四维审计 + 用户确认）`);
+    const packFeedback = card.packRef === undefined ? undefined : registryByName.get(card.packRef)?.feedback;
+    if (packFeedback !== undefined && packFeedback.score !== 0) {
+      why.push(`包级反馈：useful ${packFeedback.useful} / off ${packFeedback.off}（${packFeedback.score >= 0 ? '+' : ''}${packFeedback.score.toFixed(2)}）`);
+    }
     if (card.componentIds !== undefined && card.componentIds.length > 0) {
       why.push(`卡组：${card.componentIds.map((id) => `\`${id}\``).join('、')}`);
     }
@@ -383,8 +407,10 @@ export async function recommendDesign(
     options: recommendations
   };
   await ensureDir(join(paths.shared, 'tasks'));
-  await writeTextAtomic(paths.designOptionsMd, renderOptionsMarkdown(recommendation, cards));
-  await writeTextAtomic(paths.designRecommendations, `${JSON.stringify(recommendation, null, 2)}\n`);
+  if (input.persist !== false) {
+    await writeTextAtomic(paths.designOptionsMd, renderOptionsMarkdown(recommendation, cards));
+    await writeTextAtomic(paths.designRecommendations, `${JSON.stringify(recommendation, null, 2)}\n`);
+  }
   return { file: paths.designOptionsMd, recommendation };
 }
 
@@ -449,16 +475,6 @@ function renderPackReadme(
   return `${lines.join('\n')}\n`;
 }
 
-function slugify(value: string): string {
-  const ascii = value
-    .normalize('NFKD')
-    .replace(/[^\w-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase();
-  return (ascii.length === 0 ? 'card' : ascii).slice(0, 48);
-}
-
 function roleOf(cardId: string, option: DesignRecommendOption): string {
   if (option.patternIds[0] === cardId) return 'anchor';
   if (option.patternIds.includes(cardId)) return 'support';
@@ -466,32 +482,144 @@ function roleOf(cardId: string, option: DesignRecommendOption): string {
   return 'anti-pattern';
 }
 
-/** Convert an internal card into an inbox-compatible meta (portable, no ids/status). */
-export function cardToInboxMeta(card: DesignCard): Record<string, unknown> {
-  return {
-    kind: card.kind ?? 'pattern',
-    title: card.title,
-    summary: card.summary,
-    tags: card.tags,
-    tokens: card.tokens,
-    source: card.source,
-    dos: card.dos,
-    donts: card.donts,
-    ...(card.rationale === undefined ? {} : { rationale: card.rationale }),
-    ...(card.stylePriority === undefined ? {} : { stylePriority: card.stylePriority }),
-    ...(card.antiPatterns === undefined ? {} : { antiPatterns: card.antiPatterns }),
-    ...(card.checklist === undefined ? {} : { checklist: card.checklist }),
-    ...(card.dimensions === undefined ? {} : { dimensions: card.dimensions }),
-    ...(card.brand === undefined ? {} : { brand: card.brand }),
-    ...(card.principle === undefined ? {} : { principle: card.principle }),
-    ...(card.perceptualEffect === undefined ? {} : { perceptualEffect: card.perceptualEffect }),
-    ...(card.proxies === undefined ? {} : { proxies: card.proxies }),
-    ...(card.applications === undefined ? {} : { applications: card.applications }),
-    ...(card.misuses === undefined ? {} : { misuses: card.misuses }),
-    ...(card.moduleTags === undefined ? {} : { moduleTags: card.moduleTags }),
-    ...(card.tone === undefined ? {} : { tone: card.tone }),
-    ...(card.density === undefined ? {} : { density: card.density })
+/** Result of pack-level feedback. */
+export interface PackFeedbackResult {
+  readonly entry: DesignPackRegistryEntry;
+  readonly cardId?: string;
+  readonly files: string[];
+}
+
+/** Apply useful/off to a pack: registry score + learned card weight (bounded). */
+export async function applyPackFeedback(
+  paths: SharedPaths,
+  packName: string,
+  verdict: 'useful' | 'off',
+  note: string | undefined,
+  now: string
+): Promise<PackFeedbackResult> {
+  let registry = await readDesignPackRegistry(paths);
+  if (registry === null) registry = await rebuildDesignPackRegistry(paths, now);
+  const entry = registry.packs.find((item) => item.name === packName);
+  if (entry === undefined) throw new Error(`registry 里没有范式包 \`${packName}\`。`);
+  const previous = entry.feedback ?? { useful: 0, off: 0, score: 0 };
+  const score = Math.max(-0.5, Math.min(0.5, previous.score + (verdict === 'useful' ? 0.1 : -0.2)));
+  const nextEntry: DesignPackRegistryEntry = {
+    ...entry,
+    feedback: {
+      useful: previous.useful + (verdict === 'useful' ? 1 : 0),
+      off: previous.off + (verdict === 'off' ? 1 : 0),
+      score: Number(score.toFixed(2))
+    }
   };
+  await writeDesignPackRegistry(paths, {
+    ...registry,
+    updatedAt: now,
+    packs: registry.packs.map((item) => (item.name === packName ? nextEntry : item))
+  });
+  const manifest = await readDesignManifest(paths);
+  let cardId: string | undefined;
+  const files: string[] = [];
+  if (manifest !== null) {
+    const learned = manifest.cards.find((card) => card.packRef === packName);
+    if (learned !== undefined) {
+      cardId = learned.id;
+      const weight = Math.max(0.6, Math.min(1.35, learned.weight + (verdict === 'useful' ? 0.05 : -0.1)));
+      const nextManifest: DesignManifest = {
+        ...manifest,
+        updatedAt: now,
+        cards: manifest.cards.map((card) =>
+          card.id === learned.id ? { ...card, weight: Number(weight.toFixed(2)), updatedAt: now } : card
+        )
+      };
+      files.push(...(await writeDesignLibrary(paths, nextManifest)));
+    }
+  }
+  await ensureDir(paths.designPacksLocalDir);
+  await appendText(
+    paths.designPackFeedback,
+    `${JSON.stringify({ at: now, pack: packName, verdict, score: nextEntry.feedback?.score ?? 0, ...(note === undefined ? {} : { note }) })}\n`
+  );
+  files.push(displayPath(paths, paths.designPackFeedback));
+  return { entry: nextEntry, ...(cardId === undefined ? {} : { cardId }), files };
+}
+
+/** One recommendation benchmark query (0.7.0). */
+export interface RecommendBenchmarkQuery extends Omit<DesignRecommendInput, 'persist' | 'topK'> {
+  readonly id: string;
+  readonly expectPack?: string;
+  readonly expectCard?: string;
+}
+
+/** Recommendation benchmark suite (0.7.0). */
+export interface RecommendBenchmarkSuite {
+  readonly schemaVersion: 1;
+  readonly queries: readonly RecommendBenchmarkQuery[];
+}
+
+/** Per-query benchmark row. */
+export interface RecommendBenchmarkRow {
+  readonly id: string;
+  readonly expected: string;
+  readonly hit: boolean;
+  readonly rank?: number;
+  readonly actual: readonly string[];
+}
+
+/** Result of evaluating a recommendation benchmark. */
+export interface RecommendBenchmarkResult {
+  readonly file: string;
+  readonly total: number;
+  readonly hits: number;
+  readonly hitRate: number;
+  readonly rows: readonly RecommendBenchmarkRow[];
+}
+
+/** Evaluate top-3 pack/card hit rate against a recommendation suite (0.7.0). */
+export async function evaluateRecommendBenchmark(
+  paths: SharedPaths,
+  options: Options,
+  specVersion: number,
+  suite: RecommendBenchmarkSuite,
+  now: string
+): Promise<RecommendBenchmarkResult> {
+  const rows: RecommendBenchmarkRow[] = [];
+  for (const query of suite.queries) {
+    const { expectPack, expectCard, id, ...input } = query;
+    const result = await recommendDesign(paths, options, specVersion, { ...input, persist: false, topK: 3 }, now);
+    const actualPacks = result.recommendation.options.map((option) => option.packRef ?? option.patternIds[0] ?? '—');
+    const expected = expectPack ?? expectCard ?? '—';
+    const rank = result.recommendation.options.findIndex((option) =>
+      expectPack !== undefined
+        ? option.packRef === expectPack
+        : expectCard !== undefined
+          ? option.patternIds.includes(expectCard)
+          : false
+    );
+    rows.push({
+      id,
+      expected,
+      hit: rank >= 0,
+      ...(rank >= 0 ? { rank: rank + 1 } : {}),
+      actual: actualPacks
+    });
+  }
+  const hits = rows.filter((row) => row.hit).length;
+  const hitRate = rows.length === 0 ? 0 : hits / rows.length;
+  const lines = [
+    '# 推荐基准 · top-3 命中率',
+    '',
+    `> ${now} · 任务包 v${specVersion} · ${hits}/${rows.length} 命中（${(hitRate * 100).toFixed(1)}%）`,
+    '',
+    '| 查询 | 期望 | 命中 | 名次 | 实际候选 |',
+    '| --- | --- | --- | --- | --- |',
+    ...rows.map((row) =>
+      `| ${row.id} | ${row.expected} | ${row.hit ? '✅' : '❌'} | ${row.rank ?? '—'} | ${row.actual.map((item) => `\`${item}\``).join('、')} |`
+    ),
+    ''
+  ];
+  await ensureDir(join(paths.shared, 'artifacts'));
+  await writeTextAtomic(paths.designRecommendBenchmarkMd, lines.join('\n'));
+  return { file: paths.designRecommendBenchmarkMd, total: rows.length, hits, hitRate, rows };
 }
 
 /** Freeze the selected recommendation into a local design pack (0.6.8). */
@@ -522,6 +650,14 @@ export async function captureDesignPack(
   const manifest = await readDesignManifest(paths);
   if (manifest === null) throw new Error('设计库尚未初始化。');
   const cards = cardMap(manifest);
+  let registry = await readDesignPackRegistry(paths);
+  if (registry === null) registry = await rebuildDesignPackRegistry(paths, now);
+  if (input.supersedes !== undefined) {
+    if (input.supersedes === input.name) throw new Error('`supersedes` 不能指向自己。');
+    if (!registry.packs.some((entry) => entry.name === input.supersedes)) {
+      throw new Error(`要取代的范式包 \`${input.supersedes}\` 不在 registry 中。`);
+    }
+  }
   const ids = [...new Set([...option.patternIds, ...option.principleIds, ...option.antiPatternIds])];
   const selected = ids.map((id) => cards.get(id)).filter((card): card is DesignCard => card !== undefined);
   if (selected.length === 0) throw new Error('候选卡片都不存在；重新 recommend 或重建设计库。');
@@ -545,7 +681,7 @@ export async function captureDesignPack(
   await ensureDir(join(packDir, 'cards'));
   const files: string[] = [];
   const cardFiles = selected.map((card, index) => ({
-    file: `cards/${String(index + 1).padStart(2, '0')}-${slugify(card.title)}.meta.json`,
+    file: `cards/${String(index + 1).padStart(2, '0')}-${slugifyDesign(card.title)}.meta.json`,
     sourceId: card.id,
     role: roleOf(card.id, option)
   }));
@@ -553,11 +689,11 @@ export async function captureDesignPack(
     const entry = cardFiles[index];
     if (entry === undefined) continue;
     const file = join(packDir, entry.file);
-    await writeTextAtomic(file, `${JSON.stringify(cardToInboxMeta(card), null, 2)}\n`);
+    await writeTextAtomic(file, `${JSON.stringify(designCardToInboxMeta(card), null, 2)}\n`);
     files.push(displayPath(paths, file));
   }
   const pack: DesignPack = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     name: input.name,
     createdAt: now,
     engineVersion: DESIGN_ENGINE_VERSION,
@@ -575,7 +711,9 @@ export async function captureDesignPack(
     why: option.why,
     cost: option.cost,
     cardFiles,
-    evidence: input.evidence
+    evidence: input.evidence,
+    ...(input.supersedes === undefined ? {} : { supersedes: input.supersedes }),
+    feedback: { useful: 0, off: 0, score: 0 }
   };
   await writeTextAtomic(join(packDir, 'pack.json'), `${JSON.stringify(pack, null, 2)}\n`);
   files.push(displayPath(paths, join(packDir, 'pack.json')));
@@ -619,12 +757,45 @@ export async function captureDesignPack(
     packRef: input.name,
     componentIds: selected.map((card) => card.id)
   };
+  const priorCards =
+    input.supersedes === undefined
+      ? manifest.cards
+      : manifest.cards.map((card) =>
+          card.packRef === input.supersedes ? { ...card, status: 'blocked' as const, supersededBy: input.name } : card
+        );
   const nextManifest: DesignManifest = {
     ...manifest,
     updatedAt: now,
-    cards: [...manifest.cards, projectCard]
+    cards: [...priorCards, projectCard]
   };
   files.push(...(await writeDesignLibrary(paths, nextManifest)));
+
+  const supersededEntries = registry.packs.map((entry) =>
+    entry.name === input.supersedes
+      ? { ...entry, status: 'superseded' as const, supersededBy: input.name }
+      : entry
+  );
+  const newEntry: DesignPackRegistryEntry = {
+    name: input.name,
+    status: 'paradigm',
+    createdAt: now,
+    specVersion,
+    ...(option.module === undefined ? {} : { module: option.module }),
+    ...(option.appType === undefined ? {} : { appType: option.appType }),
+    ...(option.platform === undefined ? {} : { platform: option.platform }),
+    ...(option.tone === undefined ? {} : { tone: option.tone }),
+    ...(option.density === undefined ? {} : { density: option.density }),
+    ...(previewRelative === undefined ? {} : { preview: previewRelative }),
+    cardIds: selected.map((card) => card.id),
+    evidence: input.evidence,
+    ...(input.supersedes === undefined ? {} : { supersedes: input.supersedes }),
+    feedback: pack.feedback ?? { useful: 0, off: 0, score: 0 }
+  };
+  await writeDesignPackRegistry(paths, {
+    schemaVersion: 1,
+    updatedAt: now,
+    packs: [...supersededEntries, newEntry]
+  });
   return {
     dir: packDir,
     readme: displayPath(paths, readme),

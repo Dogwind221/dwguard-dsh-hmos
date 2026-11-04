@@ -54,6 +54,12 @@ export interface SharedPaths {
     readonly designRecommendations: string;
     /** Local frozen design packs (0.6.8). */
     readonly designPacksLocalDir: string;
+    /** Local pack registry / supersedes (0.7.0). */
+    readonly designPacksIndex: string;
+    /** Pack-level feedback log (0.7.0). */
+    readonly designPackFeedback: string;
+    /** Recommendation benchmark report (0.7.0). */
+    readonly designRecommendBenchmarkMd: string;
     /** Embedding cache for hybrid rerank (0.6.4). */
     readonly designEmbeddings: string;
     /** Image feature cache for search-by-image (0.6.4). */

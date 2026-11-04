@@ -1918,6 +1918,7 @@ test('0.6.8 RC/CP: recommend 3 diverse options and capture-pack freezes + learns
   assert.equal(recommended.ok, true, recommended.detail);
   assert.match(recommended.summary, /已生成 3 套设计候选/);
   const options = JSON.parse(await readFile(paths(cwd).designRecommendations, 'utf8'));
+  const firstRecommendations = await readFile(paths(cwd).designRecommendations, 'utf8');
   assert.equal(options.schemaVersion, 1);
   assert.equal(options.options.length, 3);
   assert.equal(options.options[0].patternIds.length, 1);
@@ -1978,7 +1979,7 @@ test('0.6.8 RC/CP: recommend 3 diverse options and capture-pack freezes + learns
   assert.match(readme, /audit-\d+\.json/);
   assert.match(readme, /confirmation-\d+\.json/);
   const pack = JSON.parse(await readFile(join(packDir, 'pack.json'), 'utf8'));
-  assert.equal(pack.schemaVersion, 1);
+  assert.equal(pack.schemaVersion, 2);
   assert.equal(pack.status, 'paradigm');
   assert.ok(pack.cards.length >= 3);
   assert.equal(pack.evidence.auditPass, true);
@@ -2049,4 +2050,177 @@ test('0.6.8 RC/CP: recommend 3 diverse options and capture-pack freezes + learns
   const learnedPackOption = learnedOptions.options.find((option) => option.packRef === 'silver-member-v1');
   assert.ok(learnedPackOption.componentIds.length >= 3);
   assert.ok(learnedPackOption.why.some((item) => item.includes('范式包')));
+
+  const registryResult = await tool.execute({ action: 'pack', packOp: 'registry' }, exec(cwd));
+  assert.equal(registryResult.ok, true, registryResult.detail);
+  assert.match(registryResult.detail, /silver-member-v1/);
+  const registry = JSON.parse(await readFile(paths(cwd).designPacksIndex, 'utf8'));
+  assert.equal(registry.packs[0].status, 'paradigm');
+  assert.deepEqual(registry.packs[0].cardIds, project.componentIds);
+
+  const packOff = await tool.execute(
+    { action: 'pack-feedback', packName: 'silver-member-v1', verdict: 'off', note: '首屏太满' },
+    exec(cwd)
+  );
+  assert.equal(packOff.ok, true, packOff.detail);
+  const afterFeedback = JSON.parse(await readFile(paths(cwd).designPacksIndex, 'utf8'));
+  assert.equal(afterFeedback.packs[0].feedback.off, 1);
+  assert.equal(afterFeedback.packs[0].feedback.score, -0.2);
+  const learnedAfterFeedback = (await readDesignManifest(paths(cwd)))?.cards.find((card) => card.packRef === 'silver-member-v1');
+  assert.equal(learnedAfterFeedback?.weight, 1.1);
+
+  await writeFile(paths(cwd).designRecommendations, firstRecommendations, 'utf8');
+  const capturedV2 = await tool.execute(
+    {
+      action: 'capture-pack',
+      choice: 'opt-1',
+      name: 'silver-member-v2',
+      supersedes: 'silver-member-v1',
+      confirmed: true
+    },
+    exec(cwd)
+  );
+  assert.equal(capturedV2.ok, true, capturedV2.detail);
+  const registryV2 = JSON.parse(await readFile(paths(cwd).designPacksIndex, 'utf8'));
+  const v1Entry = registryV2.packs.find((entry) => entry.name === 'silver-member-v1');
+  const v2Entry = registryV2.packs.find((entry) => entry.name === 'silver-member-v2');
+  assert.equal(v1Entry?.status, 'superseded');
+  assert.equal(v1Entry?.supersededBy, 'silver-member-v2');
+  assert.equal(v2Entry?.status, 'paradigm');
+  assert.equal(v2Entry?.supersedes, 'silver-member-v1');
+  const afterSupersede = await readDesignManifest(paths(cwd));
+  const oldProject = afterSupersede?.cards.find((card) => card.packRef === 'silver-member-v1');
+  const newProject = afterSupersede?.cards.find((card) => card.packRef === 'silver-member-v2');
+  assert.equal(oldProject?.status, 'blocked');
+  assert.equal(oldProject?.supersededBy, 'silver-member-v2');
+  assert.equal(newProject?.status, 'active');
+
+  const afterSupersedeRecommend = await tool.execute(
+    {
+      action: 'recommend',
+      requirement: '会员中心首屏要显示等级和积分，保留银白极简的留白，但主 CTA 必须清晰',
+      module: 'member-center',
+      tone: 'calm',
+      density: 'low',
+      appType: '会员',
+      platform: 'harmonyos'
+    },
+    exec(cwd)
+  );
+  assert.equal(afterSupersedeRecommend.ok, true, afterSupersedeRecommend.detail);
+  const supersededOptions = JSON.parse(await readFile(paths(cwd).designRecommendations, 'utf8'));
+  assert.ok(supersededOptions.options.some((option) => option.packRef === 'silver-member-v2'));
+  assert.ok(!supersededOptions.options.some((option) => option.packRef === 'silver-member-v1'));
+
+  await mkdir(join(paths(cwd).designDir, 'benchmarks'), { recursive: true });
+  await writeFile(
+    join(paths(cwd).designDir, 'benchmarks', 'recommend.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      queries: [
+        {
+          id: 'RP-01',
+          requirement: '会员中心首屏要显示等级和积分，银白极简',
+          module: 'member-center',
+          tone: 'calm',
+          density: 'low',
+          appType: '会员',
+          platform: 'harmonyos',
+          expectPack: 'silver-member-v2'
+        }
+      ]
+    }),
+    'utf8'
+  );
+  const benchmark = await tool.execute({ action: 'benchmark' }, exec(cwd));
+  assert.equal(benchmark.ok, true, benchmark.detail);
+  assert.match(benchmark.summary, /1\/1 命中 top-3/);
+  const benchmarkMd = await readFile(paths(cwd).designRecommendBenchmarkMd, 'utf8');
+  assert.match(benchmarkMd, /silver-member-v2/);
+});
+
+test('0.7.0 MIG: v1 packs migrate to v2 and import rewrites preview paths', async () => {
+  const cwd = await workspace();
+  await tool.execute({ action: 'library', op: 'init' }, exec(cwd));
+  const seeded = await seedSculptural(cwd);
+  assert.equal(seeded.ok, true, seeded.detail);
+  const manifest = await readDesignManifest(paths(cwd));
+  assert.ok(manifest !== null);
+  const cards = manifest.cards.filter((card) => card.kind === 'pattern').slice(0, 2);
+  const legacyDir = join(paths(cwd).designPacksLocalDir, 'legacy');
+  await mkdir(legacyDir, { recursive: true });
+  await writeFile(
+    join(legacyDir, 'pack.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 1,
+        name: 'legacy',
+        createdAt: '2026-11-04T00:00:00.000Z',
+        engineVersion: '0.6.8',
+        cards
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  const migrated = await tool.execute({ action: 'pack', packOp: 'migrate', packName: 'legacy' }, exec(cwd));
+  assert.equal(migrated.ok, true, migrated.detail);
+  const migratedPack = JSON.parse(await readFile(join(legacyDir, 'pack.json'), 'utf8'));
+  assert.equal(migratedPack.schemaVersion, 2);
+  assert.equal(migratedPack.status, 'draft');
+  assert.equal(migratedPack.cardFiles.length, 2);
+  for (const entry of migratedPack.cardFiles) {
+    const meta = JSON.parse(await readFile(join(legacyDir, entry.file), 'utf8'));
+    assert.equal(meta.id, undefined);
+    assert.ok(typeof meta.title === 'string');
+  }
+  const migratedRegistry = JSON.parse(await readFile(paths(cwd).designPacksIndex, 'utf8'));
+  assert.equal(migratedRegistry.packs.find((entry) => entry.name === 'legacy')?.status, 'draft');
+
+  const globalDir = await mkdtemp(join(tmpdir(), 'dwguard-pack-preview-'));
+  dirs.push(globalDir);
+  const previewPack = join(globalDir, 'preview-pack');
+  await mkdir(join(previewPack, 'cards'), { recursive: true });
+  await mkdir(join(previewPack, 'preview'), { recursive: true });
+  await writeFile(join(previewPack, 'preview', 'index.html'), '<!doctype html><title>preview-pack</title>\n', 'utf8');
+  const sourceCard = cards[0];
+  assert.ok(sourceCard !== undefined);
+  await writeFile(
+    join(previewPack, 'pack.json'),
+    JSON.stringify(
+      {
+        schemaVersion: 2,
+        name: 'preview-pack',
+        createdAt: '2026-11-04T00:00:00.000Z',
+        engineVersion: '0.7.0',
+        status: 'draft',
+        cards: [sourceCard],
+        preview: 'preview/index.html',
+        cardFiles: [{ file: 'cards/01-home.meta.json', sourceId: sourceCard.id, role: 'anchor' }]
+      },
+      null,
+      2
+    ),
+    'utf8'
+  );
+  await writeFile(
+    join(previewPack, 'cards', '01-home.meta.json'),
+    JSON.stringify({ title: sourceCard.title, source: sourceCard.source, tokens: sourceCard.tokens }, null, 2),
+    'utf8'
+  );
+
+  const target = await workspace();
+  const importTool = createDesignTool(resolveOptions({ designPacksDir: globalDir }));
+  await importTool.execute({ action: 'library', op: 'init' }, exec(target));
+  const imported = await importTool.execute(
+    { action: 'pack', packOp: 'import', packName: 'preview-pack', confirmed: true },
+    exec(target)
+  );
+  assert.equal(imported.ok, true, imported.detail);
+  const targetManifest = await readDesignManifest(paths(target));
+  const importedCard = targetManifest?.cards.find((card) => card.title === sourceCard.title);
+  assert.ok(importedCard !== undefined);
+  assert.equal(importedCard.preview, 'design-packs/preview-pack/preview/index.html');
+  assert.ok(await readFile(join(paths(target).shared, importedCard.preview), 'utf8').then((text) => text.includes('preview-pack')));
 });

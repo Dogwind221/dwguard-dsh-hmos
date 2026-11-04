@@ -14,7 +14,7 @@ import { type ClipConfig } from './image.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** Version stamped into the manifest/index so a future format change is visible. */
-export declare const DESIGN_ENGINE_VERSION = "0.6.8";
+export declare const DESIGN_ENGINE_VERSION = "0.7.0";
 /** The card sections that become retrievable chunks. */
 export declare const DESIGN_SECTIONS: readonly ["tokens", "rationale", "dos", "donts", "style", "antiPatterns", "checklist", "brand", "principle", "context"];
 /** One retrievable section of a card. */
@@ -122,6 +122,8 @@ export interface DesignCard {
     readonly packRef?: string;
     /** Source card ids that make up the paradigm pack (0.6.8 learning). */
     readonly componentIds?: readonly string[];
+    /** Set when a newer paradigm pack supersedes this one (0.7.0). */
+    readonly supersededBy?: string;
 }
 /** `manifest.json`. */
 export interface DesignManifest {
@@ -302,6 +304,10 @@ export declare function renderDesignSearchMarkdown(result: DesignSearchResult): 
 export declare function renderDesignCardsMarkdown(manifest: DesignManifest): string;
 /** One-line token summary used by spec/audit reports (0.6.2 P2). */
 export declare function designCardTokenSummary(card: DesignCard): string;
+/** Safe ASCII file slug for pack card files (0.7.0). */
+export declare function slugifyDesign(value: string): string;
+/** Convert an internal card into an inbox-compatible meta (portable, no ids/status). */
+export declare function designCardToInboxMeta(card: DesignCard): Record<string, unknown>;
 /** Embedding endpoint settings for hybrid rerank (0.6.4). */
 export interface DesignEmbeddingConfig {
     readonly endpoint: string;
@@ -413,15 +419,31 @@ export declare function searchDesignByText(paths: SharedPaths, manifest: DesignM
 export declare function renderDesignImageSearchMarkdown(result: DesignImageSearchResult): string;
 /** Default global directory for cross-project design packs (0.6.5). */
 export declare function defaultDesignPacksDir(): string;
+/** Audit + confirmation evidence attached to a paradigm pack. */
+export interface DesignPackEvidence {
+    readonly auditReport: string;
+    readonly auditSha256: string;
+    readonly auditPass: boolean;
+    readonly confirmation: string;
+    readonly confirmationSha256: string;
+    readonly userDecision: string;
+}
+/** Pack-level feedback (0.7.0). */
+export interface DesignPackFeedback {
+    readonly useful: number;
+    readonly off: number;
+    /** Bounded score added to recommendation ranking (useful +, off −). */
+    readonly score: number;
+}
 /** One exported design pack. */
 export interface DesignPack {
-    readonly schemaVersion: 1;
+    readonly schemaVersion: 1 | 2;
     readonly name: string;
     readonly createdAt: string;
     readonly engineVersion: string;
     readonly cards: readonly DesignCard[];
     /** Paradigm metadata (0.6.8 learning; optional for older packs). */
-    readonly status?: 'draft' | 'paradigm';
+    readonly status?: 'draft' | 'paradigm' | 'superseded';
     readonly specVersion?: number;
     readonly requirement?: string;
     readonly module?: string;
@@ -438,14 +460,34 @@ export interface DesignPack {
         readonly sourceId: string;
         readonly role: string;
     }>;
-    readonly evidence?: {
-        readonly auditReport: string;
-        readonly auditSha256: string;
-        readonly auditPass: boolean;
-        readonly confirmation: string;
-        readonly confirmationSha256: string;
-        readonly userDecision: string;
-    };
+    readonly evidence?: DesignPackEvidence;
+    readonly supersedes?: string;
+    readonly supersededBy?: string;
+    readonly feedback?: DesignPackFeedback;
+}
+/** Local pack registry entry (`.shared/design-packs/index.json`, 0.7.0). */
+export interface DesignPackRegistryEntry {
+    readonly name: string;
+    readonly status: 'draft' | 'paradigm' | 'superseded';
+    readonly createdAt: string;
+    readonly specVersion?: number;
+    readonly module?: string;
+    readonly appType?: string;
+    readonly platform?: string;
+    readonly tone?: string;
+    readonly density?: DesignDensity;
+    readonly preview?: string;
+    readonly cardIds: readonly string[];
+    readonly evidence?: DesignPackEvidence;
+    readonly supersedes?: string;
+    readonly supersededBy?: string;
+    readonly feedback?: DesignPackFeedback;
+}
+/** Independent local pack registry. */
+export interface DesignPackRegistry {
+    readonly schemaVersion: 1;
+    readonly updatedAt: string;
+    readonly packs: readonly DesignPackRegistryEntry[];
 }
 /** One row of `pack list`. */
 export interface DesignPackSummary {
@@ -453,6 +495,13 @@ export interface DesignPackSummary {
     readonly cards: number;
     readonly createdAt: string;
     readonly path: string;
+    readonly schemaVersion?: 1 | 2;
+    readonly status?: 'draft' | 'paradigm' | 'superseded';
+    readonly module?: string;
+    readonly tone?: string;
+    readonly supersedes?: string;
+    readonly supersededBy?: string;
+    readonly feedback?: DesignPackFeedback;
 }
 /** Result of `pack export`. */
 export interface DesignPackExportResult {
@@ -476,6 +525,14 @@ export declare function listDesignPacks(dir: string): Promise<DesignPackSummary[
 export declare function exportDesignPack(paths: SharedPaths, dir: string, manifest: DesignManifest, name: string, now: string): Promise<DesignPackExportResult>;
 /** Read and validate a pack; returns null when missing/invalid. */
 export declare function readDesignPack(dir: string, name: string): Promise<DesignPack | null>;
+/** Read the local pack registry (0.7.0); null when it does not exist yet. */
+export declare function readDesignPackRegistry(paths: SharedPaths): Promise<DesignPackRegistry | null>;
+/** Persist the local pack registry. */
+export declare function writeDesignPackRegistry(paths: SharedPaths, registry: DesignPackRegistry): Promise<string>;
+/** Rebuild the registry from local pack directories, preserving feedback/supersede state. */
+export declare function rebuildDesignPackRegistry(paths: SharedPaths, now: string): Promise<DesignPackRegistry>;
+/** Migrate a v1 pack to v2 (draft unless it already has evidence). */
+export declare function migrateDesignPack(dir: string, name: string): Promise<DesignPack>;
 /** Import a pack into the local library (new ids, deduped by semantic key). */
 export declare function importDesignPack(paths: SharedPaths, dir: string, name: string, now: string): Promise<DesignPackImportResult>;
 export interface DesignReworkSuggestion {

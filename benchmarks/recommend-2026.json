@@ -1,0 +1,66 @@
+{
+  "schemaVersion": 1,
+  "queries": [
+    {
+      "id": "RP-01",
+      "requirement": "会员中心首屏展示等级、积分与主 CTA，银白极简，主操作清晰",
+      "module": "member-center",
+      "appType": "会员",
+      "platform": "harmonyos",
+      "tone": "calm",
+      "density": "low",
+      "brandColors": ["#E8DED2", "#2A2320"],
+      "expectPack": "sculptural-member-v1"
+    },
+    {
+      "id": "RP-02",
+      "requirement": "数据看板需要高密度指标卡与图表，深色低反射",
+      "module": "dashboard",
+      "appType": "数据",
+      "platform": "harmonyos",
+      "tone": "energetic",
+      "density": "high",
+      "expectPack": "sculptural-dashboard-v1"
+    },
+    {
+      "id": "RP-03",
+      "requirement": "阅读首页要安静、留白、长文可读",
+      "module": "reading",
+      "appType": "阅读",
+      "platform": "harmonyos",
+      "tone": "calm",
+      "density": "low",
+      "expectPack": "sculptural-reading-v1"
+    },
+    {
+      "id": "RP-04",
+      "requirement": "AI 创作工具首屏要有状态 hero 与单一主操作",
+      "module": "ai-workbench",
+      "appType": "AI工具",
+      "platform": "harmonyos",
+      "tone": "luxury",
+      "density": "medium",
+      "expectPack": "sculptural-ai-workbench-v1"
+    },
+    {
+      "id": "RP-05",
+      "requirement": "新用户引导要三步内完成，减少认知负荷",
+      "module": "onboarding",
+      "appType": "工具",
+      "platform": "harmonyos",
+      "tone": "calm",
+      "density": "low",
+      "expectPack": "sculptural-onboarding-v1"
+    },
+    {
+      "id": "RP-06",
+      "requirement": "空态需要品牌雕塑感，但不能压过恢复操作",
+      "module": "empty-state",
+      "appType": "工具",
+      "platform": "harmonyos",
+      "tone": "calm",
+      "density": "low",
+      "expectPack": "sculptural-empty-state-v1"
+    }
+  ]
+}

@@ -57,6 +57,12 @@ export interface SharedPaths {
   readonly designRecommendations: string;
   /** Local frozen design packs (0.6.8). */
   readonly designPacksLocalDir: string;
+  /** Local pack registry / supersedes (0.7.0). */
+  readonly designPacksIndex: string;
+  /** Pack-level feedback log (0.7.0). */
+  readonly designPackFeedback: string;
+  /** Recommendation benchmark report (0.7.0). */
+  readonly designRecommendBenchmarkMd: string;
   /** Embedding cache for hybrid rerank (0.6.4). */
   readonly designEmbeddings: string;
   /** Image feature cache for search-by-image (0.6.4). */
@@ -107,6 +113,9 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     designOptionsMd: resolve(shared, 'tasks', 'design-options.md'),
     designRecommendations: resolve(shared, 'design-library', 'recommendations.json'),
     designPacksLocalDir: resolve(shared, 'design-packs'),
+    designPacksIndex: resolve(shared, 'design-packs', 'index.json'),
+    designPackFeedback: resolve(shared, 'design-packs', 'feedback.jsonl'),
+    designRecommendBenchmarkMd: resolve(shared, 'artifacts', 'recommend-benchmark.md'),
     designEmbeddings: resolve(shared, 'design-library', 'embeddings.json'),
     designImageFeatures: resolve(shared, 'design-library', 'image-features.json'),
     designClipEmbeddings: resolve(shared, 'design-library', 'clip-embeddings.json'),
