@@ -74,6 +74,8 @@ export const Config = z.object({
   maxAuditRounds: z.number().default(5),
   /** Hard stop: design searches allowed in one round (0.6.3 C). */
   maxDesignSearches: z.number().default(12),
+  /** Max attempts for one harness step before a human decision (0.8.0). */
+  harnessMaxRetries: z.number().default(3),
   /** Embedding wire protocol: `openai` (compatible /embeddings) or `dashscope` (native contents). */
   designEmbeddingProvider: z.string().default('openai'),
   /** OpenAI-compatible embedding endpoint for hybrid rerank (0.6.4); empty = lexical only. */
@@ -137,6 +139,8 @@ export interface Options {
   readonly maxAuditRounds: number;
   /** Design searches allowed per round (hard stop). */
   readonly maxDesignSearches: number;
+  /** Max attempts for one harness step before a human decision (0.8.0). */
+  readonly harnessMaxRetries: number;
   /** OpenAI-compatible embedding endpoint (empty = lexical only). */
   readonly designEmbeddingEndpoint: string;
   readonly designEmbeddingProvider: 'openai' | 'dashscope';
@@ -179,6 +183,7 @@ const DEFAULTS: Options = {
   designPrincipleCards: 3,
   maxAuditRounds: 5,
   maxDesignSearches: 12,
+  harnessMaxRetries: 3,
   designEmbeddingEndpoint: '',
   designEmbeddingProvider: 'openai',
   designEmbeddingModel: 'text-embedding-3-small',
@@ -253,6 +258,7 @@ export function resolveOptions(raw: unknown): Options {
     designPrincipleCards: positiveInt(input['designPrincipleCards'], DEFAULTS.designPrincipleCards, 0),
     maxAuditRounds: positiveInt(input['maxAuditRounds'], DEFAULTS.maxAuditRounds, 1),
     maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
+    harnessMaxRetries: positiveInt(input['harnessMaxRetries'], DEFAULTS.harnessMaxRetries, 1),
     designEmbeddingEndpoint: typeof input['designEmbeddingEndpoint'] === 'string' ? input['designEmbeddingEndpoint'].trim() : DEFAULTS.designEmbeddingEndpoint,
     designEmbeddingProvider: input['designEmbeddingProvider'] === 'dashscope' ? 'dashscope' : DEFAULTS.designEmbeddingProvider,
     designEmbeddingModel: str(input['designEmbeddingModel'], DEFAULTS.designEmbeddingModel),

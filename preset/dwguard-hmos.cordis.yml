@@ -1,6 +1,6 @@
 # DwGuard · 鸿蒙双代理 —— 可选 agent preset（新会话选择器里的独立入口）
 #
-# 说明：bundle 本身已经把 DwGuard 的 15 个工具、4 个 skill 和 1 段策略提示词
+# 说明：bundle 本身已经把 DwGuard 的 16 个工具、4 个 skill 和 1 段策略提示词
 # 注册给该 profile 的所有会话，所以这个文件是「可选的体验增强」，不是必需步骤。
 #
 # 适用前提：部署里已经包含 @deepseek-ai/dsh-agent-preset（Web 版默认包含）。

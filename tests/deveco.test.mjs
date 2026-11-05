@@ -258,3 +258,69 @@ test('status watchdog flags a dispatch that has been waiting too long', async ()
   assert.match(status.next, /仍无回执\/交付/);
 });
 
+test('0.8.0 EX: pipeline runs build/sign/run/screenshot/layout in order and records evidence', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  const calls = [];
+  const runner = async (command, args) => {
+    calls.push({ command, args });
+    return { code: 0, stdout: args[0] === 'ui' && args[1] === 'layout' ? '{"type":"Root"}' : 'ok', stderr: '', durationMs: 3 };
+  };
+  const tool = createDevecoTool(options, undefined, runner);
+  const result = await tool.execute({ action: 'pipeline', module: 'entry', device: 'SN-1' }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  assert.deepEqual(
+    calls.map((call) => call.args[0]),
+    ['build', 'signature', 'run', 'ui', 'ui']
+  );
+  assert.deepEqual(calls[1].args, ['signature', 'generate']);
+  assert.deepEqual(calls[2].args, ['run', '--module', 'entry', '--device', 'SN-1']);
+  const record = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'pipeline.json'), 'utf8'));
+  assert.equal(record.action, 'pipeline');
+  assert.equal(record.exitCode, 0);
+  assert.equal(record.steps.length, 5);
+  assert.ok(record.steps.every((step) => step.ok === true));
+  assert.ok(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'layout.json'), 'utf8').then((text) => text.includes('Root')));
+});
+
+test('0.8.0 EX: pipeline stops at the first failure and points at fallback/resume', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  let calls = 0;
+  const runner = async () => {
+    calls += 1;
+    return calls === 1
+      ? { code: 0, stdout: 'built', stderr: '', durationMs: 2 }
+      : { code: 1, stdout: '', stderr: 'signing certificate missing', durationMs: 2 };
+  };
+  const tool = createDevecoTool(options, undefined, runner);
+  const result = await tool.execute({ action: 'pipeline', device: 'SN-1' }, exec(cwd));
+  assert.equal(result.ok, false);
+  assert.match(result.summary, /sign/);
+  assert.match(result.next, /fallback|resume|审计/);
+  const record = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'pipeline.json'), 'utf8'));
+  assert.equal(record.failedStep, 'sign');
+  assert.equal(record.steps.length, 2);
+  assert.equal(record.steps[1].ok, false);
+  assert.equal(calls, 2);
+});
+
+test('0.8.0 EX: pipeline resume skips already-successful steps', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  let calls = 0;
+  const runner = async () => {
+    calls += 1;
+    return { code: 0, stdout: 'ok', stderr: '', durationMs: 1 };
+  };
+  const first = createDevecoTool(options, undefined, runner);
+  const initial = await first.execute({ action: 'pipeline', device: 'SN-1' }, exec(cwd));
+  assert.equal(initial.ok, true, initial.detail);
+  assert.equal(calls, 5);
+  const resumed = createDevecoTool(options, undefined, runner);
+  const result = await resumed.execute({ action: 'pipeline', device: 'SN-1', resume: true }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  assert.equal(calls, 5, 'resume 不应重复执行已成功步骤');
+  const record = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-2', 'pipeline.json'), 'utf8'));
+  assert.ok(record.steps.every((step) => step.skipped === true));
+});

@@ -1,7 +1,7 @@
 /**
  * DwGuard-Dsh-Hmos — the DSH half of a HarmonyOS dual-agent workflow.
  *
- * One host row registers fifteen tools, four skills and one team-policy prompt
+ * One host row registers sixteen tools, four skills and one team-policy prompt
  * section. The tools are the stage gates; the skills carry the methodology; the
  * section states the one rule that matters: DSH orchestrates and audits, it
  * does not write the app.
@@ -21,6 +21,7 @@ import { createCalibrationTool } from './tools/calibration.js';
 import { createConfirmTool } from './tools/confirm.js';
 import { createDevecoTool } from './tools/deveco.js';
 import { createDispatchTool } from './tools/dispatch.js';
+import { createHarnessTool } from './tools/harness.js';
 import { createKnowledgeTool } from './tools/knowledge.js';
 import { createPrereviewTool } from './tools/prereview.js';
 import { createRulesTool } from './tools/rules.js';
@@ -75,6 +76,7 @@ export function apply(ctx: PluginContext, config?: unknown): void {
     createAuditTool(options, ctx),
     createAestheticTool(options, ctx),
     createDesignTool(options, ctx),
+    createHarnessTool(options, ctx),
     createCalibrationTool(options, ctx),
     createConfirmTool(options, ctx),
     createKnowledgeTool(options, ctx),

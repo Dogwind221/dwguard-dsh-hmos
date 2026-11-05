@@ -15,6 +15,9 @@ export interface SharedPaths {
     readonly outboxDsh: string;
     readonly outboxDeveco: string;
     readonly stateFile: string;
+    /** Cross-session run state / checkpoints (0.8.0). */
+    readonly harnessDir: string;
+    readonly harnessRun: string;
     readonly specJson: string;
     readonly specMd: string;
     readonly briefMd: string;

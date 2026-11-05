@@ -45,6 +45,8 @@ export interface Options {
     readonly maxAuditRounds: number;
     /** Design searches allowed per round (hard stop). */
     readonly maxDesignSearches: number;
+    /** Max attempts for one harness step before a human decision (0.8.0). */
+    readonly harnessMaxRetries: number;
     /** OpenAI-compatible embedding endpoint (empty = lexical only). */
     readonly designEmbeddingEndpoint: string;
     readonly designEmbeddingProvider: 'openai' | 'dashscope';

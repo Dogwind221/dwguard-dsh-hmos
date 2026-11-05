@@ -1,0 +1,293 @@
+{
+  "schemaVersion": 1,
+  "entries": [
+    {
+      "id": "ENG-01",
+      "topic": "spec-version",
+      "title": "任务包是版本化状态契约",
+      "statement": "需求、约束、判据、当前进度和证据必须写进同一个 specVersion；改需求就升版本并重跑预审。",
+      "why": "只存在对话里的目标会漂移；版本化后 resume 和审计都能判断“这份证据属于哪一版”。",
+      "check": "spec.json 的 specVersion 与 audit/confirmation 的 specVersion 一致；不一致时拒绝验收。",
+      "rules": ["DW-FN-01", "DW-PERF-02"]
+    },
+    {
+      "id": "ENG-02",
+      "topic": "evidence-bundle",
+      "title": "证据要可复现、可哈希、可归档",
+      "statement": "每条 must 判据都要有独立证据文件（截图/布局树/日志/测量值），并记录路径与 sha256。",
+      "why": "口头结论和自验截图无法复核；证据包让“通过”可追溯。",
+      "check": "audit checks 带 evidenceFiles；文件存在且哈希匹配；缺文件的审计不落盘。",
+      "rules": ["DW-A11Y-01", "DW-PERF-02"]
+    },
+    {
+      "id": "ENG-03",
+      "topic": "prereview",
+      "title": "派发前先攻击任务包",
+      "statement": "从性能、生命周期、并发、API 兼容、验收可行性五个视角找阻断项；每个 blocker 必须先写反驳尝试。",
+      "why": "最便宜的返工发生在派发前；否则执行器会稳定地实现一个错误规格。",
+      "check": "prereview gate pass；blocker 无 rebuttal 或仍 open 时 dispatch 拒绝。",
+      "rules": ["DW-FN-01"]
+    },
+    {
+      "id": "ENG-04",
+      "topic": "build-repro",
+      "title": "构建要固定工具链与环境",
+      "statement": "记录 DevEco/SDK/hvigor 版本、构建命令、退出码和产物路径；同一 spec 的重建结果应可比较。",
+      "why": "环境漂移会让“昨天能过、今天不能过”，无法判断是代码还是环境问题。",
+      "check": "pipeline 结果记录版本/命令/退出码；失败时先查环境再改代码。",
+      "rules": ["DW-PERF-02"]
+    },
+    {
+      "id": "ENG-05",
+      "topic": "signing",
+      "title": "自动签名是端到端闭环的断点",
+      "statement": "签名配置必须可审计：证书/Profile/签名命令/产物路径；不要在未确认时改发布签名。",
+      "why": "代码能编译不等于能安装；签名失败会让真机验证链中断。",
+      "check": "sign 步骤有命令、退出码和产物；发布包 debuggable=false。",
+      "rules": ["DW-AGC-01"]
+    },
+    {
+      "id": "ENG-06",
+      "topic": "install-launch",
+      "title": "安装和启动分开取证",
+      "statement": "安装成功、启动成功、功能正确是三件事；分别记录退出码、设备序列号和启动日志。",
+      "why": "把它们合成一句“跑通了”会掩盖安装失败或启动崩溃。",
+      "check": "run/log 证据带设备 sn；截图只证明界面，不证明业务链路。",
+      "rules": ["DW-FN-01", "DW-PERF-10"]
+    },
+    {
+      "id": "ENG-07",
+      "topic": "layout-tree",
+      "title": "布局树比肉眼截图更适合判尺寸",
+      "statement": "触控目标、间距、截断、折叠屏换行优先用布局树 bounds/文本判断，截图只做视觉佐证。",
+      "why": "截图无法稳定量出 vp、重叠和真实可点区域。",
+      "check": "a11y/layout 输出节点 bounds、accessibilityId、text；审计引用关键节点。",
+      "rules": ["DW-A11Y-02", "DW-AES-12"]
+    },
+    {
+      "id": "ENG-08",
+      "topic": "screenshot",
+      "title": "截图要带状态、设备和时间",
+      "statement": "一张截图只证明一个状态；深色、空态、错误、字体放大要分别截图，并记录设备与时间。",
+      "why": "“首页截图”不能证明错误态或折叠屏行为。",
+      "check": "截图命名含状态；审计 checks 的 evidence 与状态对应。",
+      "rules": ["DW-AES-02"]
+    },
+    {
+      "id": "ENG-09",
+      "topic": "accessibility",
+      "title": "无障碍不是最后补的属性",
+      "statement": "每个可交互节点要有可读文本/accessibilityId、≥48vp 触控、焦点顺序和字体放大不截断。",
+      "why": "后补属性容易破坏布局；无障碍问题往往也是普通用户的可用性问题。",
+      "check": "布局树扫描缺文本节点；放大字体截图；读屏走查。",
+      "rules": ["DW-A11Y-01", "DW-A11Y-13"]
+    },
+    {
+      "id": "ENG-10",
+      "topic": "cold-start",
+      "title": "冷启动按阶段定位",
+      "statement": "把冷启动拆成进程创建、UI 首帧、数据就绪；优化前先测基线，优化后同机对比。",
+      "why": "只报一个总时长无法知道瓶颈在初始化、布局还是网络。",
+      "check": "Profiler/启动日志有阶段时间；优化前后同设备、同场景。",
+      "rules": ["DW-PERF-10"]
+    },
+    {
+      "id": "ENG-11",
+      "topic": "frame-jank",
+      "title": "卡顿看超长帧而不是平均帧",
+      "statement": "滚动/转场采集帧耗时分布，关注 >16.7ms/33ms 的超长帧与主线程阻塞。",
+      "why": "平均帧率会掩盖偶发长帧，而用户感知的正是长帧。",
+      "check": "滚动录屏 + Profiler 帧图；没有连续掉帧。",
+      "rules": ["DW-PERF-11"]
+    },
+    {
+      "id": "ENG-12",
+      "topic": "memory",
+      "title": "内存闸门按设备档位",
+      "statement": "低内存设备上限制图片解码、缓存和并发；用设备池内存档位决定是否跑矩阵。",
+      "why": "开发机不 OOM 不代表目标机不 OOM。",
+      "check": "低内存设备启动/回前台/长列表内存曲线；无持续增长。",
+      "rules": ["DW-PERF-03"]
+    },
+    {
+      "id": "ENG-13",
+      "topic": "dark-mode",
+      "title": "深色模式是独立配色合同",
+      "statement": "深色不是颜色反转；背景/表面/边框/强调色要有独立 token，正文对比度 ≥4.5:1。",
+      "why": "反转会破坏品牌色与层级，金属/玻璃材质在深色下更容易糊。",
+      "check": "深色截图 + 对比度取样；层级仍可辨。",
+      "rules": ["DW-AES-03", "DW-A11Y-01"]
+    },
+    {
+      "id": "ENG-14",
+      "topic": "foldable",
+      "title": "折叠屏按断点重排，不是拉伸",
+      "statement": "展开态改变列数/信息层级/导航形态；铰链区不放大主内容，返回栈保持。",
+      "why": "简单拉伸会让平板/折叠屏出现过长行宽和空容器。",
+      "check": "折叠/展开各截图 + 布局树；旋转/折叠后状态不丢。",
+      "rules": ["DW-AES-04"]
+    },
+    {
+      "id": "ENG-15",
+      "topic": "font-scale",
+      "title": "字体放大要按系统档位测",
+      "statement": "至少测 1.3×/2×；标题、按钮、列表行不截断，必要处换行而不是缩字。",
+      "why": "固定高度容器是大字体最常见的截断来源。",
+      "check": "系统字体放大截图 + 布局树文本完整；无横向滚动。",
+      "rules": ["DW-A11Y-13"]
+    },
+    {
+      "id": "ENG-16",
+      "topic": "arkui-state",
+      "title": "V1/V2 状态边界要明确",
+      "statement": "不要混用 @State 与 @ObservedV2/@Trace；嵌套对象修改要能触发刷新。",
+      "why": "状态不刷新是最常见的“代码看起来对但界面不动”。",
+      "check": "代码扫描 V1/V2 混用；交互后 UI 实际更新；有回归用例。",
+      "rules": ["DW-STATE-02", "DW-STATE-03"]
+    },
+    {
+      "id": "ENG-17",
+      "topic": "lazy-list",
+      "title": "长列表用 LazyForEach + 数据源",
+      "statement": "长列表不要用 ForEach 全量构建；数据源变更要通知，key 稳定。",
+      "why": "全量构建导致首帧慢、滚动卡、内存高。",
+      "check": "列表 1000 项滚动；构建数量与内存曲线；key 不重复。",
+      "rules": ["DW-PERF-04"]
+    },
+    {
+      "id": "ENG-18",
+      "topic": "navigation",
+      "title": "导航栈要可恢复",
+      "statement": "页面进入/返回/深链/进程恢复后都在正确栈位；返回不重复压栈。",
+      "why": "导航错误会表现为“返回键退出 App”或重复页面。",
+      "check": "进入详情→返回→再进入；冷启动深链；折叠屏旋转后栈保持。",
+      "rules": ["DW-FN-02"]
+    },
+    {
+      "id": "ENG-19",
+      "topic": "lifecycle",
+      "title": "前后台/销毁都要释放资源",
+      "statement": "定时器、监听、动画、相机/音频在 onHidden/onDisappear 释放；回前台可恢复。",
+      "why": "泄漏在长会话里表现为耗电、卡顿和崩溃。",
+      "check": "后台 5 分钟回前台；反复进出页面；监听数量不增长。",
+      "rules": ["DW-PERF-05"]
+    },
+    {
+      "id": "ENG-20",
+      "topic": "concurrency",
+      "title": "并发要有取消与顺序保证",
+      "statement": "请求/任务带取消；快速切换页面时旧结果不能覆盖新状态；写操作串行。",
+      "why": "竞态会造成“最后点的不是最后显示的”。",
+      "check": "快速点击/切换；乱序响应注入；最终状态正确。",
+      "rules": ["DW-FN-03"]
+    },
+    {
+      "id": "ENG-21",
+      "topic": "network",
+      "title": "网络失败要有可恢复路径",
+      "statement": "超时、断网、弱网、服务端错误分别有文案和重试；重试有退避与上限。",
+      "why": "只处理成功分支会把用户卡在空白页。",
+      "check": "断网/超时/500 三态截图；重试不会无限循环。",
+      "rules": ["DW-FN-04"]
+    },
+    {
+      "id": "ENG-22",
+      "topic": "storage",
+      "title": "本地存储要版本化",
+      "statement": "缓存/偏好/迁移带 schemaVersion；升级不丢关键数据；损坏可降级。",
+      "why": "升级后读取旧结构会崩溃或静默清空。",
+      "check": "旧版本数据→新版本启动；损坏 JSON；清缓存后恢复。",
+      "rules": ["DW-FN-05"]
+    },
+    {
+      "id": "ENG-23",
+      "topic": "permissions",
+      "title": "权限按最小必要申请",
+      "statement": "首次使用再申请；拒绝后给可继续的路径；不因权限拒绝崩溃。",
+      "why": "启动即弹权限是 AGC 常见拒因，也伤害转化。",
+      "check": "同意/拒绝/永久拒绝三条路径；无权限仍能浏览核心内容。",
+      "rules": ["DW-AGC-04", "DW-AGC-05"]
+    },
+    {
+      "id": "ENG-24",
+      "topic": "privacy",
+      "title": "隐私政策与数据分级要对齐",
+      "statement": "收集什么、为什么、存多久、给谁，必须和隐私政策/权限清单一致；日志不落敏感字段。",
+      "why": "实现与声明不一致会直接触发审核拒绝。",
+      "check": "权限清单/隐私政策/代码三方对照；日志脱敏抽查。",
+      "rules": ["DW-AGC-03", "DW-AGC-07"]
+    },
+    {
+      "id": "ENG-25",
+      "topic": "agc-release",
+      "title": "发布包与调试包分离",
+      "statement": "发布构建关闭 debug、使用发布证书/Profile、debuggable=false；包名/版本号/图标一致。",
+      "why": "调试包上架是最常见的低级拒因。",
+      "check": "发布包签名与 debuggable 检查；AGC 提审清单。",
+      "rules": ["DW-AGC-01", "DW-AGC-02"]
+    },
+    {
+      "id": "ENG-26",
+      "topic": "logs-pii",
+      "title": "日志默认不含 PII",
+      "statement": "手机号/身份证/令牌/位置等敏感字段不写日志；调试日志在发布包关闭。",
+      "why": "日志泄漏是合规问题，不是“调试方便”。",
+      "check": "日志扫描敏感模式；发布包无调试日志。",
+      "rules": ["DW-AGC-07"]
+    },
+    {
+      "id": "ENG-27",
+      "topic": "crash",
+      "title": "崩溃要有现场与最小复现",
+      "statement": "记录设备/版本/操作路径/堆栈；修复后在同一路径回归，而不是只说“已修复”。",
+      "why": "没有复现路径的修复无法证明有效。",
+      "check": "崩溃日志 + 复现步骤 + 修复后同路径截图/日志。",
+      "rules": ["DW-PERF-06"]
+    },
+    {
+      "id": "ENG-28",
+      "topic": "design-tokens",
+      "title": "颜色/字号/间距用 token，不散落魔法数",
+      "statement": "组件引用语义 token；品牌色替换只改一层；新增值先进 token 表。",
+      "why": "散落值让深色模式、品牌换色和一致性维护失控。",
+      "check": "代码扫描硬编码色值/字号；设计稿 token 对照。",
+      "rules": ["DW-AES-01"]
+    },
+    {
+      "id": "ENG-29",
+      "topic": "contrast",
+      "title": "对比度按真实背景量",
+      "statement": "正文 4.5:1、大字 3:1、非文本控件 3:1；渐变/毛玻璃要取最差处。",
+      "why": "设计稿上的色值不等于运行时的有效对比。",
+      "check": "截图取样或布局树 + 计算；深色/浅色都测。",
+      "rules": ["DW-A11Y-01"]
+    },
+    {
+      "id": "ENG-30",
+      "topic": "motion",
+      "title": "动效服务状态，不服务炫耀",
+      "statement": "转场 160–280ms，只动 transform/opacity；支持减少动态；阅读/输入时不持续动画。",
+      "why": "过度动效拖慢任务，也会触发无障碍问题。",
+      "check": "录屏 + 系统减少动态开关；无持续循环动画。",
+      "rules": ["DW-AES-09", "DW-A11Y-06"]
+    },
+    {
+      "id": "ENG-31",
+      "topic": "i18n",
+      "title": "文案长度按最长语言测",
+      "statement": "按钮/标签/空态用最短和最长语言各测一次；不靠缩字适配。",
+      "why": "中文能放下不代表英文/德文能放下，截断会破坏功能。",
+      "check": "语言切换截图 + 布局树文本完整；RTL 如支持则单独测。",
+      "rules": ["DW-AES-10"]
+    },
+    {
+      "id": "ENG-32",
+      "topic": "rollback",
+      "title": "发布要有回滚与观察窗",
+      "statement": "保留上一版本包/配置；发布后观察崩溃、启动、关键转化；异常可按预案回滚。",
+      "why": "没有回滚的发布把一次错误放大成事故。",
+      "check": "回滚演练记录；观察指标与阈值；值班人明确。",
+      "rules": ["DW-AGC-09"]
+    }
+  ]
+}
