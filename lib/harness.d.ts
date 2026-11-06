@@ -90,6 +90,46 @@ export declare function failHarness(paths: SharedPaths, snapshot: Snapshot, step
 export declare function fallbackHarness(paths: SharedPaths, snapshot: Snapshot, step: string, level: number, now: string): Promise<HarnessRun>;
 /** Mark the run done. */
 export declare function closeHarness(paths: SharedPaths, snapshot: Snapshot, now: string): Promise<HarnessRun>;
+/** One durable queue task (0.8.0 scheduler). */
+export interface HarnessTask {
+    readonly id: string;
+    readonly createdAt: string;
+    readonly updatedAt: string;
+    readonly status: 'queued' | 'leased' | 'done' | 'failed';
+    readonly step: string;
+    readonly note?: string;
+    readonly attempts: number;
+    readonly lease?: {
+        readonly owner: string;
+        readonly until: string;
+    };
+    readonly lastError?: string;
+    readonly evidence?: readonly string[];
+}
+/** Persistent task queue. */
+export interface HarnessQueue {
+    readonly schemaVersion: 1;
+    readonly updatedAt: string;
+    readonly tasks: readonly HarnessTask[];
+}
+/** Read the queue; a missing/corrupt file becomes empty. */
+export declare function readHarnessQueue(paths: SharedPaths, now: string): Promise<HarnessQueue>;
+/** Persist the queue. */
+export declare function writeHarnessQueue(paths: SharedPaths, queue: HarnessQueue): Promise<void>;
+/** Add a queued task. */
+export declare function enqueueHarnessTask(paths: SharedPaths, now: string, input: {
+    readonly step: string;
+    readonly note?: string;
+}): Promise<HarnessQueue>;
+/** Claim the next queued task, reclaiming expired leases. */
+export declare function claimHarnessTask(paths: SharedPaths, now: string, owner: string, leaseSeconds: number): Promise<{
+    queue: HarnessQueue;
+    task: HarnessTask | null;
+}>;
+/** Mark a task done. */
+export declare function completeHarnessTask(paths: SharedPaths, now: string, id: string, evidence?: readonly string[]): Promise<HarnessQueue>;
+/** Mark a task failed. */
+export declare function failHarnessTask(paths: SharedPaths, now: string, id: string, error: string): Promise<HarnessQueue>;
 /** Collect a snapshot + run in one call for the tool. */
 export declare function readHarnessSnapshot(paths: SharedPaths, options: Parameters<typeof collectSnapshot>[1], now: string): Promise<{
     snapshot: Snapshot;

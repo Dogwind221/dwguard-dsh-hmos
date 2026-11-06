@@ -76,6 +76,10 @@ export const Config = z.object({
   maxDesignSearches: z.number().default(12),
   /** Max attempts for one harness step before a human decision (0.8.0). */
   harnessMaxRetries: z.number().default(3),
+  /** Automatic fallback chain (0.8.0): MCP command, hdc and hvigor binaries. */
+  devecoMcpCommand: z.string().default('deveco-mcp'),
+  hdcPath: z.string().default('hdc'),
+  hvigorPath: z.string().default('hvigorw'),
   /** Embedding wire protocol: `openai` (compatible /embeddings) or `dashscope` (native contents). */
   designEmbeddingProvider: z.string().default('openai'),
   /** OpenAI-compatible embedding endpoint for hybrid rerank (0.6.4); empty = lexical only. */
@@ -141,6 +145,12 @@ export interface Options {
   readonly maxDesignSearches: number;
   /** Max attempts for one harness step before a human decision (0.8.0). */
   readonly harnessMaxRetries: number;
+  /** MCP fallback command (empty = skip MCP tier). */
+  readonly devecoMcpCommand: string;
+  /** hdc binary for the hdc+hvigor fallback tier. */
+  readonly hdcPath: string;
+  /** hvigor binary for the hdc+hvigor fallback tier. */
+  readonly hvigorPath: string;
   /** OpenAI-compatible embedding endpoint (empty = lexical only). */
   readonly designEmbeddingEndpoint: string;
   readonly designEmbeddingProvider: 'openai' | 'dashscope';
@@ -184,6 +194,9 @@ const DEFAULTS: Options = {
   maxAuditRounds: 5,
   maxDesignSearches: 12,
   harnessMaxRetries: 3,
+  devecoMcpCommand: 'deveco-mcp',
+  hdcPath: 'hdc',
+  hvigorPath: 'hvigorw',
   designEmbeddingEndpoint: '',
   designEmbeddingProvider: 'openai',
   designEmbeddingModel: 'text-embedding-3-small',
@@ -259,6 +272,9 @@ export function resolveOptions(raw: unknown): Options {
     maxAuditRounds: positiveInt(input['maxAuditRounds'], DEFAULTS.maxAuditRounds, 1),
     maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
     harnessMaxRetries: positiveInt(input['harnessMaxRetries'], DEFAULTS.harnessMaxRetries, 1),
+    devecoMcpCommand: str(input['devecoMcpCommand'], DEFAULTS.devecoMcpCommand),
+    hdcPath: str(input['hdcPath'], DEFAULTS.hdcPath),
+    hvigorPath: str(input['hvigorPath'], DEFAULTS.hvigorPath),
     designEmbeddingEndpoint: typeof input['designEmbeddingEndpoint'] === 'string' ? input['designEmbeddingEndpoint'].trim() : DEFAULTS.designEmbeddingEndpoint,
     designEmbeddingProvider: input['designEmbeddingProvider'] === 'dashscope' ? 'dashscope' : DEFAULTS.designEmbeddingProvider,
     designEmbeddingModel: str(input['designEmbeddingModel'], DEFAULTS.designEmbeddingModel),

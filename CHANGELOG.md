@@ -4,7 +4,7 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## 0.8.0 — 2026-11-05
+## 0.8.0 — 2026-11-06
 
 The recovery/knowledge/execution release. This is a developer-side AI-native
 harness; app-side AI is explicitly out of scope (a phone is not a development
@@ -13,21 +13,28 @@ runtime).
 ### Added
 
 - **`dwguard_harness`** (16th tool): durable `.shared/harness/run.json` with
-  `checkpoint` / `resume` / `retry` / `fail` / `fallback` / `close`. Resume checks
-  specVersion/iteration and marks stale runs; retry stops at
-  `harnessMaxRetries` and turns into a human decision; fallback records
-  `devecocli → deveco-mcp → hdc+hvigor`.
+  `checkpoint` / `resume` / `retry` / `fail` / `fallback` / `close`; a persistent
+  `.shared/harness/queue.json` with `enqueue` / `queue` / `claim` / `complete` /
+  `task-fail` and lease expiry. `scripts/harness-worker.mjs` can be scheduled by
+  Windows Task Scheduler/cron to claim/resume without a human opening a round.
+  Resume checks specVersion/iteration and marks stale runs; retry stops at
+  `harnessMaxRetries` and turns into a human decision.
 - **Knowledge/SOP library**: 14 SOPs (`knowledge/sops.json`) + 32 engineering
   facts (`knowledge/engineering.json`), searchable through
   `dwguard_knowledge action:"sops" / "sop" / "engineering"`. Covers environment,
   build/sign, install/launch, functional/aesthetic/accessibility/performance,
   regression, release/AGC and bugfix.
 - **Execution pipeline**: `dwguard_deveco action:"pipeline"` runs
-  `build → sign → run → screenshot → layout`, writes per-step evidence to
+  `sign → build → run → screenshot → layout`, writes per-step evidence to
   `artifacts/deveco-<n>/pipeline.json`, stops at the first failure, supports
-  `resume: true`, and points at the fallback chain. `sign` runs
-  `devecocli signature generate`.
-- `harnessMaxRetries` config (default 3).
+  `resume: true`, and automatically tries `devecocli → deveco-mcp → hdc+hvigor`
+  (hdc screenshot/layout adapters verified on the emulator; every tier attempt is
+  recorded). `sign` runs `devecocli signature generate`.
+- **CLI/device verification**: `docs/0.8.0-verification.md` records the real
+  `devecocli 1.3.10` + Pura 90 emulator run, including the API-level mismatch,
+  sign-before-build fix, device-name quoting fix and layout-notice parsing.
+- `harnessMaxRetries` (default 3), `devecoMcpCommand`, `hdcPath`,
+  `hvigorPath` config.
 
 ### Boundaries
 
@@ -36,12 +43,14 @@ runtime).
 - No app-side AI / Intent / on-device model integration.
 - No cross-machine distributed run state; multi-project runs isolate their
   `.shared` and serialise device access via the existing device lock.
+- `deveco-mcp` is a configurable tier; its concrete command interface was not
+  available on this machine.
 
 ### Tests
 
 - Harness recovery (cross-instance resume, stale run, retry budget, fallback),
-  knowledge/SOP counts/search, pipeline order/failure/resume and tool
-  registration; suite is now 144/144.
+  queue lease/expiry/worker, knowledge/SOP counts/search, pipeline order/failure/
+  resume/automatic hdc fallback and tool registration; suite is now 147/147.
 
 ## 0.7.1 — 2026-11-04
 

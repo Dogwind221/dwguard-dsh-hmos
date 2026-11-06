@@ -47,6 +47,12 @@ export interface Options {
     readonly maxDesignSearches: number;
     /** Max attempts for one harness step before a human decision (0.8.0). */
     readonly harnessMaxRetries: number;
+    /** MCP fallback command (empty = skip MCP tier). */
+    readonly devecoMcpCommand: string;
+    /** hdc binary for the hdc+hvigor fallback tier. */
+    readonly hdcPath: string;
+    /** hvigor binary for the hdc+hvigor fallback tier. */
+    readonly hvigorPath: string;
     /** OpenAI-compatible embedding endpoint (empty = lexical only). */
     readonly designEmbeddingEndpoint: string;
     readonly designEmbeddingProvider: 'openai' | 'dashscope';

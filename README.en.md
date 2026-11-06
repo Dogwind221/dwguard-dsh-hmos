@@ -54,14 +54,19 @@ acceptance evidence. Design cards/refs are contrast evidence, not criteria.
 
 - `dwguard_harness` persists checkpoints, attempts, last error and fallback in
   `.shared/harness/run.json`; `resume` checks specVersion/iteration, `retry` stops
-  at `harnessMaxRetries`, and `fallback` records
-  `devecocli → deveco-mcp → hdc+hvigor`.
+  at `harnessMaxRetries`. `enqueue/queue/claim/complete/task-fail` use
+  `.shared/harness/queue.json`; `scripts/harness-worker.mjs` can be scheduled by
+  Windows Task Scheduler/cron so resume does not need a human to open a round.
 - `dwguard_knowledge` searches 14 bundled SOPs and 32 engineering facts.
-- `dwguard_deveco action:"pipeline"` runs build → sign → run → screenshot →
-  layout with per-step evidence, stop-on-failure and optional resume.
+- `dwguard_deveco action:"pipeline"` runs sign → build → run → screenshot →
+  layout with per-step evidence, stop-on-failure and optional resume. On
+  `devecocli` failure it automatically tries the configured `deveco-mcp` tier,
+  then `hdc+hvigor` (hdc screenshot/layout verified); every attempt is recorded.
 - App-side AI (Intent/on-device models/in-app agents) is out of scope; a phone
   is not a development runtime. Multi-project runs isolate state in their own
   `.shared` and serialise device access via the existing device lock.
+
+CLI/device verification and limits: [docs/0.8.0-verification.md](docs/0.8.0-verification.md) (Pura 90 emulator, not a physical phone).
 
 ## Install
 
@@ -155,14 +160,14 @@ self-report never becomes a `pass`.
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
-| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`; `pipeline` runs build→sign→run→screenshot→layout with per-step evidence, stop-on-failure and `resume`; defaults to the pool's bar phone and serialises device actions via `.shared/.device-lock.json` |
+| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; defaults to the pool's bar phone and serialises device actions via `.shared/.device-lock.json` |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
 | `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
 | `dwguard_aesthetic` | Aesthetic learning (0.6.1) + cross-project templates (0.6.4): `profile`, `baseline`, `compare`, `learn`, `template` (list/get/export/import). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; `baseline save` needs a passing audit + user confirmation; `template import` needs `confirmed: true` (`merge` supersedes local conflicts) |
 | `dwguard_design` | Design reference library (0.6.2–0.7.0): `library init/ingest/list`, `search` (filters incl. module/tone/density + `image` + `imageText` + `kind: principle`), `brief` (brand constraints / principles for direction / patterns for implementation), `recommend` (3 options), `capture-pack` (freeze after audit + confirmation, supports `supersedes`), `pack-feedback` (useful/off), `benchmark` (top-3 pack hit rate), `pack registry/export/import/migrate`, `feedback`, `capture`, `stats`. `hybrid` supports `openai`/`dashscope`; metadata includes `moduleTags`/`tone`/`density`/derived `colorProfile` and `preview`; `capture`/`capture-pack`/`pack import` need `confirmed: true` (capture-pack also needs audit + confirmation evidence); budgets hard-stop |
-| `dwguard_harness` | Cross-session run journal: `status / checkpoint / resume / retry / fail / fallback / close` in `.shared/harness/run.json`; resume checks specVersion/iteration, retry stops at `harnessMaxRetries`, fallback records `devecocli → deveco-mcp → hdc+hvigor` |
+| `dwguard_harness` | Cross-session run journal + persistent queue: `status / checkpoint / resume / retry / fail / fallback / close` in `.shared/harness/run.json`; `enqueue / queue / claim / complete / task-fail` in `.shared/harness/queue.json`; `scripts/harness-worker.mjs` can be scheduled externally |
 | `dwguard_calibration` | Gate accuracy ledger (`report` / `miss`) |
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | `sediment` durable lessons; `sops` / `sop` search the 14 bundled SOPs; `engineering` searches 32 engineering facts |
@@ -310,6 +315,9 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     maxAuditRounds: 5      # hard cap on audits per round
     maxDesignSearches: 12  # hard cap on design searches per round
     harnessMaxRetries: 3   # attempts per harness step before human decision
+    devecoMcpCommand: deveco-mcp  # fallback tier 2; empty = skip
+    hdcPath: hdc                  # fallback tier 3 hdc
+    hvigorPath: hvigorw           # fallback tier 3 hvigor
     aestheticTemplatesDir: ""  # empty = ~/.dsh/dwguard/aesthetic-templates
     designPacksDir: ""         # empty = ~/.dsh/dwguard/design-packs
     designClipProvider: dashscope  # custom (own contract) | dashscope (native contents)
@@ -347,7 +355,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 144 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 147 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

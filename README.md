@@ -262,7 +262,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_spec` | 立项 → 任务包 | 写入 / 复检 / 查看任务包，首次调用会脚手架 `.shared/` | 四维至少各 1 条；拒绝纯形容词、缺验证方式、依赖自述的判据；`ruleId` 必须在规则目录内；至少 1 条 must；判据可带 `assertion`（matcher + 期望值），非法断言写入前直接拒绝 |
 | `dwguard_prereview` | 派发前预审 | 记录对抗审查发现 | 阻断项必须有 `rebuttal`；未关闭的阻断项不许派发；零发现必须写审阅范围 |
 | `dwguard_dispatch` | 派发 | 生成 `tasks/goal-brief.md` 并写 `outbox-dsh.md`；`executor: cli` 时另写 `tasks/cli-brief.md` | 任务包合法 + 最近一次预审通过（可配置关闭） |
-| `dwguard_deveco` | 执行期 / 取证 | 调 DevEco CLI 取证：`env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`；`pipeline` 顺序跑 build→sign→run→screenshot→layout，逐步落 `pipeline.json`，失败即停、支持 `resume`；命令、退出码与输出落到 `artifacts/deveco-<n>/`；截图落 `artifacts/devshots/`，布局树落 `layout.json`；缺省设备取设备池直板机，设备动作经 `.shared/.device-lock.json` 串行 | 只跑固定子命令；超时/找不到 `devecocli` 明确失败；`ui` 参数按白名单校验；pipeline 只是执行证据，不替代 audit |
+| `dwguard_deveco` | 执行期 / 取证 | 调 DevEco CLI 取证：`env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`；`pipeline` 顺序跑 sign→build→run→screenshot→layout，逐步落 `pipeline.json`，失败即停、支持 `resume` 与自动 fallback；命令、退出码与输出落到 `artifacts/deveco-<n>/`；截图落 `artifacts/devshots/`，布局树落 `layout.json`；缺省设备取设备池直板机，设备动作经 `.shared/.device-lock.json` 串行 | 只跑固定子命令；超时/找不到 `devecocli` 明确失败；`ui` 参数按白名单校验；pipeline 只是执行证据，不替代 audit |
 | `dwguard_scan` | 取证前 | 独立 ArkTS/ArkUI 静态扫描（只读）：嵌套属性赋值、`any`、`@ohos.*`、V1/V2 混用、伪包、ForEach、定时器、无障碍文本 | 每条命中带规则 ID 与 `file:line`；写 `artifacts/scan-<n>.json`；must 级要进审计 findings |
 | `dwguard_shadow` | 执行期 | 影子审查：**增量扫描**（只看上次之后改过的文件），自动尝试调用宿主的 `harmony_ui_tree`（失败则需手动传 `uiTree`），写 `artifacts/shadow-<n>.json`；**只把新增**的 must 级风险写 `shadow-risk` 出站 | 只在 dispatched / rework 阶段可跑；`status` 超过 `shadowIntervalMinutes` 会提醒；同一问题不会重复刷屏 |
 | `dwguard_rules` | 全程 | 查规则目录（`list` / `get`，支持别名）与本地官方语料（`search`，返回 file:line + 出处 URL） | 语料目录由 `docsDir` / `DWG_DOCS_DIR` 指定；`get` 未知 ID 直接报错 |
@@ -270,7 +270,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_audit` | 外部审计 | 汇总逐条检查与发现，自动出返工单或验收报告 | must 全覆盖、四维全评估、无未关闭 blocker/major、失败项不许记成 unverified；带 `assertion` 的判据必须给 `actual` 实测值，闸门重算断言并拒绝矛盾结论；matrix 模式（主机内存 ≥32GB）下 checks 必须带 `device`+`family`，审美/无障碍缺屏族会被拒绝；`profileRef` 引用不存在/已 superseded 的审美档案 → error；证据文件缺失或**超过 20MB/份、100MB/包**整次拒绝；完成后清空进度文件；每次审计自动记账 |
 | `dwguard_aesthetic` | 审美学习（0.6.1–0.6.4） | `profile`、`baseline`、`compare`、`learn`、`template`（list/get/export/import 跨项目审美模板） | 写档案必须带 `source` + `confidence`，改已有领域的值需 `confirmed: true`；`learn` 默认只提议不落盘，`apply` 必须 `confirmed: true`；`baseline save` 必须有通过审计 + 用户确认；`template import` 必须 `confirmed: true`（merge 会 supersede 本地冲突） |
 | `dwguard_design` | 设计参考库（0.6.2–0.7.0） | `library init/ingest/list`、`search`（关键词 + 维度/模块/气质/密度过滤 + `image` 以图搜图 + `imageText` 多模态文本→图 + `kind: principle`）、`brief`（品牌/原则/模式三通道）、`recommend`（3 套候选）、`capture-pack`（审计通过 + 用户确认后冻结范式包，支持 `supersedes`）、`pack-feedback`（包级 useful/off）、`benchmark`（top-3 包命中率）、`pack registry/export/import/migrate`、`feedback`、`capture`、`stats` | 默认 `lexical` 零网络；`hybrid` 支持 `openai`/`dashscope` provider；原则卡必须有 `proxies`/`checklist`；`preview` 只是视觉参考；`capture`/`capture-pack`/`pack import` 必须 `confirmed: true`（capture-pack 还需四维审计通过 + 用户确认记录）；检索/审计轮次受预算硬停 |
-| `dwguard_harness` | 恢复 / 长任务 | 跨会话 journal：`status / checkpoint / resume / retry / fail / fallback / close`，写 `.shared/harness/run.json`；resume 会检查 specVersion/iteration，retry 超 `harnessMaxRetries` 转人工，fallback 记录 `devecocli → deveco-mcp → hdc+hvigor` | 不改写验收判据；App 侧 AI 不在范围；跨机器分布式状态不适用 |
+| `dwguard_harness` | 恢复 / 长任务 | 跨会话 journal：`status / checkpoint / resume / retry / fail / fallback / close`，写 `.shared/harness/run.json`；持久队列：`enqueue / queue / claim / complete / task-fail`，写 `.shared/harness/queue.json`；`scripts/harness-worker.mjs` 可由 OS 调度器定时领取 | 不改写验收判据；App 侧 AI 不在范围；跨机器分布式状态不适用 |
 | `dwguard_calibration` | 收尾 | 闸门准确率账本：`report` 算四维漏检率，`miss` 记录"审计通过但用户后来发现问题" | `miss` 必须针对已通过的审计；账本 `knowledge/calibration.jsonl` 只追加 |
 | `dwguard_confirm` | 收尾 | 记录用户对验收报告的决定：`accept` 结束本轮，`new_round` 迭代号 +1 | 必须有通过的审计与 acceptance-report；写 `artifacts/confirmation-<n>.json` 并更新 state |
 | `dwguard_knowledge` | 沉淀 / 知识 | `sediment` 追加经验；`sops`/`sop` 检索 14 个 SOP；`engineering` 检索 32 条工程知识 | 索引按 kind+结论去重；SOP/知识只做输入，不替代判据 |
@@ -320,9 +320,11 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 
 0.8.0 补的是“Agent 能恢复、能查知识、能跑执行链”的三块基础，不是 App 侧 AI：
 
-1. **跨会话 journal**：`dwguard_harness` 把 checkpoint / attempts / lastError / fallback 写到 `.shared/harness/run.json`；新会话 `resume` 先核对 specVersion/iteration，旧 checkpoint 会标 stale，不会盲目续跑；`retry` 超过 `harnessMaxRetries` 转人工；`fallback` 记录 `devecocli → deveco-mcp → hdc+hvigor` 档位。
+1. **跨会话 journal + 持久队列**：`dwguard_harness` 把 checkpoint / attempts / lastError / fallback 写到 `.shared/harness/run.json`；新会话 `resume` 先核对 specVersion/iteration，旧 checkpoint 会标 stale；`retry` 超过 `harnessMaxRetries` 转人工；`fallback` 记录 `devecocli → deveco-mcp → hdc+hvigor`。`enqueue/queue/claim/complete/task-fail` 写 `.shared/harness/queue.json`，`scripts/harness-worker.mjs` 可由 Windows Task Scheduler/cron 定时领取，不再依赖人再开一轮。
 2. **知识/SOP 库**：`knowledge/sops.json`（14 个 SOP）+ `knowledge/engineering.json`（32 条工程知识），用 `dwguard_knowledge action:"sops" / "sop" / "engineering"` 检索；覆盖环境、构建签名、安装启动、功能/审美/无障碍/性能/回归/发布/热修。
-3. **执行链**：`dwguard_deveco action:"pipeline"` 顺序跑 `build → sign → run → screenshot → layout`，每步写 `artifacts/deveco-<n>/pipeline.json`；失败即停并保留现场，`resume: true` 跳过已成功步骤；**pipeline 只是执行证据，是否通过仍由 `dwguard_audit` 判定**。
+3. **执行链 + 自动 fallback**：`dwguard_deveco action:"pipeline"` 顺序跑 `sign → build → run → screenshot → layout`，每步写 `artifacts/deveco-<n>/pipeline.json`；失败即停并保留现场，`resume: true` 跳过已成功步骤。`devecocli` 失败时自动尝试 `deveco-mcp`、再尝试 `hdc+hvigor`（截图/布局的 hdc 命令已实测）；每档 attempt 都落在 pipeline 记录里。**pipeline 只是执行证据，是否通过仍由 `dwguard_audit` 判定**。
+
+真机/CLI 验证记录与已知限制见 [docs/0.8.0-verification.md](docs/0.8.0-verification.md)（Pura 90 模拟器，非物理机）。
 
 **边界**：App 侧 AI（Intent/端侧模型/应用内智能体）不做；手机端不是开发运行时；多项目通过各自 `.shared` 隔离 + 设备锁串行，不做跨机器分布式 run state。
 
@@ -464,6 +466,9 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
     maxAuditRounds: 5                     # 本轮审计轮次硬上限
     maxDesignSearches: 12                 # 本轮设计检索次数硬上限
     harnessMaxRetries: 3                  # 同一 step 自动重试上限，超过转人工
+    devecoMcpCommand: deveco-mcp          # fallback tier 2；空字符串跳过
+    hdcPath: hdc                          # fallback tier 3 的 hdc
+    hvigorPath: hvigorw                   # fallback tier 3 的 hvigor
     aestheticTemplatesDir: ""             # 跨项目模板目录；空 = ~/.dsh/dwguard/aesthetic-templates
     designPacksDir: ""                    # 卡片包目录；空 = ~/.dsh/dwguard/design-packs
     designClipProvider: dashscope         # custom（自有契约）| dashscope（原生 contents）
@@ -535,7 +540,7 @@ CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（144 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 四维审计+确认门禁、inbox 可移植 cards、范式卡学习；0.7.0 registry/supersedes、pack v2 迁移、import preview 重写、包级 feedback、top-3 benchmark；0.8.0 harness journal/resume/retry/fallback、14 SOP+32 工程知识、deveco pipeline/sign/resume）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
+2. `npm test` 全绿（147 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 设备锁串行）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 四维审计+确认门禁、inbox 可移植 cards、范式卡学习；0.7.0 registry/supersedes、pack v2 迁移、import preview 重写、包级 feedback、top-3 benchmark；0.8.0 harness journal/queue/resume/retry/fallback、14 SOP+32 工程知识、deveco pipeline/sign/resume/自动 fallback、standalone worker）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

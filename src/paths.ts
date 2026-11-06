@@ -21,6 +21,7 @@ export interface SharedPaths {
   /** Cross-session run state / checkpoints (0.8.0). */
   readonly harnessDir: string;
   readonly harnessRun: string;
+  readonly harnessQueue: string;
   readonly specJson: string;
   readonly specMd: string;
   readonly briefMd: string;
@@ -94,6 +95,7 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     stateFile: resolve(shared, 'state.json'),
     harnessDir: resolve(shared, 'harness'),
     harnessRun: resolve(shared, 'harness', 'run.json'),
+    harnessQueue: resolve(shared, 'harness', 'queue.json'),
     specJson: resolve(shared, 'tasks', 'spec.json'),
     specMd: resolve(shared, 'tasks', 'spec.md'),
     briefMd: resolve(shared, 'tasks', 'goal-brief.md'),

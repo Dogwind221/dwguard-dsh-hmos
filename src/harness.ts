@@ -332,6 +332,165 @@ export async function closeHarness(paths: SharedPaths, snapshot: Snapshot, now: 
   return next;
 }
 
+/** One durable queue task (0.8.0 scheduler). */
+export interface HarnessTask {
+  readonly id: string;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+  readonly status: 'queued' | 'leased' | 'done' | 'failed';
+  readonly step: string;
+  readonly note?: string;
+  readonly attempts: number;
+  readonly lease?: { readonly owner: string; readonly until: string };
+  readonly lastError?: string;
+  readonly evidence?: readonly string[];
+}
+
+/** Persistent task queue. */
+export interface HarnessQueue {
+  readonly schemaVersion: 1;
+  readonly updatedAt: string;
+  readonly tasks: readonly HarnessTask[];
+}
+
+/** Read the queue; a missing/corrupt file becomes empty. */
+export async function readHarnessQueue(paths: SharedPaths, now: string): Promise<HarnessQueue> {
+  const raw = await readTextOrNull(paths.harnessQueue);
+  if (raw === null) return { schemaVersion: 1, updatedAt: now, tasks: [] };
+  try {
+    const parsed = JSON.parse(raw) as Partial<HarnessQueue>;
+    if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.tasks)) return { schemaVersion: 1, updatedAt: now, tasks: [] };
+    return {
+      schemaVersion: 1,
+      updatedAt: typeof parsed.updatedAt === 'string' ? parsed.updatedAt : now,
+      tasks: parsed.tasks.filter(
+        (task): task is HarnessTask =>
+          typeof task === 'object' &&
+          task !== null &&
+          typeof (task as { id?: unknown }).id === 'string' &&
+          typeof (task as { step?: unknown }).step === 'string'
+      )
+    };
+  } catch {
+    return { schemaVersion: 1, updatedAt: now, tasks: [] };
+  }
+}
+
+/** Persist the queue. */
+export async function writeHarnessQueue(paths: SharedPaths, queue: HarnessQueue): Promise<void> {
+  await ensureDir(paths.harnessDir);
+  await writeTextAtomic(paths.harnessQueue, `${JSON.stringify(queue, null, 2)}\n`);
+}
+
+/** Add a queued task. */
+export async function enqueueHarnessTask(
+  paths: SharedPaths,
+  now: string,
+  input: { readonly step: string; readonly note?: string }
+): Promise<HarnessQueue> {
+  const queue = await readHarnessQueue(paths, now);
+  const nextNumber =
+    queue.tasks.reduce((max, task) => {
+      const match = /^task-(\d+)$/.exec(task.id);
+      return match?.[1] === undefined ? max : Math.max(max, Number.parseInt(match[1], 10));
+    }, 0) + 1;
+  const task: HarnessTask = {
+    id: `task-${String(nextNumber).padStart(4, '0')}`,
+    createdAt: now,
+    updatedAt: now,
+    status: 'queued',
+    step: input.step,
+    ...(input.note === undefined ? {} : { note: input.note }),
+    attempts: 0
+  };
+  const next: HarnessQueue = { schemaVersion: 1, updatedAt: now, tasks: [...queue.tasks, task].slice(-100) };
+  await writeHarnessQueue(paths, next);
+  return next;
+}
+
+/** Claim the next queued task, reclaiming expired leases. */
+export async function claimHarnessTask(
+  paths: SharedPaths,
+  now: string,
+  owner: string,
+  leaseSeconds: number
+): Promise<{ queue: HarnessQueue; task: HarnessTask | null }> {
+  const queue = await readHarnessQueue(paths, now);
+  const nowMs = Date.parse(now);
+  const tasks = queue.tasks.map((task) => {
+    if (task.status === 'leased' && task.lease !== undefined && Date.parse(task.lease.until) <= nowMs) {
+      return { ...task, status: 'queued' as const, updatedAt: now, lease: undefined };
+    }
+    return task;
+  });
+  const index = tasks.findIndex((task) => task.status === 'queued');
+  if (index < 0) {
+    const next = { ...queue, updatedAt: now, tasks };
+    await writeHarnessQueue(paths, next);
+    return { queue: next, task: null };
+  }
+  const current = tasks[index];
+  if (current === undefined) return { queue, task: null };
+  const leased: HarnessTask = {
+    ...current,
+    status: 'leased',
+    updatedAt: now,
+    attempts: current.attempts + 1,
+    lease: { owner, until: new Date(nowMs + Math.max(10, leaseSeconds) * 1000).toISOString() }
+  };
+  const nextTasks = [...tasks];
+  nextTasks[index] = leased;
+  const next = { ...queue, updatedAt: now, tasks: nextTasks };
+  await writeHarnessQueue(paths, next);
+  return { queue: next, task: leased };
+}
+
+/** Mark a task done. */
+export async function completeHarnessTask(
+  paths: SharedPaths,
+  now: string,
+  id: string,
+  evidence?: readonly string[]
+): Promise<HarnessQueue> {
+  const queue = await readHarnessQueue(paths, now);
+  const next: HarnessQueue = {
+    ...queue,
+    updatedAt: now,
+    tasks: queue.tasks.map((task) =>
+      task.id === id
+        ? {
+            ...task,
+            status: 'done',
+            updatedAt: now,
+            lease: undefined,
+            ...(evidence === undefined ? {} : { evidence: [...evidence].slice(0, 32) })
+          }
+        : task
+    )
+  };
+  await writeHarnessQueue(paths, next);
+  return next;
+}
+
+/** Mark a task failed. */
+export async function failHarnessTask(
+  paths: SharedPaths,
+  now: string,
+  id: string,
+  error: string
+): Promise<HarnessQueue> {
+  const queue = await readHarnessQueue(paths, now);
+  const next: HarnessQueue = {
+    ...queue,
+    updatedAt: now,
+    tasks: queue.tasks.map((task) =>
+      task.id === id ? { ...task, status: 'failed', updatedAt: now, lease: undefined, lastError: error } : task
+    )
+  };
+  await writeHarnessQueue(paths, next);
+  return next;
+}
+
 /** Collect a snapshot + run in one call for the tool. */
 export async function readHarnessSnapshot(
   paths: SharedPaths,

@@ -16,13 +16,19 @@ import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import {
   checkpointHarness,
+  claimHarnessTask,
   closeHarness,
+  completeHarnessTask,
+  enqueueHarnessTask,
   failHarness,
+  failHarnessTask,
   fallbackHarness,
   HARNESS_FALLBACK_CHAIN,
+  readHarnessQueue,
   readHarnessSnapshot,
   resumeHarness,
   retryHarness,
+  type HarnessQueue,
   type HarnessRun
 } from '../harness.js';
 import { displayPath } from '../paths.js';
@@ -33,7 +39,32 @@ import { asRecord, optionalInt, optionalString, optionalStringArray, requiredEnu
 import { pathsOf } from './common.js';
 
 const TOOL = 'dwguard_harness';
-const ACTIONS = ['status', 'checkpoint', 'resume', 'retry', 'fail', 'fallback', 'close'] as const;
+const ACTIONS = [
+  'status',
+  'checkpoint',
+  'resume',
+  'retry',
+  'fail',
+  'fallback',
+  'close',
+  'enqueue',
+  'queue',
+  'claim',
+  'complete',
+  'task-fail'
+] as const;
+
+function queueDetail(queue: HarnessQueue): string {
+  if (queue.tasks.length === 0) return '（队列为空）';
+  return [
+    '| task | status | step | attempts | lease | note |',
+    '| --- | --- | --- | --- | --- | --- |',
+    ...queue.tasks.map(
+      (task) =>
+        `| \`${task.id}\` | ${task.status} | ${task.step} | ${task.attempts} | ${task.lease === undefined ? '—' : `${task.lease.owner} @ ${task.lease.until}`} | ${task.note ?? '—'} |`
+    )
+  ].join('\n');
+}
 
 function runDetail(run: HarnessRun): string {
   const last = run.checkpoints.at(-1);
@@ -64,16 +95,19 @@ export function createHarnessTool(options: Options, ctx?: PluginContext): ToolDe
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Cross-session run journal for the DwGuard protocol: `status` / `checkpoint` / `resume` / `retry` / `fail` / `fallback` / `close`. ' +
-      'Stores checkpoints, attempt counts, last error and fallback level in `.shared/harness/run.json`; `resume` tells the next session where to continue. ' +
+      'Cross-session run journal + persistent queue: `status` / `checkpoint` / `resume` / `retry` / `fail` / `fallback` / `close` plus `enqueue` / `queue` / `claim` / `complete` / `task-fail`. ' +
+      'Stores checkpoints, attempt counts, last error and fallback level in `.shared/harness/run.json`; the queue lives in `.shared/harness/queue.json` so a scheduled worker can claim/resume without a human opening a new round. ' +
       'App-side AI and mobile development runtimes are out of scope.',
     parameters: {
-      action: { type: 'string', required: true, enum: [...ACTIONS], description: 'status / checkpoint / resume / retry / fail / fallback / close。' },
-      step: { type: 'string', description: 'checkpoint/retry/fail/fallback 的步骤名，如 `pipeline` / `audit`。' },
-      note: { type: 'string', description: 'checkpoint 的说明（可选）。' },
-      evidence: { type: 'array', items: { type: 'string' }, description: 'checkpoint 的证据路径（可选）。' },
-      error: { type: 'string', description: 'retry/fail 的错误摘要（可选）。' },
-      level: { type: 'number', description: 'fallback 档位（1=devecocli，2=deveco-mcp，3=hdc+hvigor；默认 1）。' }
+      action: { type: 'string', required: true, enum: [...ACTIONS], description: 'status/checkpoint/resume/retry/fail/fallback/close/enqueue/queue/claim/complete/task-fail。' },
+      step: { type: 'string', description: 'checkpoint/retry/fail/fallback/enqueue 的步骤名，如 `pipeline` / `audit`。' },
+      note: { type: 'string', description: 'checkpoint/enqueue 的说明（可选）。' },
+      evidence: { type: 'array', items: { type: 'string' }, description: 'checkpoint/complete 的证据路径（可选）。' },
+      error: { type: 'string', description: 'retry/fail/task-fail 的错误摘要（可选）。' },
+      level: { type: 'number', description: 'fallback 档位（1=devecocli，2=deveco-mcp，3=hdc+hvigor；默认 1）。' },
+      taskId: { type: 'string', description: 'complete/task-fail 的 task id（如 `task-0001`）。' },
+      owner: { type: 'string', description: 'claim 的 worker 名（默认 `dsh-<pid>`）。' },
+      leaseSeconds: { type: 'number', description: 'claim 的租约秒数（默认 300，最小 10）。' }
     },
     output: { schema: RESULT_SCHEMA, render: renderResult },
     async execute(rawArgs: unknown, exec: ToolRunContext): Promise<ToolResult> {
@@ -115,6 +149,68 @@ export function createHarnessTool(options: Options, ctx?: PluginContext): ToolDe
           detail: `${runDetail(result.run)}\n\n- stale：${result.stale}`,
           files: [displayPath(paths, paths.harnessRun)],
           next: result.nextAction
+        });
+      }
+
+      if (action === 'enqueue') {
+        const step = requiredString(args, 'step', TOOL, 80);
+        const note = optionalString(args, 'note', TOOL, 300);
+        const queue = await enqueueHarnessTask(paths, now, { step, ...(note === undefined ? {} : { note }) });
+        const task = queue.tasks.at(-1);
+        return ok(`已入队：${task?.id ?? step}`, {
+          detail: queueDetail(queue),
+          files: [displayPath(paths, paths.harnessQueue)],
+          next: '用 `claim` 领取（或让 scripts/harness-worker.mjs 定时领取），完成后 `complete`。'
+        });
+      }
+
+      if (action === 'queue') {
+        const queue = await readHarnessQueue(paths, now);
+        const queued = queue.tasks.filter((task) => task.status === 'queued').length;
+        return ok(`队列 ${queue.tasks.length} 个任务（queued ${queued}）。`, {
+          detail: queueDetail(queue),
+          files: [displayPath(paths, paths.harnessQueue)],
+          next: queued > 0 ? '用 `claim` 领取下一个任务。' : '队列为空；可用 `enqueue` 加入续跑任务。'
+        });
+      }
+
+      if (action === 'claim') {
+        const owner = optionalString(args, 'owner', TOOL, 80) ?? `dsh-${process.pid}`;
+        const leaseSeconds = optionalInt(args, 'leaseSeconds', 300, TOOL, 10, 86_400);
+        const result = await claimHarnessTask(paths, now, owner, leaseSeconds);
+        if (result.task === null) {
+          return ok('队列里没有可领取的任务。', {
+            detail: queueDetail(result.queue),
+            files: [displayPath(paths, paths.harnessQueue)],
+            next: '等待 `enqueue` 或定时 worker。'
+          });
+        }
+        return ok(`已领取 ${result.task.id}（${result.task.step}）。`, {
+          detail: `${queueDetail(result.queue)}\n\n- lease：${result.task.lease?.owner} @ ${result.task.lease?.until}`,
+          files: [displayPath(paths, paths.harnessQueue)],
+          next: '执行该 step；成功后 `complete` + taskId，失败用 `task-fail`。'
+        });
+      }
+
+      if (action === 'complete') {
+        const taskId = requiredString(args, 'taskId', TOOL, 40);
+        const evidence = optionalStringArray(args, 'evidence', TOOL, 32);
+        const queue = await completeHarnessTask(paths, now, taskId, evidence);
+        return ok(`任务 ${taskId} 已标记 done。`, {
+          detail: queueDetail(queue),
+          files: [displayPath(paths, paths.harnessQueue)],
+          next: '继续 `claim` 下一个任务，或结束。'
+        });
+      }
+
+      if (action === 'task-fail') {
+        const taskId = requiredString(args, 'taskId', TOOL, 40);
+        const error = requiredString(args, 'error', TOOL, 600);
+        const queue = await failHarnessTask(paths, now, taskId, error);
+        return ok(`任务 ${taskId} 已标记 failed。`, {
+          detail: queueDetail(queue),
+          files: [displayPath(paths, paths.harnessQueue)],
+          next: '保留现场转人工，或重新 `enqueue` 一个修复任务。'
         });
       }
 

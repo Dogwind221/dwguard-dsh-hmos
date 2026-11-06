@@ -271,9 +271,9 @@ test('0.8.0 EX: pipeline runs build/sign/run/screenshot/layout in order and reco
   assert.equal(result.ok, true, result.detail);
   assert.deepEqual(
     calls.map((call) => call.args[0]),
-    ['build', 'signature', 'run', 'ui', 'ui']
+    ['signature', 'build', 'run', 'ui', 'ui']
   );
-  assert.deepEqual(calls[1].args, ['signature', 'generate']);
+  assert.deepEqual(calls[0].args, ['signature', 'generate']);
   assert.deepEqual(calls[2].args, ['run', '--module', 'entry', '--device', 'SN-1']);
   const record = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'pipeline.json'), 'utf8'));
   assert.equal(record.action, 'pipeline');
@@ -290,19 +290,46 @@ test('0.8.0 EX: pipeline stops at the first failure and points at fallback/resum
   const runner = async () => {
     calls += 1;
     return calls === 1
-      ? { code: 0, stdout: 'built', stderr: '', durationMs: 2 }
-      : { code: 1, stdout: '', stderr: 'signing certificate missing', durationMs: 2 };
+      ? { code: 0, stdout: 'signed', stderr: '', durationMs: 2 }
+      : { code: 1, stdout: '', stderr: 'build failed', durationMs: 2 };
   };
   const tool = createDevecoTool(options, undefined, runner);
   const result = await tool.execute({ action: 'pipeline', device: 'SN-1' }, exec(cwd));
   assert.equal(result.ok, false);
-  assert.match(result.summary, /sign/);
+  assert.match(result.summary, /build/);
   assert.match(result.next, /fallback|resume|审计/);
   const record = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'pipeline.json'), 'utf8'));
-  assert.equal(record.failedStep, 'sign');
+  assert.equal(record.failedStep, 'build');
   assert.equal(record.steps.length, 2);
   assert.equal(record.steps[1].ok, false);
-  assert.equal(calls, 2);
+  assert.equal(calls, 4);
+});
+
+test('0.8.0 EX: pipeline falls back from devecocli to hdc for screenshot/layout', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  const calls = [];
+  const runner = async (command, args) => {
+    calls.push({ command, args });
+    if (command.includes('devecocli')) {
+      if (args[0] === 'ui') return { code: 1, stdout: '', stderr: 'ui failed', durationMs: 1 };
+      return { code: 0, stdout: 'ok', stderr: '', durationMs: 1 };
+    }
+    if (command === 'deveco-mcp') return { code: 1, stdout: '', stderr: 'mcp unavailable', durationMs: 1 };
+    if (command === 'hdc') return { code: 0, stdout: 'hdc ok', stderr: '', durationMs: 1 };
+    return { code: 1, stdout: '', stderr: 'unexpected', durationMs: 1 };
+  };
+  const tool = createDevecoTool(options, undefined, runner);
+  const result = await tool.execute({ action: 'pipeline', device: 'SN-1' }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  const record = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'pipeline.json'), 'utf8'));
+  const screenshot = record.steps.find((step) => step.name === 'screenshot');
+  const layout = record.steps.find((step) => step.name === 'layout');
+  assert.equal(screenshot.tier, 'hdc+hvigor');
+  assert.equal(layout.tier, 'hdc+hvigor');
+  assert.ok(screenshot.attempts.length >= 3);
+  assert.ok(calls.some((call) => call.command === 'hdc' && call.args.includes('snapshot_display')));
+  assert.ok(calls.some((call) => call.command === 'hdc' && call.args.includes('dumpLayout')));
 });
 
 test('0.8.0 EX: pipeline resume skips already-successful steps', async () => {

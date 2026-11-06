@@ -20,6 +20,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import { acquireDeviceLock, defaultDevice, releaseDeviceLock } from '../device.js';
+import { buildFallbackTiers, type FallbackStep } from '../fallback.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { scanWorkspace } from '../scan.js';
@@ -96,7 +97,7 @@ async function defaultStart(
 ): Promise<number> {
   const { openSync, closeSync } = await import('node:fs');
   const out = openSync(logFile, 'a');
-  const child = spawn(command, [...args], {
+  const child = spawn(command, process.platform === 'win32' ? args.map(quoteShellArg) : [...args], {
     cwd,
     shell: process.platform === 'win32',
     windowsHide: true,
@@ -106,6 +107,12 @@ async function defaultStart(
   closeSync(out);
   child.unref();
   return child.pid ?? -1;
+}
+
+/** Quote an argument for `cmd.exe` when spawn uses `shell: true` on Windows. */
+function quoteShellArg(value: string): string {
+  if (!/[\s"]/u.test(value)) return value;
+  return `"${value.replace(/(["\\])/g, '\\$1')}"`;
 }
 
 function defaultStop(pid: number): boolean {
@@ -133,7 +140,7 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 function spawnRunner(command: string, args: readonly string[], cwd: string): Promise<DevecoRun> {
   return new Promise((resolvePromise, reject) => {
     const started = Date.now();
-    const child = spawn(command, [...args], {
+    const child = spawn(command, process.platform === 'win32' ? args.map(quoteShellArg) : [...args], {
       cwd,
       shell: process.platform === 'win32',
       windowsHide: true,
@@ -165,6 +172,23 @@ function spawnRunner(command: string, args: readonly string[], cwd: string): Pro
 function tail(text: string, lines = 40): string {
   const split = text.trimEnd().split('\n');
   return split.slice(-lines).join('\n');
+}
+
+/** `devecocli` may append a docs-update notice to stdout; extract the JSON body. */
+function extractJsonText(text: string): string | null {
+  const first = text.search(/[[{]/);
+  if (first < 0) return null;
+  const opener = text[first];
+  const closer = opener === '[' ? ']' : '}';
+  const last = text.lastIndexOf(closer);
+  if (last <= first) return null;
+  const candidate = text.slice(first, last + 1);
+  try {
+    JSON.parse(candidate);
+    return candidate;
+  } catch {
+    return null;
+  }
 }
 
 function safeToken(value: string): boolean {
@@ -238,7 +262,7 @@ export function createDevecoTool(
     name: TOOL,
     description:
       'Run DevEco CLI (`devecocli`) evidence commands: env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop. ' +
-      '`pipeline` = build → sign → run → screenshot → layout with per-step evidence, stop-on-failure, optional resume; it never claims acceptance. ' +
+      '`pipeline` = sign → build → run → screenshot → layout with per-step evidence, stop-on-failure, optional resume; it never claims acceptance. ' +
       'Writes command + exit code + output under `artifacts/deveco-<n>/`; DSH cites this as evidence, never as executor self-verification. ' +
       '`a11y` = 布局树快照 + accessibilityId + 工作区静态无障碍扫描；长命令加 `background: true` 立即返回 job id；`attach` 复用已有日志；`screenshot` / `layout` / `verify` 走真实设备取证。',
     parameters: {
@@ -248,13 +272,15 @@ export function createDevecoTool(
       level: { type: 'string', description: 'log 的级别 D/I/W/E/F（可选）。' },
       crash: { type: 'boolean', description: 'log 是否只看崩溃日志（可选）。' },
       apply: { type: 'string', description: 'run 的增量部署清单文件名（放在工程 .hvigor/ 下，可选）。' },
+      hap: { type: 'string', description: 'pipeline 的 hdc fallback 安装包路径（可选；相对工作区或绝对路径）。' },
+      bundle: { type: 'string', description: 'verify/pipeline fallback 的 bundleName。' },
+      ability: { type: 'string', description: 'pipeline fallback 启动的 Ability 名（如 EntryAbility）。' },
       args: { type: 'string', description: 'ui 的附加参数（空格分隔，仅允许安全字符）。' },
       file: { type: 'string', description: 'attach：要登记为证据的已有文件（相对工作区或 `.shared/`）。' },
       background: { type: 'boolean', description: 'build/run/log 是否后台执行并立即返回 job id（默认 false）。' },
       resume: { type: 'boolean', description: 'pipeline：跳过上一次 pipeline 已成功的步骤（默认 false）。' },
       job: { type: 'string', description: 'stop：job id（即 deveco-<n> 的 n，或 pid）。' },
-      plan: { type: 'string', description: 'verify：自然语言测试步骤与预期结果。' },
-      bundle: { type: 'string', description: 'verify：被测应用 bundleName。' }
+      plan: { type: 'string', description: 'verify：自然语言测试步骤与预期结果。' }
     },
     output: { schema: RESULT_SCHEMA, render: renderResult },
     async execute(rawArgs: unknown, exec: ToolRunContext): Promise<ToolResult> {
@@ -266,6 +292,9 @@ export function createDevecoTool(
       const level = optionalString(args, 'level', TOOL, 1);
       const crash = args['crash'] === true;
       const applyFile = optionalString(args, 'apply', TOOL, 200);
+      const hapArg = optionalString(args, 'hap', TOOL, 400);
+      const bundleArg = optionalString(args, 'bundle', TOOL, 200);
+      const abilityArg = optionalString(args, 'ability', TOOL, 200);
       const uiArgs = optionalString(args, 'args', TOOL, 400);
 
       if (level !== undefined && !/^[DIWEF]$/i.test(level)) return fail('level 只能是 D/I/W/E/F。');
@@ -384,7 +413,7 @@ export function createDevecoTool(
         });
       }
 
-      // End-to-end execution chain: build → sign → run → screenshot → layout.
+      // End-to-end execution chain: sign → build → run → screenshot → layout.
       // It records every step and stops at the first failure; it is evidence,
       // never an acceptance claim (the audit still decides).
       if (action === 'pipeline') {
@@ -404,8 +433,8 @@ export function createDevecoTool(
         const shotPath = `${paths.artifactsDir}/devshots/pipeline-${Date.now()}.png`;
         await ensureDir(dirname(shotPath));
         const steps = [
-          { name: 'build', args: ['build', ...(module === undefined ? [] : ['--modules', module])] },
           { name: 'sign', args: ['signature', 'generate'] },
+          { name: 'build', args: ['build', ...(module === undefined ? [] : ['--modules', module])] },
           {
             name: 'run',
             args: ['run', ...(module === undefined ? [] : ['--module', module]), ...(device === undefined ? [] : ['--device', device]), ...(applyFile === undefined ? [] : ['--apply', applyFile])]
@@ -450,7 +479,23 @@ export function createDevecoTool(
         const dir = `${paths.artifactsDir}/deveco-${index}`;
         await ensureDir(dir);
         const started = Date.now();
-        const records: Array<{
+        const layoutFallbackPath = `${dir}/layout-fallback.json`;
+        const requestedHap = hapArg === undefined ? undefined : resolve(paths.workspace, hapArg);
+        const hapPath =
+          requestedHap !== undefined && existsSync(requestedHap) && requestedHap.startsWith(`${paths.workspace}${sep}`)
+            ? requestedHap
+            : undefined;
+        type StepAttempt = {
+          tier: 'devecocli' | 'mcp' | 'hdc+hvigor';
+          command: string;
+          args: string[];
+          code: number;
+          durationMs: number;
+          ok: boolean;
+          stdout: string;
+          stderr: string;
+        };
+        type StepRecord = {
           name: string;
           command: string;
           code: number;
@@ -458,9 +503,46 @@ export function createDevecoTool(
           ok: boolean;
           stdout: string;
           stderr: string;
+          tier?: string;
+          attempts?: StepAttempt[];
           skipped?: boolean;
-        }> = [];
+        };
+        const records: StepRecord[] = [];
         let failed: string | undefined;
+        let layoutWritten = false;
+
+        const attempt = async (
+          tier: StepAttempt['tier'],
+          command: string,
+          commandArgs: readonly string[]
+        ): Promise<StepAttempt> => {
+          try {
+            const run = await runner(command, commandArgs, paths.workspace);
+            return {
+              tier,
+              command: `${command} ${commandArgs.join(' ')}`,
+              args: [...commandArgs],
+              code: run.code,
+              durationMs: run.durationMs,
+              ok: run.code === 0,
+              stdout: run.stdout,
+              stderr: run.stderr
+            };
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            return {
+              tier,
+              command: `${command} ${commandArgs.join(' ')}`,
+              args: [...commandArgs],
+              code: -1,
+              durationMs: 0,
+              ok: false,
+              stdout: '',
+              stderr: message
+            };
+          }
+        };
+
         try {
           for (const step of steps) {
             if (completed.has(step.name)) {
@@ -474,39 +556,80 @@ export function createDevecoTool(
                 stderr: '',
                 skipped: true
               });
+              if (step.name === 'layout') layoutWritten = existsSync(`${dir}/layout.json`);
               continue;
             }
-            const command = `${binary} ${step.args.join(' ')}`;
-            let run: DevecoRun;
-            try {
-              run = await runner(binary, step.args, paths.workspace);
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error);
+
+            const attempts: StepAttempt[] = [await attempt('devecocli', binary, step.args)];
+            let success = attempts[0];
+            if (success?.ok !== true) {
+              const tiers = buildFallbackTiers({
+                step: step.name as FallbackStep,
+                primaryArgs: step.args,
+                mcpCommand: options.devecoMcpCommand,
+                hdcPath: options.hdcPath,
+                hvigorPath: options.hvigorPath,
+                ...(device === undefined ? {} : { device }),
+                ...(hapPath === undefined ? {} : { hapPath }),
+                ...(bundleArg === undefined ? {} : { bundle: bundleArg }),
+                ...(abilityArg === undefined ? {} : { ability: abilityArg }),
+                screenshotPath: shotPath,
+                layoutPath: layoutFallbackPath
+              });
+              for (const tier of tiers) {
+                const tierAttempts: StepAttempt[] = [];
+                let allOk = true;
+                for (const command of tier.commands) {
+                  const one = await attempt(tier.name, command.command, command.args);
+                  tierAttempts.push(one);
+                  attempts.push(one);
+                  if (!one.ok) {
+                    allOk = false;
+                    break;
+                  }
+                }
+                if (allOk && tierAttempts.length > 0) {
+                  success = tierAttempts[tierAttempts.length - 1];
+                  break;
+                }
+              }
+            }
+
+            const final = success ?? attempts[attempts.length - 1];
+            if (final === undefined) {
               failed = step.name;
-              records.push({ name: step.name, command, code: -1, durationMs: 0, ok: false, stdout: '', stderr: message });
+              records.push({ name: step.name, command: '', code: -1, durationMs: 0, ok: false, stdout: '', stderr: 'no attempt', attempts });
               break;
             }
-            const okStep = run.code === 0;
             records.push({
               name: step.name,
-              command,
-              code: run.code,
-              durationMs: run.durationMs,
-              ok: okStep,
-              stdout: tail(run.stdout),
-              stderr: tail(run.stderr)
+              command: final.command,
+              code: final.code,
+              durationMs: attempts.reduce((sum, item) => sum + item.durationMs, 0),
+              ok: final.ok,
+              stdout: tail(final.stdout),
+              stderr: tail(final.stderr),
+              tier: final.tier,
+              attempts: attempts.map((item) => ({ ...item, stdout: tail(item.stdout, 12), stderr: tail(item.stderr, 12) }))
             });
-            if (!okStep) {
+            if (!final.ok) {
               failed = step.name;
               break;
+            }
+            if (step.name === 'layout') {
+              const layoutSource =
+                final.tier === 'hdc+hvigor' && existsSync(layoutFallbackPath)
+                  ? await readTextOrNull(layoutFallbackPath)
+                  : final.stdout;
+              const json = layoutSource === null ? null : extractJsonText(layoutSource);
+              if (json !== null) {
+                await writeTextAtomic(`${dir}/layout.json`, `${json}\n`);
+                layoutWritten = true;
+              }
             }
           }
         } finally {
           if (lockHolder !== null) await releaseDeviceLock(paths, lockHolder);
-        }
-        const layoutRecord = records.find((record) => record.name === 'layout' && record.ok);
-        if (layoutRecord !== undefined && layoutRecord.stdout.length > 0) {
-          await writeTextAtomic(`${dir}/layout.json`, layoutRecord.stdout);
         }
         const record = {
           schemaVersion: 1,
@@ -523,7 +646,7 @@ export function createDevecoTool(
         };
         await writeTextAtomic(`${dir}/pipeline.json`, `${JSON.stringify(record, null, 2)}\n`);
         await updateState(paths, now, (current) => ({ ...current, lastDevecoAt: now }));
-        const files = [displayPath(paths, `${dir}/pipeline.json`), ...(layoutRecord === undefined ? [] : [displayPath(paths, `${dir}/layout.json`)])];
+        const files = [displayPath(paths, `${dir}/pipeline.json`), ...(layoutWritten ? [displayPath(paths, `${dir}/layout.json`)] : [])];
         if (failed !== undefined) {
           return fail(`pipeline 在 \`${failed}\` 失败，后续步骤已停止。`, {
             detail: [
@@ -536,7 +659,7 @@ export function createDevecoTool(
             next: '先按失败步骤分类（环境/代码/设备/签名），再 resume 或转人工；不要跳过审计。'
           });
         }
-        return ok(`pipeline 完成 ${records.length} 步（build/sign/run/screenshot/layout）。`, {
+        return ok(`pipeline 完成 ${records.length} 步（sign/build/run/screenshot/layout）。`, {
           detail: [
             `- 证据：\`${displayPath(paths, `${dir}/pipeline.json`)}\``,
             `- 设备：${device ?? '默认'}`,
@@ -698,11 +821,9 @@ export function createDevecoTool(
       await writeTextAtomic(`${dir}/result.json`, `${JSON.stringify(record, null, 2)}\n`);
       await writeTextAtomic(`${dir}/output.log`, `${result.stdout}${result.stderr.length > 0 ? `\n[stderr]\n${result.stderr}` : ''}`);
       if (action === 'layout' && result.stdout.trim().length > 0) {
-        try {
-          JSON.parse(result.stdout);
-          await writeTextAtomic(`${dir}/layout.json`, `${result.stdout.trim()}\n`);
-        } catch {
-          /* keep raw output only */
+        const json = extractJsonText(result.stdout);
+        if (json !== null) {
+          await writeTextAtomic(`${dir}/layout.json`, `${json}\n`);
         }
       }
       let a11ySummary: {
@@ -713,38 +834,43 @@ export function createDevecoTool(
         readonly staticHits: number;
       } | null = null;
       if (action === 'a11y' && result.stdout.trim().length > 0) {
-        try {
-          const nodes = flattenA11y(JSON.parse(result.stdout) as unknown);
-          const scan = await scanWorkspace(paths.workspace, true, now);
-          const a11yHits = scan.hits.filter((hit) => hit.dimension === 'accessibility');
-          a11ySummary = {
-            nodes: nodes.length,
-            clickable: nodes.filter((node) => node.clickable === true).length,
-            clickableWithoutText: nodes.filter(
-              (node) => node.clickable === true && node.text === undefined && node.accessibilityId === undefined
-            ).length,
-            withAccessibilityId: nodes.filter((node) => node.accessibilityId !== undefined).length,
-            staticHits: a11yHits.length
-          };
-          await writeTextAtomic(`${dir}/a11y.json`, `${result.stdout.trim()}\n`);
-          await writeTextAtomic(
-            `${dir}/a11y-summary.json`,
-            `${JSON.stringify(
-              {
-                schemaVersion: 1,
-                capturedAt: now,
-                ...a11ySummary,
-                staticHits: a11yHits,
-                note:
-                  '布局树只含 bounds/text/clickable/accessibilityId，不含 accessibilityText/Level/Group；' +
-                  '读屏名称与层级需结合源码静态扫描或人工走查。'
-              },
-              null,
-              2
-            )}\n`
-          );
-        } catch {
-          /* keep raw output only */
+        const json = extractJsonText(result.stdout);
+        if (json === null) {
+          /* keep raw output only; a11y summary is impossible without valid JSON */
+        } else {
+          try {
+            const nodes = flattenA11y(JSON.parse(json) as unknown);
+            const scan = await scanWorkspace(paths.workspace, true, now);
+            const a11yHits = scan.hits.filter((hit) => hit.dimension === 'accessibility');
+            a11ySummary = {
+              nodes: nodes.length,
+              clickable: nodes.filter((node) => node.clickable === true).length,
+              clickableWithoutText: nodes.filter(
+                (node) => node.clickable === true && node.text === undefined && node.accessibilityId === undefined
+              ).length,
+              withAccessibilityId: nodes.filter((node) => node.accessibilityId !== undefined).length,
+              staticHits: a11yHits.length
+            };
+            await writeTextAtomic(`${dir}/a11y.json`, `${json}\n`);
+            await writeTextAtomic(
+              `${dir}/a11y-summary.json`,
+              `${JSON.stringify(
+                {
+                  schemaVersion: 1,
+                  capturedAt: now,
+                  ...a11ySummary,
+                  staticHits: a11yHits,
+                  note:
+                    '布局树只含 bounds/text/clickable/accessibilityId，不含 accessibilityText/Level/Group；' +
+                    '读屏名称与层级需结合源码静态扫描或人工走查。'
+                },
+                null,
+                2
+              )}\n`
+            );
+          } catch {
+            /* keep raw output only */
+          }
         }
       }
       await updateState(paths, now, (current) => ({ ...current, lastDevecoAt: now }));
