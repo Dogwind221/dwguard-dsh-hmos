@@ -26,6 +26,8 @@ export interface BackgroundDeps {
     stop?: (pid: number) => Promise<boolean> | boolean;
     alive?: (pid: number) => boolean;
 }
+/** Quote an argument for `cmd.exe`; reject shell metacharacters first. */
+export declare function quoteShellArg(value: string): string;
 /**
  * Create the DevEco CLI adapter tool.
  * @param options - resolved plugin options.

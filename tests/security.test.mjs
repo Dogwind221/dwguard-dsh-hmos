@@ -1,6 +1,6 @@
 // 0.8.5 security regressions: pack path traversal and evidence name collisions.
 import assert from 'node:assert/strict';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -20,6 +20,11 @@ import { gateDelivery, normalizeChecks } from '../lib/review.js';
 import { registerBoardRoute } from '../lib/web.js';
 import { rememberWorkspace } from '../lib/workspaces.js';
 import { readObservation, recordObservation } from '../lib/observation.js';
+import { quoteShellArg } from '../lib/tools/deveco.js';
+import { decodePng } from '../lib/image.js';
+import { readResponseTextLimited } from '../lib/http.js';
+import { createCachedEmbedder, designEmbeddingIdentity } from '../lib/design.js';
+import { crc32 } from 'node:zlib';
 
 const dirs = [process.env.DSH_HOME];
 after(async () => {
@@ -340,6 +345,89 @@ test('P0-6: board route is loopback/token gated and only accepts registered work
   registerBoardRoute(tokenCtx, resolveOptions({ boardToken: 'secret' }));
   assert.equal((await call('/dwguard/board', { host: '10.0.0.5:56100' })).status, 403);
   assert.equal((await call('/dwguard/board', { host: '10.0.0.5:56100', 'x-dwguard-token': 'secret' })).status, 200);
+});
+
+test('0.8.6: PNG decoder rejects oversized dimensions before inflate', () => {
+  const type = Buffer.from('IHDR');
+  const data = Buffer.alloc(13);
+  data.writeUInt32BE(10_000, 0);
+  data.writeUInt32BE(10_000, 4);
+  data[8] = 8;
+  data[9] = 6;
+  const crc = crc32(Buffer.concat([type, data])) >>> 0;
+  const chunkHeader = Buffer.alloc(8);
+  chunkHeader.writeUInt32BE(13, 0);
+  type.copy(chunkHeader, 4);
+  const chunkCrc = Buffer.alloc(4);
+  chunkCrc.writeUInt32BE(crc, 0);
+  const png = Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    chunkHeader,
+    data,
+    chunkCrc
+  ]);
+  assert.throws(() => decodePng(png), /尺寸过大/);
+});
+
+test('0.8.6: HTTP response reader enforces a byte cap', async () => {
+  const response = new Response('0123456789', { headers: { 'content-length': '10' } });
+  await assert.rejects(() => readResponseTextLimited(response, 5), /响应体过大/);
+  assert.equal(await readResponseTextLimited(new Response('ok'), 5), 'ok');
+});
+
+test('0.8.6: embedding cache keys include provider/endpoint/model/version', async () => {
+  assert.notEqual(
+    designEmbeddingIdentity('openai', 'https://a', 'm', 'v1'),
+    designEmbeddingIdentity('openai', 'https://b', 'm', 'v1')
+  );
+  let calls = 0;
+  const embed = async (texts) => {
+    calls += 1;
+    return texts.map(() => [1]);
+  };
+  const identityA = designEmbeddingIdentity('p', 'https://a', 'm', 'v1');
+  const identityB = designEmbeddingIdentity('p', 'https://b', 'm', 'v1');
+  const cacheA = { schemaVersion: 2, identity: identityA, model: 'm', vectors: {} };
+  const cacheB = { schemaVersion: 2, identity: identityB, model: 'm', vectors: {} };
+  await createCachedEmbedder(embed, cacheA, identityA)(['same text']);
+  await createCachedEmbedder(embed, cacheB, identityB)(['same text']);
+  assert.equal(calls, 2, 'different endpoints must not share vectors');
+});
+
+test('0.8.6: evidence paths reject symlink/junction escapes', async () => {
+  const cwd = await workspace();
+  const paths = resolvePaths(cwd, '.shared');
+  const outside = join(cwd, 'outside-dir');
+  await mkdir(outside, { recursive: true });
+  await writeFile(join(outside, 'secret.png'), 'outside-bytes', 'utf8');
+  await mkdir(paths.artifactsDir, { recursive: true });
+  const link = join(paths.artifactsDir, 'linkdir');
+  try {
+    await symlink(outside, link, process.platform === 'win32' ? 'junction' : 'dir');
+  } catch (error) {
+    // Windows may require Developer Mode for symlinks; the lexical test above
+    // still covers the common case.
+    if (['EPERM', 'EACCES', 'UNKNOWN'].includes(error.code)) return;
+    throw error;
+  }
+  await assert.rejects(
+    () =>
+      writeEvidenceBundle(
+        paths,
+        9,
+        1,
+        [{ criterionId: 'F-01', result: 'pass', evidence: '截图', evidenceFiles: ['artifacts/linkdir/secret.png'] }],
+        now
+      ),
+    /符号链接|Junction/
+  );
+});
+
+test('0.8.6: Windows shell quoting rejects metacharacters before spawn', () => {
+  assert.equal(quoteShellArg('Pura 90'), '"Pura 90"');
+  for (const value of ['x & calc', 'x | whoami', 'x > out', 'x ^ y', 'x %PATH%', 'x `cmd`']) {
+    assert.throws(() => quoteShellArg(value), /元字符/);
+  }
 });
 
 test('P0-2: commandId replays the first result instead of repeating side effects', async () => {

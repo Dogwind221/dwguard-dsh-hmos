@@ -85,6 +85,7 @@ function clipConfig(options: Options): ClipConfig | undefined {
     endpoint,
     model: options.designClipModel,
     provider: options.designClipProvider,
+    ...(options.designClipModelVersion.length === 0 ? {} : { modelVersion: options.designClipModelVersion }),
     ...(apiKey === undefined || apiKey.length === 0 ? {} : { apiKey }),
     timeoutMs: options.designClipTimeoutMs
   };

@@ -92,13 +92,29 @@ intentionally breaking:
 
 See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
 
+## Release/runtime hardening (0.8.6)
+
+1. `publish.yml` runs `npm ci → typecheck → build → git diff --exit-code → test →
+   tag/version check → npm pack check → publish`; `pretest` builds first.
+2. Windows `cmd.exe` arguments reject `& | < > ^ % !` before quoting.
+3. Screenshots must exist, be non-empty and carry PNG/JPEG magic; pipeline
+   validates screenshot/layout artifacts, not just exit codes.
+4. Child stdout/stderr are capped at 4MB; timeout/overflow kills the process tree.
+5. Evidence paths are checked with `realpath`, not only string containment.
+6. PNG decode bounds: 8192 per side, 32M pixels, 20MB IDAT, 160MB inflated;
+   HTTP response bodies are capped at 4MB.
+7. Embedding cache identity includes `provider + endpoint + model + modelVersion`.
+
+See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
+
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.5).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.6).
 
-> **0.8.5 is the security-hardening release**: strict evidence, structured
-> `actual`, per-device leases, concurrency/id fixes, design-pack path safety and
-> board authentication. See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
+> **0.8.6 is the release/runtime hardening release**: CI build/tag/pack gates,
+> Windows argument constraints, screenshot/decode/network/process bounds,
+> evidence symlink protection and vector-cache identity. See
+> [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ### Install from npm
 
@@ -108,9 +124,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.5`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.5` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.5` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.6`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.6` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.6` |
 
 Omit the version to follow the latest release.
 
@@ -119,7 +135,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.5`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.6`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -128,7 +144,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.8.5   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.8.6   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -341,6 +357,8 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     harnessMaxRetries: 3   # attempts per harness step before human decision
     strictEvidence: true   # must+pass needs structured evidence; self-report is an error
     boardToken: ""         # empty = loopback-only; otherwise x-dwguard-token is required
+    designEmbeddingModelVersion: ""  # part of the embedding cache identity
+    designClipModelVersion: ""       # part of the CLIP cache identity
     devecoMcpCommand: deveco-mcp  # fallback tier 2; empty = skip
     hdcPath: hdc                  # fallback tier 3 hdc
     hvigorPath: hvigorw           # fallback tier 3 hvigor
@@ -381,7 +399,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 161 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 167 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

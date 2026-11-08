@@ -21,6 +21,7 @@ import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import { acquireDeviceLock, defaultDevice, releaseDeviceLock, renewDeviceLease } from '../device.js';
 import { recordObservation } from '../observation.js';
+import { validateImageFile } from '../media.js';
 import { buildFallbackTiers, type FallbackStep } from '../fallback.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
@@ -111,6 +112,7 @@ async function defaultStart(
 ): Promise<number> {
   const { openSync, closeSync } = await import('node:fs');
   const out = openSync(logFile, 'a');
+  assertSafeCommand(command);
   const child = spawn(command, process.platform === 'win32' ? args.map(quoteShellArg) : [...args], {
     cwd,
     shell: process.platform === 'win32',
@@ -123,10 +125,19 @@ async function defaultStart(
   return child.pid ?? -1;
 }
 
-/** Quote an argument for `cmd.exe` when spawn uses `shell: true` on Windows. */
-function quoteShellArg(value: string): string {
+/** Quote an argument for `cmd.exe`; reject shell metacharacters first. */
+export function quoteShellArg(value: string): string {
+  if (/[\r\n&|<>^%!`]/u.test(value)) {
+    throw new Error(`参数包含 shell 元字符，拒绝执行：${value}`);
+  }
   if (!/[\s"]/u.test(value)) return value;
   return `"${value.replace(/(["\\])/g, '\\$1')}"`;
+}
+
+function assertSafeCommand(command: string): void {
+  if (process.platform === 'win32' && /[\r\n&|<>^%!`]/u.test(command)) {
+    throw new Error(`命令路径包含 shell 元字符，拒绝执行：${command}`);
+  }
 }
 
 function defaultStop(pid: number): boolean {
@@ -144,6 +155,32 @@ function defaultStop(pid: number): boolean {
 }
 
 const DEFAULT_TIMEOUT_MS = 180_000;
+/** Keep a runaway CLI from exhausting the host's memory. */
+const MAX_OUTPUT_BYTES = 4 * 1024 * 1024;
+
+async function killTree(pid: number): Promise<void> {
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  if (process.platform === 'win32') {
+    await new Promise<void>((resolve) => {
+      const killer = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        windowsHide: true,
+        stdio: 'ignore'
+      });
+      killer.on('close', () => resolve());
+      killer.on('error', () => resolve());
+    });
+    return;
+  }
+  try {
+    process.kill(-pid, 'SIGKILL');
+  } catch {
+    try {
+      process.kill(pid, 'SIGKILL');
+    } catch {
+      /* already gone */
+    }
+  }
+}
 
 /**
  * Default runner: spawn `devecocli`, capture output, enforce a timeout.
@@ -154,31 +191,56 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 function spawnRunner(command: string, args: readonly string[], cwd: string): Promise<DevecoRun> {
   return new Promise((resolvePromise, reject) => {
     const started = Date.now();
+    assertSafeCommand(command);
     const child = spawn(command, process.platform === 'win32' ? args.map(quoteShellArg) : [...args], {
       cwd,
       shell: process.platform === 'win32',
       windowsHide: true,
+      detached: process.platform !== 'win32',
       env: process.env
     });
     let stdout = '';
     let stderr = '';
+    let outputBytes = 0;
+    let settled = false;
+    const finish = (work: () => void): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      work();
+    };
+    const abort = (reason: string): void => {
+      if (settled) return;
+      const pid = child.pid;
+      if (pid !== undefined) void killTree(pid);
+      finish(() => reject(new Error(reason)));
+    };
     const timer = setTimeout(() => {
-      child.kill();
-      reject(new Error(`devecocli 超时（${DEFAULT_TIMEOUT_MS / 1000}s）`));
+      abort(`devecocli 超时（${DEFAULT_TIMEOUT_MS / 1000}s）`);
     }, DEFAULT_TIMEOUT_MS);
     child.stdout?.on('data', (chunk: Buffer) => {
+      outputBytes += chunk.length;
+      if (outputBytes > MAX_OUTPUT_BYTES) {
+        abort(`devecocli 输出超过上限（${MAX_OUTPUT_BYTES} B）`);
+        return;
+      }
       stdout += chunk.toString('utf8');
     });
     child.stderr?.on('data', (chunk: Buffer) => {
+      outputBytes += chunk.length;
+      if (outputBytes > MAX_OUTPUT_BYTES) {
+        abort(`devecocli 输出超过上限（${MAX_OUTPUT_BYTES} B）`);
+        return;
+      }
       stderr += chunk.toString('utf8');
     });
     child.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
+      finish(() => reject(error));
     });
     child.on('close', (code) => {
-      clearTimeout(timer);
-      resolvePromise({ code: code ?? -1, stdout, stderr, durationMs: Date.now() - started });
+      finish(() =>
+        resolvePromise({ code: code ?? -1, stdout, stderr, durationMs: Date.now() - started })
+      );
     });
   });
 }
@@ -659,6 +721,24 @@ export function createDevecoTool(
         } finally {
           if (lockHolder !== null && lockToken !== null) await releaseDeviceLock(paths, lockHolder, lockToken);
         }
+        if (failed === undefined && !completed.has('screenshot')) {
+          const screenshotCheck = await validateImageFile(shotPath);
+          if (!screenshotCheck.ok) {
+            failed = 'screenshot';
+            const record = records.find((item) => item.name === 'screenshot');
+            if (record !== undefined) {
+              record.ok = false;
+              record.stderr = `截图校验失败：${screenshotCheck.reason ?? '未知原因'}`;
+            }
+          } else if (!completed.has('layout') && !layoutWritten) {
+            failed = 'layout';
+            const record = records.find((item) => item.name === 'layout');
+            if (record !== undefined) {
+              record.ok = false;
+              record.stderr = '布局树没有可解析的 JSON';
+            }
+          }
+        }
         const record = {
           schemaVersion: 1,
           index,
@@ -950,6 +1030,16 @@ export function createDevecoTool(
         }
       }
       await updateState(paths, now, (current) => ({ ...current, lastDevecoAt: now }));
+
+      if (action === 'screenshot' && result.code === 0 && screenshotPath !== null) {
+        const screenshotCheck = await validateImageFile(screenshotPath);
+        if (!screenshotCheck.ok) {
+          return fail(`截图命令退出码为 0，但没有生成有效截图：${screenshotCheck.reason ?? '未知原因'}`, {
+            detail: `路径：\`${displayPath(paths, screenshotPath)}\`\n没有把“退出码 0”当作成功；请检查设备/路径权限。`,
+            next: '重新执行 screenshot，或改用 hdc snapshot_display + file recv 并确认文件头。'
+          });
+        }
+      }
 
       const summary = a11ySummary === null
         ? `devecocli ${action} → exit ${result.code}（${result.durationMs}ms）`

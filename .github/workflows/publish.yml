@@ -19,10 +19,34 @@ jobs:
       id-token: write # required for OIDC trusted publishing + provenance
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 24 # npm >= 11.5.1 is required for trusted publishing
           registry-url: https://registry.npmjs.org
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build committed lib
+        run: npm run build
+      - name: Reject stale committed lib
+        run: git diff --exit-code
+      - name: Test
+        run: npm test
+      - name: Verify tag matches package.json.version
+        if: github.ref_type == 'tag'
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          VERSION=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "tag $GITHUB_REF_NAME does not match package.json version $VERSION"
+            exit 1
+          fi
+      - name: Verify npm pack contents
+        run: node scripts/verify-publish.mjs
       - name: Check whether the version is already published
         id: check
         run: |

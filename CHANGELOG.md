@@ -4,6 +4,39 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.6 — 2026-11-08
+
+Release-pipeline and runtime hardening.
+
+### Added
+
+- Publish workflow now installs (`npm ci`), typechecks, builds, rejects stale
+  committed `lib/` (`git diff --exit-code`), tests, verifies `tag ===
+  package.json.version`, validates `npm pack` contents, then publishes.
+- `pretest` builds before running tests; `prepublishOnly` runs
+  typecheck/build/test/pack gate; `scripts/verify-publish.mjs` checks runtime
+  assets and rejects `tests/` / `node_modules/` in the package.
+- `scripts/verify-publish.mjs --tag=vX.Y.Z` for local/CI release checks.
+- Bounded subprocess output (4MB total), process-tree kill on timeout/overflow.
+- Screenshot validation (existence, non-empty, size, PNG/JPEG magic) for
+  `screenshot` and pipeline screenshot/layout artifacts.
+- Evidence `realpath` containment, rejecting symlink/Junction escapes.
+- PNG decoder limits and 4MB HTTP response reader.
+- Embedding/CLIP cache identity: provider + endpoint + model + modelVersion.
+
+### Changed (breaking)
+
+- Windows `cmd.exe` arguments containing `& | < > ^ % !` or newlines are
+  rejected.
+- Screenshot exit code 0 without a valid image is now a failure.
+- Embedding cache schema is 2; old model-only caches are invalidated.
+- `designEmbeddingModelVersion` / `designClipModelVersion` config added.
+
+### Tests
+
+- 167/167; added shell-metachar, screenshot-without-file, symlink evidence,
+  PNG-dimension bomb, HTTP body cap, cache identity and publish-gate checks.
+
 ## 0.8.5 — 2026-11-08
 
 Security hardening for the six release blockers found in the 0.8.0 review.

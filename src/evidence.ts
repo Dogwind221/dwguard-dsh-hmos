@@ -10,7 +10,8 @@
  */
 
 import { createHash } from 'node:crypto';
-import { readFile, stat, writeFile } from 'node:fs/promises';
+import { readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
 import { extname, relative, resolve, isAbsolute } from 'node:path';
 
 import type { Check } from './model.js';
@@ -63,7 +64,30 @@ export function resolveSharedPath(paths: SharedPaths, file: string): string {
   if (rel.startsWith('..') || isAbsolute(rel)) {
     throw new EvidenceError(`证据文件不能指到 \`.shared/\` 之外：${file}`);
   }
+  // Sync realpath for callers that read immediately (aesthetic bounds, etc.).
+  try {
+    const sharedReal = realpathSync(paths.shared);
+    const sourceReal = realpathSync(source);
+    const realRel = relative(sharedReal, sourceReal);
+    if (realRel.startsWith('..') || isAbsolute(realRel)) {
+      throw new EvidenceError(`证据文件通过符号链接/Junction 指到 \`.shared/\` 之外：${file}`);
+    }
+  } catch (error) {
+    if (error instanceof EvidenceError) throw error;
+    // Missing files are reported by the caller's existence check.
+  }
   return source;
+}
+
+/** Reject symlink/junction escapes after resolving the real path. */
+async function assertRealInside(paths: SharedPaths, source: string, file: string): Promise<void> {
+  const sharedReal = await realpath(paths.shared).catch(() => null);
+  const sourceReal = await realpath(source).catch(() => null);
+  if (sharedReal === null || sourceReal === null) return;
+  const rel = relative(sharedReal, sourceReal);
+  if (rel.startsWith('..') || isAbsolute(rel)) {
+    throw new EvidenceError(`证据文件通过符号链接/Junction 指到 \`.shared/\` 之外：${file}`);
+  }
 }
 
 /**
@@ -75,7 +99,11 @@ export async function missingEvidence(paths: SharedPaths, checks: readonly Check
   for (const check of checks) {
     for (const file of check.evidenceFiles ?? []) {
       const source = resolveSharedPath(paths, file);
-      if (!(await fileExists(source))) missing.push(file);
+      if (!(await fileExists(source))) {
+        missing.push(file);
+        continue;
+      }
+      await assertRealInside(paths, source, file);
     }
   }
   return missing;
@@ -129,6 +157,7 @@ export async function writeEvidenceBundle(
       const source = resolveSharedPath(paths, file);
       const info = await stat(source).catch(() => null);
       if (info === null) throw new EvidenceError(`证据文件不存在：${file}`);
+      await assertRealInside(paths, source, file);
       if (info.size > perFileBytes) {
         throw new EvidenceError(
           `证据文件过大：${file}（${info.size} B，单文件上限 ${perFileBytes} B）。请压缩或改存摘要。`

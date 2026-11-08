@@ -38,7 +38,11 @@ export interface ClipConfig {
     readonly timeoutMs: number;
     /** `custom` = our documented {images,texts} contract; `dashscope` = native contents API. */
     readonly provider?: 'custom' | 'dashscope';
+    /** Optional embedding model version; part of the cache identity. */
+    readonly modelVersion?: string;
 }
+/** Cache identity for a multimodal endpoint. */
+export declare function clipIdentity(config: ClipConfig): string;
 /** DashScope native multimodal embedding endpoint (not supported by compatible mode). */
 export declare const DASHSCOPE_MULTIMODAL_ENDPOINT = "https://dashscope.aliyuncs.com/api/v1/services/embeddings/multimodal-embedding/multimodal-embedding";
 /** Text-only embedder backed by DashScope's native multimodal endpoint (0.6.6). */

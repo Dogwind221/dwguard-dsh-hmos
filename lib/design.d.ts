@@ -324,16 +324,20 @@ export declare function createHttpEmbedder(config: DesignEmbeddingConfig): Desig
 export declare function cosineSimilarity(left: readonly number[], right: readonly number[]): number;
 /** `embeddings.json` cache so repeated briefs do not re-embed the same text. */
 export interface DesignEmbeddingCache {
-    schemaVersion: 1;
+    schemaVersion: 2;
+    /** provider + endpoint + model + modelVersion; a mismatch invalidates the cache. */
+    identity: string;
     model: string;
     vectors: Record<string, readonly number[]>;
 }
-/** Cache key for one text (model-scoped). */
-export declare function embeddingCacheKey(model: string, text: string): string;
+/** Build the identity that prevents cross-provider/model cache reuse. */
+export declare function designEmbeddingIdentity(provider: string, endpoint: string, model: string, modelVersion: string): string;
+/** Cache key for one text (identity-scoped). */
+export declare function embeddingCacheKey(identity: string, text: string): string;
 /** Wrap an embedder with the on-disk cache (mutates `cache`). */
-export declare function createCachedEmbedder(embed: DesignEmbedder, cache: DesignEmbeddingCache, model: string): DesignEmbedder;
-/** Load the embedding cache for a model (empty when missing/mismatched). */
-export declare function loadDesignEmbeddingCache(paths: SharedPaths, model: string): Promise<DesignEmbeddingCache>;
+export declare function createCachedEmbedder(embed: DesignEmbedder, cache: DesignEmbeddingCache, identity: string): DesignEmbedder;
+/** Load the embedding cache for an endpoint identity (empty when mismatched). */
+export declare function loadDesignEmbeddingCache(paths: SharedPaths, identity: string, model: string): Promise<DesignEmbeddingCache>;
 /** Persist the embedding cache. */
 export declare function saveDesignEmbeddingCache(paths: SharedPaths, cache: DesignEmbeddingCache): Promise<void>;
 /**

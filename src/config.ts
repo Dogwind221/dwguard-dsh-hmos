@@ -90,6 +90,7 @@ export const Config = z.object({
   designEmbeddingEndpoint: z.string().default(''),
   /** Embedding model name sent to the endpoint. */
   designEmbeddingModel: z.string().default('text-embedding-3-small'),
+  designEmbeddingModelVersion: z.string().default(''),
   /** Env var holding the endpoint API key. */
   designEmbeddingApiKeyEnv: z.string().default('DWG_DESIGN_EMBEDDING_KEY'),
   /** Embedding request timeout (ms). */
@@ -103,6 +104,7 @@ export const Config = z.object({
   /** Optional multimodal (CLIP-style) embedding endpoint (0.6.5); empty = off. */
   designClipEndpoint: z.string().default(''),
   designClipModel: z.string().default('clip-vit-base-patch32'),
+  designClipModelVersion: z.string().default(''),
   /** Multimodal wire protocol: our custom contract or DashScope native contents API (0.6.6). */
   designClipProvider: z.string().default('custom'),
   designClipApiKeyEnv: z.string().default('DWG_DESIGN_CLIP_KEY'),
@@ -163,6 +165,7 @@ export interface Options {
   readonly designEmbeddingEndpoint: string;
   readonly designEmbeddingProvider: 'openai' | 'dashscope';
   readonly designEmbeddingModel: string;
+  readonly designEmbeddingModelVersion: string;
   readonly designEmbeddingApiKeyEnv: string;
   readonly designEmbeddingTimeoutMs: number;
   readonly designEmbeddingWeight: number;
@@ -172,6 +175,7 @@ export interface Options {
   readonly designPacksDir: string;
   readonly designClipEndpoint: string;
   readonly designClipModel: string;
+  readonly designClipModelVersion: string;
   readonly designClipProvider: 'custom' | 'dashscope';
   readonly designClipApiKeyEnv: string;
   readonly designClipTimeoutMs: number;
@@ -210,6 +214,7 @@ const DEFAULTS: Options = {
   designEmbeddingEndpoint: '',
   designEmbeddingProvider: 'openai',
   designEmbeddingModel: 'text-embedding-3-small',
+  designEmbeddingModelVersion: '',
   designEmbeddingApiKeyEnv: 'DWG_DESIGN_EMBEDDING_KEY',
   designEmbeddingTimeoutMs: 8000,
   designEmbeddingWeight: 0.35,
@@ -217,6 +222,7 @@ const DEFAULTS: Options = {
   designPacksDir: '',
   designClipEndpoint: '',
   designClipModel: 'clip-vit-base-patch32',
+  designClipModelVersion: '',
   designClipProvider: 'custom',
   designClipApiKeyEnv: 'DWG_DESIGN_CLIP_KEY',
   designClipTimeoutMs: 8000,
@@ -290,6 +296,7 @@ export function resolveOptions(raw: unknown): Options {
     designEmbeddingEndpoint: typeof input['designEmbeddingEndpoint'] === 'string' ? input['designEmbeddingEndpoint'].trim() : DEFAULTS.designEmbeddingEndpoint,
     designEmbeddingProvider: input['designEmbeddingProvider'] === 'dashscope' ? 'dashscope' : DEFAULTS.designEmbeddingProvider,
     designEmbeddingModel: str(input['designEmbeddingModel'], DEFAULTS.designEmbeddingModel),
+    designEmbeddingModelVersion: str(input['designEmbeddingModelVersion'], DEFAULTS.designEmbeddingModelVersion),
     designEmbeddingApiKeyEnv: str(input['designEmbeddingApiKeyEnv'], DEFAULTS.designEmbeddingApiKeyEnv),
     designEmbeddingTimeoutMs: positiveInt(input['designEmbeddingTimeoutMs'], DEFAULTS.designEmbeddingTimeoutMs, 1000),
     designEmbeddingWeight: fraction(input['designEmbeddingWeight'], DEFAULTS.designEmbeddingWeight),
@@ -302,6 +309,7 @@ export function resolveOptions(raw: unknown): Options {
     designClipEndpoint:
       typeof input['designClipEndpoint'] === 'string' ? input['designClipEndpoint'].trim() : DEFAULTS.designClipEndpoint,
     designClipModel: str(input['designClipModel'], DEFAULTS.designClipModel),
+    designClipModelVersion: str(input['designClipModelVersion'], DEFAULTS.designClipModelVersion),
     designClipProvider: input['designClipProvider'] === 'dashscope' ? 'dashscope' : DEFAULTS.designClipProvider,
     designClipApiKeyEnv: str(input['designClipApiKeyEnv'], DEFAULTS.designClipApiKeyEnv),
     designClipTimeoutMs: positiveInt(input['designClipTimeoutMs'], DEFAULTS.designClipTimeoutMs, 1000),

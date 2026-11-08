@@ -40,6 +40,24 @@ async function workspace() {
   return dir;
 }
 
+const PNG_BYTES = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00]);
+
+async function createArtifactFromArgs(args) {
+  const pathIndex = args.indexOf('--path');
+  if (pathIndex >= 0 && typeof args[pathIndex + 1] === 'string') {
+    await writeFile(args[pathIndex + 1], PNG_BYTES);
+  }
+  const recvIndex = args.indexOf('recv');
+  if (recvIndex >= 0) {
+    const remote = args[recvIndex + 1];
+    const local = args[recvIndex + 2];
+    if (typeof local === 'string') {
+      const bytes = typeof remote === 'string' && remote.endsWith('.json') ? '{"type":"Root"}' : PNG_BYTES;
+      await writeFile(local, bytes);
+    }
+  }
+}
+
 async function dispatched(cwd, options) {
   const specTool = createSpecTool(options);
   const prereviewTool = createPrereviewTool(options);
@@ -210,6 +228,7 @@ test('device evidence actions use the real devecocli subcommands', async () => {
   const seen = [];
   const tool = createDevecoTool(options, undefined, async (_command, args) => {
     seen.push(args);
+    await createArtifactFromArgs(args);
     if (args[0] === 'ui' && args[1] === 'layout') {
       return { code: 0, stdout: '{"nodes":[{"type":"Button"}]}', stderr: '', durationMs: 3 };
     }
@@ -281,12 +300,27 @@ test('status watchdog flags a dispatch that has been waiting too long', async ()
   assert.match(status.next, /仍无回执\/交付/);
 });
 
+test('0.8.6: screenshot exit 0 without a valid file is a failure', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  const tool = createDevecoTool(options, undefined, async () => ({
+    code: 0,
+    stdout: 'Screenshot saved',
+    stderr: '',
+    durationMs: 1
+  }));
+  const result = await tool.execute({ action: 'screenshot' }, exec(cwd));
+  assert.equal(result.ok, false);
+  assert.match(result.summary, /有效截图|文件不存在/);
+});
+
 test('0.8.0 EX: pipeline runs build/sign/run/screenshot/layout in order and records evidence', async () => {
   const cwd = await workspace();
   const options = resolveOptions({});
   const calls = [];
   const runner = async (command, args) => {
     calls.push({ command, args });
+    await createArtifactFromArgs(args);
     return { code: 0, stdout: args[0] === 'ui' && args[1] === 'layout' ? '{"type":"Root"}' : 'ok', stderr: '', durationMs: 3 };
   };
   const tool = createDevecoTool(options, undefined, runner);
@@ -339,7 +373,10 @@ test('0.8.0 EX: pipeline falls back from devecocli to hdc for screenshot/layout'
       return { code: 0, stdout: 'ok', stderr: '', durationMs: 1 };
     }
     if (command === 'deveco-mcp') return { code: 1, stdout: '', stderr: 'mcp unavailable', durationMs: 1 };
-    if (command === 'hdc') return { code: 0, stdout: 'hdc ok', stderr: '', durationMs: 1 };
+    if (command === 'hdc') {
+      await createArtifactFromArgs(args);
+      return { code: 0, stdout: 'hdc ok', stderr: '', durationMs: 1 };
+    }
     return { code: 1, stdout: '', stderr: 'unexpected', durationMs: 1 };
   };
   const tool = createDevecoTool(options, undefined, runner);
@@ -359,9 +396,10 @@ test('0.8.0 EX: pipeline resume skips already-successful steps', async () => {
   const cwd = await workspace();
   const options = resolveOptions({});
   let calls = 0;
-  const runner = async () => {
+  const runner = async (command, args) => {
     calls += 1;
-    return { code: 0, stdout: 'ok', stderr: '', durationMs: 1 };
+    await createArtifactFromArgs(args);
+    return { code: 0, stdout: args[0] === 'ui' && args[1] === 'layout' ? '{"type":"Root"}' : 'ok', stderr: '', durationMs: 1 };
   };
   const first = createDevecoTool(options, undefined, runner);
   const initial = await first.execute({ action: 'pipeline', device: 'SN-1' }, exec(cwd));

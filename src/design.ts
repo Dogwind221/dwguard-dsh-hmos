@@ -18,7 +18,8 @@ import type { BaselineEntry } from './baseline.js';
 import { baselineDir, extractMetrics, findBaselineEntry, readBaselineIndex, readBoundsJson } from './baseline.js';
 import type { Options } from './config.js';
 import type { DecodedImage, ImageFeatures } from './image.js';
-import { DASHSCOPE_MULTIMODAL_ENDPOINT, createClipClient, createDashScopeTextEmbedder, decodePng, imageFeatures, imageSimilarity, type ClipConfig } from './image.js';
+import { DASHSCOPE_MULTIMODAL_ENDPOINT, createClipClient, createDashScopeTextEmbedder, decodePng, imageFeatures, imageSimilarity, clipIdentity, type ClipConfig } from './image.js';
+import { readResponseTextLimited } from './http.js';
 import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
@@ -1319,7 +1320,7 @@ export function createHttpEmbedder(config: DesignEmbeddingConfig): DesignEmbedde
         signal: controller.signal
       });
       if (!response.ok) throw new Error(`embedding HTTP ${response.status}`);
-      const body = (await response.json()) as { data?: unknown };
+      const body = JSON.parse(await readResponseTextLimited(response)) as { data?: unknown };
       if (!Array.isArray(body.data) || body.data.length !== texts.length) {
         throw new Error('embedding 返回条数与输入不一致');
       }
@@ -1359,24 +1360,36 @@ export function cosineSimilarity(left: readonly number[], right: readonly number
 
 /** `embeddings.json` cache so repeated briefs do not re-embed the same text. */
 export interface DesignEmbeddingCache {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  /** provider + endpoint + model + modelVersion; a mismatch invalidates the cache. */
+  identity: string;
   model: string;
   vectors: Record<string, readonly number[]>;
 }
 
-/** Cache key for one text (model-scoped). */
-export function embeddingCacheKey(model: string, text: string): string {
-  return sha256Text(`${model}\u0000${text}`);
+/** Build the identity that prevents cross-provider/model cache reuse. */
+export function designEmbeddingIdentity(
+  provider: string,
+  endpoint: string,
+  model: string,
+  modelVersion: string
+): string {
+  return `${provider}\u0000${endpoint}\u0000${model}\u0000${modelVersion}`;
+}
+
+/** Cache key for one text (identity-scoped). */
+export function embeddingCacheKey(identity: string, text: string): string {
+  return sha256Text(`${identity}\u0000${text}`);
 }
 
 /** Wrap an embedder with the on-disk cache (mutates `cache`). */
 export function createCachedEmbedder(
   embed: DesignEmbedder,
   cache: DesignEmbeddingCache,
-  model: string
+  identity: string
 ): DesignEmbedder {
   return async (texts) => {
-    const keys = texts.map((text) => embeddingCacheKey(model, text));
+    const keys = texts.map((text) => embeddingCacheKey(identity, text));
     const missing: number[] = [];
     keys.forEach((key, index) => {
       if (cache.vectors[key] === undefined) missing.push(index);
@@ -1392,21 +1405,32 @@ export function createCachedEmbedder(
   };
 }
 
-/** Load the embedding cache for a model (empty when missing/mismatched). */
+/** Load the embedding cache for an endpoint identity (empty when mismatched). */
 export async function loadDesignEmbeddingCache(
   paths: SharedPaths,
+  identity: string,
   model: string
 ): Promise<DesignEmbeddingCache> {
   const raw = await readTextOrNull(paths.designEmbeddings);
-  if (raw === null) return { schemaVersion: 1, model, vectors: {} };
+  if (raw === null) return { schemaVersion: 2, identity, model, vectors: {} };
   try {
     const parsed = JSON.parse(raw) as Partial<DesignEmbeddingCache>;
-    if (parsed.schemaVersion !== 1 || parsed.model !== model || typeof parsed.vectors !== 'object' || parsed.vectors === null) {
-      return { schemaVersion: 1, model, vectors: {} };
+    if (
+      parsed.schemaVersion !== 2 ||
+      parsed.identity !== identity ||
+      typeof parsed.vectors !== 'object' ||
+      parsed.vectors === null
+    ) {
+      return { schemaVersion: 2, identity, model, vectors: {} };
     }
-    return { schemaVersion: 1, model, vectors: parsed.vectors as Record<string, readonly number[]> };
+    return {
+      schemaVersion: 2,
+      identity,
+      model,
+      vectors: parsed.vectors as Record<string, readonly number[]>
+    };
   } catch {
-    return { schemaVersion: 1, model, vectors: {} };
+    return { schemaVersion: 2, identity, model, vectors: {} };
   }
 }
 
@@ -1551,7 +1575,13 @@ export async function searchDesignWithRanker(
     };
   }
   try {
-    const cache = await loadDesignEmbeddingCache(paths, options.designEmbeddingModel);
+    const embeddingIdentity = designEmbeddingIdentity(
+      options.designEmbeddingProvider,
+      embeddingEndpoint,
+      options.designEmbeddingModel,
+      options.designEmbeddingModelVersion
+    );
+    const cache = await loadDesignEmbeddingCache(paths, embeddingIdentity, options.designEmbeddingModel);
     const apiKey = process.env[options.designEmbeddingApiKeyEnv];
     const embed = createCachedEmbedder(
       options.designEmbeddingProvider === 'dashscope'
@@ -1569,7 +1599,7 @@ export async function searchDesignWithRanker(
             weight: options.designEmbeddingWeight
           }),
       cache,
-      options.designEmbeddingModel
+      embeddingIdentity
     );
     // Semantic recall: embed every eligible card, take the closest ones, then
     // union with the lexical candidates before the final blend (0.6.6).
@@ -1669,22 +1699,33 @@ async function loadImageFeatureCache(paths: SharedPaths): Promise<ImageFeatureCa
 }
 
 interface ClipCache {
-  schemaVersion: 1;
+  schemaVersion: 2;
+  identity: string;
   model: string;
   vectors: Record<string, readonly number[]>;
 }
 
-async function loadClipCache(paths: SharedPaths, model: string): Promise<ClipCache> {
+async function loadClipCache(paths: SharedPaths, identity: string, model: string): Promise<ClipCache> {
   const raw = await readTextOrNull(paths.designClipEmbeddings);
-  if (raw === null) return { schemaVersion: 1, model, vectors: {} };
+  if (raw === null) return { schemaVersion: 2, identity, model, vectors: {} };
   try {
     const parsed = JSON.parse(raw) as Partial<ClipCache>;
-    if (parsed.schemaVersion !== 1 || parsed.model !== model || typeof parsed.vectors !== 'object' || parsed.vectors === null) {
-      return { schemaVersion: 1, model, vectors: {} };
+    if (
+      parsed.schemaVersion !== 2 ||
+      parsed.identity !== identity ||
+      typeof parsed.vectors !== 'object' ||
+      parsed.vectors === null
+    ) {
+      return { schemaVersion: 2, identity, model, vectors: {} };
     }
-    return { schemaVersion: 1, model, vectors: parsed.vectors as Record<string, readonly number[]> };
+    return {
+      schemaVersion: 2,
+      identity,
+      model,
+      vectors: parsed.vectors as Record<string, readonly number[]>
+    };
   } catch {
-    return { schemaVersion: 1, model, vectors: {} };
+    return { schemaVersion: 2, identity, model, vectors: {} };
   }
 }
 
@@ -1772,7 +1813,7 @@ export async function searchDesignByImage(
   if (options.clip !== undefined) {
     try {
       const client = await createClipClient(options.clip.config);
-      const clipCache = await loadClipCache(paths, options.clip.config.model);
+      const clipCache = await loadClipCache(paths, clipIdentity(options.clip.config), options.clip.config.model);
       const stats = await ensureClipVectors(entries, client, clipCache);
       const queryKey = `img:${await sha256File(queryPath)}`;
       let queryVector = clipCache.vectors[queryKey];
@@ -1852,10 +1893,10 @@ export async function searchDesignByText(
   }
 ): Promise<DesignImageSearchResult> {
   const client = await createClipClient(options.clip.config);
-  const cache = await loadClipCache(paths, options.clip.config.model);
+  const cache = await loadClipCache(paths, clipIdentity(options.clip.config), options.clip.config.model);
   const entries = await collectCardImages(paths, manifest, options.licenseRequired);
   const stats = await ensureClipVectors(entries, client, cache);
-  const textKey = `text:${sha256Text(`${options.clip.config.model}\u0000${text}`)}`;
+  const textKey = `text:${sha256Text(`${clipIdentity(options.clip.config)}\u0000${text}`)}`;
   let textVector = cache.vectors[textKey];
   if (textVector === undefined) {
     const response = await client({ texts: [text] });

@@ -6,6 +6,8 @@
  */
 import { inflateSync, crc32 } from 'node:zlib';
 
+import { readResponseTextLimited } from './http.js';
+
 /** Decoded true-colour image. */
 export interface DecodedImage {
   readonly width: number;
@@ -13,6 +15,12 @@ export interface DecodedImage {
   /** RGBA, 4 bytes per pixel. */
   readonly rgba: Buffer;
 }
+
+/** Decoder bounds protect against decompression bombs and huge allocations. */
+const MAX_IMAGE_DIMENSION = 8192;
+const MAX_IMAGE_PIXELS = 32_000_000;
+const MAX_IDAT_BYTES = 20 * 1024 * 1024;
+const MAX_RAW_BYTES = 160 * 1024 * 1024;
 
 /** Perceptual features used for "search by image". */
 export interface ImageFeatures {
@@ -105,6 +113,7 @@ export function decodePng(buffer: Buffer): DecodedImage {
   let colorType = 0;
   let interlace = 0;
   const idat: Buffer[] = [];
+  let idatBytes = 0;
   let palette: Buffer | null = null;
   while (offset + 8 <= buffer.length) {
     const length = buffer.readUInt32BE(offset);
@@ -125,9 +134,18 @@ export function decodePng(buffer: Buffer): DecodedImage {
       if ((data[10] ?? 1) !== 0) fail('不支持的压缩方法');
       if ((data[11] ?? 1) !== 0) fail('不支持的过滤方法');
       interlace = data[12] ?? 0;
+      if (width <= 0 || height <= 0) fail('IHDR 宽高必须大于 0');
+      if (width > MAX_IMAGE_DIMENSION || height > MAX_IMAGE_DIMENSION) {
+        fail(`PNG 尺寸过大（${width}×${height}，单边上限 ${MAX_IMAGE_DIMENSION}）`);
+      }
+      if (width * height > MAX_IMAGE_PIXELS) {
+        fail(`PNG 像素数过大（${width * height}，上限 ${MAX_IMAGE_PIXELS}）`);
+      }
     } else if (type === 'PLTE') {
       palette = Buffer.from(data);
     } else if (type === 'IDAT') {
+      idatBytes += data.length;
+      if (idatBytes > MAX_IDAT_BYTES) fail(`PNG IDAT 数据过大（上限 ${MAX_IDAT_BYTES} B）`);
       idat.push(Buffer.from(data));
     } else if (type === 'IEND') {
       break;
@@ -141,7 +159,15 @@ export function decodePng(buffer: Buffer): DecodedImage {
   if (channels === 0) fail(`不支持的颜色类型 ${colorType}`);
   if (colorType === 3 && palette === null) fail('调色板 PNG 缺少 PLTE');
   if (idat.length === 0) fail('缺少 IDAT');
-  const raw = unfilter(inflateSync(Buffer.concat(idat)), width, height, channels);
+  const expectedRaw = height * (1 + width * channels);
+  if (expectedRaw > MAX_RAW_BYTES) fail(`PNG 解压后数据过大（${expectedRaw} B）`);
+  let inflated: Buffer;
+  try {
+    inflated = inflateSync(Buffer.concat(idat), { maxOutputLength: expectedRaw });
+  } catch {
+    fail(`PNG 解压失败或超过上限（${expectedRaw} B）`);
+  }
+  const raw = unfilter(inflated, width, height, channels);
   const rgba = Buffer.alloc(width * height * 4);
   for (let index = 0; index < width * height; index += 1) {
     const source = index * channels;
@@ -323,6 +349,13 @@ export interface ClipConfig {
   readonly timeoutMs: number;
   /** `custom` = our documented {images,texts} contract; `dashscope` = native contents API. */
   readonly provider?: 'custom' | 'dashscope';
+  /** Optional embedding model version; part of the cache identity. */
+  readonly modelVersion?: string;
+}
+
+/** Cache identity for a multimodal endpoint. */
+export function clipIdentity(config: ClipConfig): string {
+  return `${config.provider ?? 'custom'}\u0000${config.endpoint}\u0000${config.model}\u0000${config.modelVersion ?? ''}`;
 }
 
 /** DashScope native multimodal embedding endpoint (not supported by compatible mode). */
@@ -364,7 +397,7 @@ async function requestJson(
   label: string
 ): Promise<Record<string, unknown>> {
   const response = await fetch(config.endpoint, init);
-  const text = await response.text();
+  const text = await readResponseTextLimited(response);
   let body: Record<string, unknown> = {};
   try {
     body = JSON.parse(text) as Record<string, unknown>;
