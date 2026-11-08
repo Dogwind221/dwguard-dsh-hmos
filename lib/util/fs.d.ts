@@ -30,3 +30,8 @@ export declare function sha256File(file: string): Promise<string>;
  * @returns the copied file's size in bytes.
  */
 export declare function copyFileTo(source: string, destination: string): Promise<number>;
+/**
+ * Snapshot an actively-written log to `<file>.1` and truncate it in place.
+ * The child keeps its append fd; O_APPEND writes resume at offset 0.
+ */
+export declare function rotateActiveLog(file: string, maxBytes: number): Promise<boolean>;

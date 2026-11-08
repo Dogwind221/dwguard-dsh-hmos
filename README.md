@@ -348,6 +348,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 5. **证据路径**：在字符串包含检查之外增加 `realpath`，拒绝符号链接/Junction 逃逸。
 6. **解码/网络边界**：PNG 限制单边 8192、像素 3200 万、IDAT 20MB、解压 160MB；HTTP 响应体上限 4MB。
 7. **向量缓存身份**：`provider + endpoint + model + modelVersion` 一起进入 cache key；换端点或模型版本不会复用旧向量。
+8. **后台日志轮转**：后台 `run/log` 每 5s 检查日志，超过 `maxDevecoLogBytes`（默认 10MB）就把快照写到 `output.log.1` 并截断当前日志；`jobs`/`stop` 停止监控。
 
 **边界**：App 侧 AI（Intent/端侧模型/应用内智能体）不做；手机端不是开发运行时；多项目通过各自 `.shared` 隔离 + 设备锁串行，不做跨机器分布式 run state。
 
@@ -493,6 +494,7 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
     boardToken: ""                        # 空 = 看板仅 loopback；非空时要求 x-dwguard-token
     designEmbeddingModelVersion: ""       # 进入 embedding cache 身份；换版本不复用旧向量
     designClipModelVersion: ""            # 进入 CLIP cache 身份
+    maxDevecoLogBytes: 10485760           # 后台日志超过此大小轮转/截断
     devecoMcpCommand: deveco-mcp          # fallback tier 2；空字符串跳过
     hdcPath: hdc                          # fallback tier 3 的 hdc
     hvigorPath: hvigorw                   # fallback tier 3 的 hvigor
@@ -567,7 +569,7 @@ CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（167 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 每设备 lease）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 四维审计+确认门禁、inbox 可移植 cards、范式卡学习；0.7.0 registry/supersedes、pack v2 迁移、import preview 重写、包级 feedback、top-3 benchmark；0.8.0 harness journal/queue/resume/retry/fallback、14 SOP+32 工程知识、deveco pipeline/sign/resume/自动 fallback、standalone worker；0.8.5 strict evidence/结构化 actual/observation、设计包路径安全、唯一证据名、state 锁/CAS、进度拆分、编号预留、commandId、后台设备 lease、看板 loopback/token；0.8.6 发布门禁、Windows 参数约束、截图校验、输出/进程树边界、证据 realpath、PNG/HTTP 上限、向量缓存身份）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
+2. `npm test` 全绿（168 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 每设备 lease）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 四维审计+确认门禁、inbox 可移植 cards、范式卡学习；0.7.0 registry/supersedes、pack v2 迁移、import preview 重写、包级 feedback、top-3 benchmark；0.8.0 harness journal/queue/resume/retry/fallback、14 SOP+32 工程知识、deveco pipeline/sign/resume/自动 fallback、standalone worker；0.8.5 strict evidence/结构化 actual/observation、设计包路径安全、唯一证据名、state 锁/CAS、进度拆分、编号预留、commandId、后台设备 lease、看板 loopback/token；0.8.6 发布门禁、Windows 参数约束、截图校验、输出/进程树边界、证据 realpath、PNG/HTTP 上限、向量缓存身份）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

@@ -76,6 +76,8 @@ export const Config = z.object({
   maxDesignSearches: z.number().default(12),
   /** 0.8.5: optional bearer token for the board route (empty = loopback-only). */
   boardToken: z.string().default(''),
+  /** 0.8.6: rotate a background devecocli log above this size at job start. */
+  maxDevecoLogBytes: z.number().default(10 * 1024 * 1024),
   /** 0.8.5: must+pass requires structured evidence/observation; self-report is an error. */
   strictEvidence: z.boolean().default(true),
   /** Max attempts for one harness step before a human decision (0.8.0). */
@@ -151,6 +153,8 @@ export interface Options {
   readonly maxDesignSearches: number;
   /** 0.8.5: optional bearer token for the board route. */
   readonly boardToken: string;
+  /** 0.8.6: rotate a background log above this size at job start. */
+  readonly maxDevecoLogBytes: number;
   /** 0.8.5: strict evidence policy (default true). */
   readonly strictEvidence: boolean;
   /** Max attempts for one harness step before a human decision (0.8.0). */
@@ -207,6 +211,7 @@ const DEFAULTS: Options = {
   maxDesignSearches: 12,
   harnessMaxRetries: 3,
   boardToken: '',
+  maxDevecoLogBytes: 10 * 1024 * 1024,
   strictEvidence: true,
   devecoMcpCommand: 'deveco-mcp',
   hdcPath: 'hdc',
@@ -289,6 +294,7 @@ export function resolveOptions(raw: unknown): Options {
     maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
     harnessMaxRetries: positiveInt(input['harnessMaxRetries'], DEFAULTS.harnessMaxRetries, 1),
     boardToken: str(input['boardToken'], DEFAULTS.boardToken),
+    maxDevecoLogBytes: positiveInt(input['maxDevecoLogBytes'], DEFAULTS.maxDevecoLogBytes, 1024),
     strictEvidence: input['strictEvidence'] === false ? false : true,
     devecoMcpCommand: str(input['devecoMcpCommand'], DEFAULTS.devecoMcpCommand),
     hdcPath: str(input['hdcPath'], DEFAULTS.hdcPath),

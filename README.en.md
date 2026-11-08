@@ -104,6 +104,8 @@ See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
 6. PNG decode bounds: 8192 per side, 32M pixels, 20MB IDAT, 160MB inflated;
    HTTP response bodies are capped at 4MB.
 7. Embedding cache identity includes `provider + endpoint + model + modelVersion`.
+8. Background `run/log` logs are checked every 5s and rotated to `output.log.1`
+   + truncated above `maxDevecoLogBytes` (default 10MB).
 
 See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
@@ -359,6 +361,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     boardToken: ""         # empty = loopback-only; otherwise x-dwguard-token is required
     designEmbeddingModelVersion: ""  # part of the embedding cache identity
     designClipModelVersion: ""       # part of the CLIP cache identity
+    maxDevecoLogBytes: 10485760      # rotate/truncate background logs above this
     devecoMcpCommand: deveco-mcp  # fallback tier 2; empty = skip
     hdcPath: hdc                  # fallback tier 3 hdc
     hvigorPath: hvigorw           # fallback tier 3 hvigor
@@ -399,7 +402,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 167 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 168 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

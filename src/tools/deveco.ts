@@ -20,6 +20,7 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import { acquireDeviceLock, defaultDevice, releaseDeviceLock, renewDeviceLease } from '../device.js';
+import { rotateActiveLog } from '../util/fs.js';
 import { recordObservation } from '../observation.js';
 import { validateImageFile } from '../media.js';
 import { buildFallbackTiers, type FallbackStep } from '../fallback.js';
@@ -86,12 +87,21 @@ interface JobFile {
 
 /** Background lease heartbeat timers, keyed by deveco index. */
 const backgroundLeases = new Map<number, { readonly device: string; readonly token: string; readonly timer: NodeJS.Timeout }>();
+/** Active background log guards, keyed by deveco index. */
+const backgroundLogGuards = new Map<number, { readonly timer: NodeJS.Timeout }>();
 
 function stopBackgroundHeartbeat(index: number): void {
   const lease = backgroundLeases.get(index);
   if (lease === undefined) return;
   clearInterval(lease.timer);
   backgroundLeases.delete(index);
+}
+
+function stopBackgroundLogGuard(index: number): void {
+  const guard = backgroundLogGuards.get(index);
+  if (guard === undefined) return;
+  clearInterval(guard.timer);
+  backgroundLogGuards.delete(index);
 }
 
 function pidAlive(pid: number): boolean {
@@ -405,6 +415,7 @@ export function createDevecoTool(
             const running = alive(job.pid);
             if (!running) {
               stopBackgroundHeartbeat(job.index);
+              stopBackgroundLogGuard(job.index);
               if (job.device !== undefined && job.deviceToken !== undefined) {
                 await releaseDeviceLock(paths, job.device, job.deviceToken);
               }
@@ -447,6 +458,7 @@ export function createDevecoTool(
         if (found === null) return fail(`找不到后台任务：${target}`);
         const stopped = await stopJob(found.pid);
         stopBackgroundHeartbeat(found.index);
+        stopBackgroundLogGuard(found.index);
         if (found.device !== undefined && found.deviceToken !== undefined) {
           await releaseDeviceLock(paths, found.device, found.deviceToken);
         }
@@ -902,6 +914,17 @@ export function createDevecoTool(
           ...(backgroundToken === undefined ? {} : { deviceToken: backgroundToken })
         };
         await writeTextAtomic(`${dir}/job.json`, `${JSON.stringify(job, null, 2)}\n`);
+        const logTimer = setInterval(() => {
+          void (async () => {
+            if (!alive(pid)) {
+              stopBackgroundLogGuard(index);
+              return;
+            }
+            await rotateActiveLog(logFile, options.maxDevecoLogBytes).catch(() => false);
+          })();
+        }, 5_000);
+        logTimer.unref?.();
+        backgroundLogGuards.set(index, { timer: logTimer });
         if (backgroundDevice !== undefined && backgroundToken !== undefined) {
           const timer = setInterval(() => {
             void (async () => {

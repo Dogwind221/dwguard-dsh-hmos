@@ -222,6 +222,18 @@ test('0.8.5: background run holds a per-device lease for the job lifetime and st
   assert.equal(await readDeviceLock(paths, 'SN-1'), null);
 });
 
+test('0.8.6: oversized background logs are rotated before the next job', async () => {
+  const cwd = await workspace();
+  const dir = join(cwd, 'logs');
+  await mkdir(dir, { recursive: true });
+  const logFile = join(dir, 'output.log');
+  await writeFile(logFile, 'x'.repeat(2048));
+  const { rotateActiveLog } = await import('../lib/util/fs.js');
+  assert.equal(await rotateActiveLog(logFile, 1024), true);
+  assert.equal((await readFile(`${logFile}.1`, 'utf8')).length, 2048);
+  assert.equal((await readFile(logFile, 'utf8')).length, 0);
+});
+
 test('device evidence actions use the real devecocli subcommands', async () => {
   const cwd = await workspace();
   const options = resolveOptions({});

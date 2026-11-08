@@ -6,7 +6,7 @@
  */
 
 import { createHash, randomBytes } from 'node:crypto';
-import { appendFile, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, readFile, readdir, rename, rm, stat, truncate, writeFile } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 const TRANSIENT_RENAME_CODES = new Set(['EACCES', 'EBUSY', 'EPERM']);
@@ -111,4 +111,17 @@ export async function copyFileTo(source: string, destination: string): Promise<n
   await ensureDir(dirname(destination));
   await copyFile(source, destination);
   return (await stat(destination)).size;
+}
+
+/**
+ * Snapshot an actively-written log to `<file>.1` and truncate it in place.
+ * The child keeps its append fd; O_APPEND writes resume at offset 0.
+ */
+export async function rotateActiveLog(file: string, maxBytes: number): Promise<boolean> {
+  const info = await stat(file).catch(() => null);
+  if (info === null || !info.isFile() || info.size <= maxBytes) return false;
+  const backup = `${file}.1`;
+  await copyFile(file, backup);
+  await truncate(file, 0);
+  return true;
 }

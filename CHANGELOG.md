@@ -23,6 +23,8 @@ Release-pipeline and runtime hardening.
 - Evidence `realpath` containment, rejecting symlink/Junction escapes.
 - PNG decoder limits and 4MB HTTP response reader.
 - Embedding/CLIP cache identity: provider + endpoint + model + modelVersion.
+- Background `run/log` guard: checks every 5s, snapshots to `output.log.1` and
+  truncates above `maxDevecoLogBytes` (default 10MB); `jobs`/`stop` clear it.
 
 ### Changed (breaking)
 
@@ -34,7 +36,7 @@ Release-pipeline and runtime hardening.
 
 ### Tests
 
-- 167/167; added shell-metachar, screenshot-without-file, symlink evidence,
+- 168/168; added shell-metachar, screenshot-without-file, symlink evidence,
   PNG-dimension bomb, HTTP body cap, cache identity and publish-gate checks.
 
 ## 0.8.5 — 2026-11-08

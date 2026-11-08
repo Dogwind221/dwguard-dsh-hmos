@@ -47,6 +47,8 @@ export interface Options {
     readonly maxDesignSearches: number;
     /** 0.8.5: optional bearer token for the board route. */
     readonly boardToken: string;
+    /** 0.8.6: rotate a background log above this size at job start. */
+    readonly maxDevecoLogBytes: number;
     /** 0.8.5: strict evidence policy (default true). */
     readonly strictEvidence: boolean;
     /** Max attempts for one harness step before a human decision (0.8.0). */
