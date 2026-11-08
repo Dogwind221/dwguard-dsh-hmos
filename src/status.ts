@@ -87,7 +87,7 @@ export interface Snapshot {
   /** Effective device policy (host memory, mode, matrix scope, pool). */
   readonly device: DeviceConfig;
   /** Current device lock, when one is held. */
-  readonly deviceLock: { readonly sn: string; readonly holder: string; readonly acquiredAt: string } | null;
+  readonly deviceLock: { readonly sn: string; readonly jobId: string; readonly acquiredAt: string } | null;
   readonly phase: Phase;
   readonly nextAction: string;
   /** English rendering of `nextAction` for the panel's language toggle. */
@@ -283,7 +283,7 @@ export function renderStatusMarkdown(snapshot: Snapshot): string {
             .map((gap) => `${DIMENSION_LABELS[gap.dimension]}·${SCREEN_FAMILY_LABELS[gap.family]}`)
             .join(' / ')}`
         ]),
-    ...(snapshot.deviceLock === null ? [] : [`- 设备锁：${snapshot.deviceLock.sn}（${snapshot.deviceLock.holder}）`]),
+    ...(snapshot.deviceLock === null ? [] : [`- 设备锁：${snapshot.deviceLock.sn}（${snapshot.deviceLock.jobId}）`]),
     `- 预审：${prereviewText}`,
     `- 派发：${state.roundDispatches ?? state.dispatches} 次（本轮）· 共 ${state.dispatches} 次`,
     `- 审计：${auditText}`,

@@ -73,7 +73,7 @@ export function createAuditDimensionTool(
 
       return ok(`${DIMENSION_LABELS[dimension]}子代理已返回（${passed} 通过 / ${failed} 未过），进度 ${returned.length}/4。`, {
         detail: lines.join('\n'),
-        files: [displayPath(paths, paths.auditProgress)],
+        files: [displayPath(paths, `${paths.auditProgressDir}/${pack.specVersion}/${dimension}.json`)],
         next:
           remaining.length > 0
             ? `继续等其余 ${remaining.length} 个维度的子代理；每回来一个就记一次。`

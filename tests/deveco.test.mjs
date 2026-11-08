@@ -9,6 +9,8 @@ process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dwguard-deveco-home-'));
 
 import { resolveOptions } from '../lib/config.js';
 import { chooseExecutor } from '../lib/dispatch.js';
+import { readDeviceLock } from '../lib/device.js';
+import { resolvePaths } from '../lib/paths.js';
 import { createDevecoTool } from '../lib/tools/deveco.js';
 import { createDispatchTool } from '../lib/tools/dispatch.js';
 import { createPrereviewTool } from '../lib/tools/prereview.js';
@@ -156,8 +158,7 @@ test('deveco attach reuses an existing log without rebuilding', async () => {
 test('background jobs start, list and stop without blocking', async () => {
   const cwd = await workspace();
   const options = resolveOptions({});
-  const started = [];
-  const tool = createDevecoTool(
+  const started = [];  const tool = createDevecoTool(
     options,
     undefined,
     async () => {
@@ -179,6 +180,28 @@ test('background jobs start, list and stop without blocking', async () => {
   assert.match(jobs.detail, /running/);
   const stopped = await tool.execute({ action: 'stop', job: '1' }, exec(cwd));
   assert.equal(stopped.ok, true, stopped.detail);
+});
+
+test('0.8.5: background run holds a per-device lease for the job lifetime and stop releases it', async () => {
+  const cwd = await workspace();
+  const options = resolveOptions({});
+  const tool = createDevecoTool(options, undefined, async () => ({ code: 0, stdout: '', stderr: '', durationMs: 1 }), {
+    start: () => 5555,
+    alive: (pid) => pid === 5555,
+    stop: (pid) => pid === 5555
+  });
+  const result = await tool.execute({ action: 'run', device: 'SN-1', background: true }, exec(cwd));
+  assert.equal(result.ok, true, result.detail);
+  const paths = resolvePaths(cwd, '.shared');
+  const lease = await readDeviceLock(paths, 'SN-1');
+  assert.notEqual(lease, null);
+  assert.equal(lease?.sn, 'SN-1');
+  const job = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'job.json'), 'utf8'));
+  assert.equal(job.device, 'SN-1');
+  assert.equal(job.deviceToken, lease?.token);
+  const stopped = await tool.execute({ action: 'stop', job: '1' }, exec(cwd));
+  assert.equal(stopped.ok, true, stopped.detail);
+  assert.equal(await readDeviceLock(paths, 'SN-1'), null);
 });
 
 test('device evidence actions use the real devecocli subcommands', async () => {

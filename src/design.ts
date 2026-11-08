@@ -10,7 +10,7 @@
  */
 
 import { createHash } from 'node:crypto';
-import { extname, join } from 'node:path';
+import { dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import type { AestheticArea } from './aesthetic.js';
 import { AREA_LABELS, isAestheticArea } from './aesthetic.js';
@@ -23,7 +23,7 @@ import type { TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 import { displayPath } from './paths.js';
 import { RULES } from './rules.js';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { appendText, copyFileTo, ensureDir, fileExists, listDir, readTextOrNull, removeFile, sha256File, writeTextAtomic } from './util/fs.js';
 import { inline, truncate } from './util/md.js';
@@ -2029,6 +2029,41 @@ export function isDesignPackName(value: string): boolean {
   return PACK_NAME.test(value);
 }
 
+/** Resolve a candidate under a trusted base; reject absolute/`..` escapes. */
+function resolveInside(base: string, candidate: string, label: string): string {
+  if (isAbsolute(candidate)) throw new DesignLibraryError(`${label} 不能是绝对路径：${candidate}`);
+  const target = resolve(base, candidate);
+  const rel = relative(base, target);
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    throw new DesignLibraryError(`${label} 越界：${candidate}`);
+  }
+  return target;
+}
+
+/** Resolve a real path and prove it is still inside the trusted base (symlink-safe). */
+async function realInside(base: string, target: string, label: string): Promise<string> {
+  const baseReal = await realpath(base);
+  const targetReal = await realpath(target);
+  const rel = relative(baseReal, targetReal);
+  if (rel === '..' || rel.startsWith(`..${sep}`) || isAbsolute(rel)) {
+    throw new DesignLibraryError(`${label} 指向包外（符号链接/Junction）：${target}`);
+  }
+  return targetReal;
+}
+
+/** Only known image extensions become refs; anything else is rejected. */
+function safeImageExtension(file: string): string {
+  const ext = extname(file).toLowerCase();
+  if (!['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(ext)) {
+    throw new DesignLibraryError(`图片扩展名不受支持：${file}`);
+  }
+  return ext;
+}
+
+function isSha256(value: string): boolean {
+  return /^[a-f0-9]{64}$/i.test(value);
+}
+
 /** List packs in the global directory (invalid packs are skipped). */
 export async function listDesignPacks(dir: string): Promise<DesignPackSummary[]> {
   const names = (await listDir(dir)).sort();
@@ -2130,6 +2165,7 @@ export async function readDesignPack(dir: string, name: string): Promise<DesignP
   try {
     const parsed = JSON.parse(raw) as Partial<DesignPack>;
     if ((parsed.schemaVersion !== 1 && parsed.schemaVersion !== 2) || typeof parsed.name !== 'string' || !Array.isArray(parsed.cards)) return null;
+    if (parsed.name !== name || !isDesignPackName(parsed.name)) return null;
     const cards = parsed.cards.filter((card): card is DesignCard => {
       if (typeof card !== 'object' || card === null) return false;
       const record = card as Record<string, unknown>;
@@ -2248,6 +2284,7 @@ export async function importDesignPack(
 ): Promise<DesignPackImportResult> {
   const pack = await readDesignPack(dir, name);
   if (pack === null) throw new DesignLibraryError(`设计包 \`${name}\` 不存在或格式不正确。`);
+  const packDir = join(dir, name);
   const manifest = (await readDesignManifest(paths)) ?? emptyManifest(now);
   const knownKeys = new Set(manifest.cards.map((card) => card.ingestKey).filter((key): key is string => key !== undefined));
   const cards: DesignCard[] = [...manifest.cards];
@@ -2255,45 +2292,78 @@ export async function importDesignPack(
   const files: string[] = [];
   let skipped = 0;
   let localPreview: string | undefined;
+  let previewPlan: { source: string; target: string } | undefined;
+
+  // Validate every source/target before copying or writing anything.
   if (pack.preview !== undefined) {
-    let relative = pack.preview.replace(/\\/g, '/');
-    const prefix = `design-packs/${pack.name}/`;
-    if (relative.startsWith(prefix)) relative = relative.slice(prefix.length);
-    if (relative.endsWith('.html') && !relative.split('/').includes('..')) {
-      const source = join(dir, pack.name, relative);
+    let previewRelative = pack.preview.replace(/\\/g, '/');
+    const prefix = `design-packs/${name}/`;
+    if (previewRelative.startsWith(prefix)) previewRelative = previewRelative.slice(prefix.length);
+    if (previewRelative.endsWith('.html')) {
+      const source = resolveInside(packDir, previewRelative, '设计包 preview');
       if (await fileExists(source)) {
-        localPreview = `design-packs/${pack.name}/preview/index.html`;
-        const target = join(paths.designPacksLocalDir, pack.name, 'preview', 'index.html');
-        await ensureDir(join(paths.designPacksLocalDir, pack.name, 'preview'));
-        await copyFileTo(source, target);
-        files.push(displayPath(paths, target));
+        await realInside(packDir, source, '设计包 preview');
+        const target = resolveInside(
+          paths.designPacksLocalDir,
+          join(name, 'preview', 'index.html'),
+          '预览目标'
+        );
+        previewPlan = { source, target };
+        localPreview = `design-packs/${name}/preview/index.html`;
       }
     }
   }
-  for (const sourceCard of pack.cards) {
-    const key = packCardKey(pack.name, sourceCard);
+
+  const imagePlans = new Map<number, Array<{ source: string; target: string; storedAs: string; sha256: string; alt?: string }>>();
+  for (const [index, sourceCard] of pack.cards.entries()) {
+    const key = packCardKey(name, sourceCard);
     if (knownKeys.has(key)) {
       skipped += 1;
       continue;
     }
     knownKeys.add(key);
-    const images: DesignCard['images'][number][] = [];
+    const plans: Array<{ source: string; target: string; storedAs: string; sha256: string; alt?: string }> = [];
     for (const image of sourceCard.images) {
-      const from = join(dir, pack.name, image.path);
-      if (!(await fileExists(from))) continue;
-      const sha = image.sha256 ?? (await sha256File(from));
-      const ext = extname(image.path).toLowerCase() || '.png';
-      const storedAs = `refs/${sha}${ext}`;
-      await copyFileTo(from, join(paths.designDir, storedAs));
-      images.push({ ...image, path: storedAs, sha256: sha });
+      if (typeof image.path !== 'string' || image.path.trim().length === 0) {
+        throw new DesignLibraryError('设计包图片缺少 path。');
+      }
+      const source = resolveInside(packDir, image.path, '设计包图片');
+      if (!(await fileExists(source))) continue;
+      await realInside(packDir, source, '设计包图片');
+      const actualSha = await sha256File(source);
+      if (image.sha256 !== undefined) {
+        if (!isSha256(image.sha256)) throw new DesignLibraryError(`设计包图片 sha256 非法：${image.sha256}`);
+        if (image.sha256.toLowerCase() !== actualSha) {
+          throw new DesignLibraryError(`设计包图片 sha256 不匹配：${image.path}`);
+        }
+      }
+      const ext = safeImageExtension(image.path);
+      const storedAs = `refs/${actualSha}${ext}`;
+      const target = resolveInside(paths.designDir, storedAs, '图片目标');
+      plans.push({ source, target, storedAs, sha256: actualSha, ...(image.alt === undefined ? {} : { alt: image.alt }) });
     }
+    imagePlans.set(index, plans);
+
+    const sourcePreview = sourceCard.preview;
+    let safeSourcePreview: string | undefined;
+    if (localPreview === undefined && sourcePreview !== undefined) {
+      const candidate = sourcePreview.replace(/\\/g, '/');
+      const source = resolveInside(paths.shared, candidate, '卡片 preview');
+      if (await fileExists(source)) {
+        await realInside(paths.shared, source, '卡片 preview');
+        safeSourcePreview = candidate;
+      }
+    }
+
     const kind =
       sourceCard.kind === 'anti-pattern' ? 'anti-pattern' : sourceCard.kind === 'principle' ? 'principle' : 'pattern';
     const id = nextDesignId(cards, kind);
-    const { preview: sourcePreview, ...rest } = sourceCard;
-    const usablePreview =
-      localPreview ??
-      (sourcePreview !== undefined && (await fileExists(join(paths.shared, sourcePreview))) ? sourcePreview : undefined);
+    const { preview: _ignoredPreview, ...rest } = sourceCard;
+    const images: DesignCard['images'][number][] = plans.map((plan) => ({
+      path: plan.storedAs,
+      sha256: plan.sha256,
+      ...(plan.alt === undefined ? {} : { alt: plan.alt })
+    }));
     const card: DesignCard = {
       ...rest,
       id,
@@ -2301,13 +2371,28 @@ export async function importDesignPack(
       status: 'active',
       updatedAt: now,
       ingestKey: key,
-      ...(usablePreview === undefined ? {} : { preview: usablePreview })
+      ...(localPreview === undefined && safeSourcePreview === undefined ? {} : { preview: localPreview ?? safeSourcePreview })
     };
     cards.push(card);
     imported.push(card);
   }
+
   if (imported.length === 0) {
     return { manifest, imported, skipped, files, changed: false };
+  }
+
+  // Everything is validated; now perform the side effects.
+  if (previewPlan !== undefined) {
+    await ensureDir(dirname(previewPlan.target));
+    await copyFileTo(previewPlan.source, previewPlan.target);
+    files.push(displayPath(paths, previewPlan.target));
+  }
+  for (const plans of imagePlans.values()) {
+    for (const plan of plans) {
+      await ensureDir(dirname(plan.target));
+      await copyFileTo(plan.source, plan.target);
+      files.push(displayPath(paths, plan.target));
+    }
   }
   const next: DesignManifest = { ...manifest, updatedAt: now, cards };
   files.push(...(await writeLibrary(paths, next)));

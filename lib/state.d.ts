@@ -22,6 +22,8 @@ export declare function writeState(paths: SharedPaths, state: SharedState): Prom
 export declare function updateState(paths: SharedPaths, now: string, mutate: (state: SharedState) => SharedState): Promise<SharedState>;
 /**
  * Next free numeric suffix for `<prefix>-<n>` files in a directory.
+ * The counter is reserved under a lock, so concurrent callers cannot both
+ * receive the same audit/deveco id.
  * @param dir - directory to scan.
  * @param prefix - file stem before the dash.
  */

@@ -34,7 +34,7 @@ import { createSpecTool } from '../lib/tools/spec.js';
 import { createStatusTool } from '../lib/tools/status.js';
 
 const run = promisify(execFile);
-const options = resolveOptions({});
+const options = resolveOptions({ strictEvidence: false });
 const tool = createDesignTool(options);
 const specTool = createSpecTool(options);
 const prereviewTool = createPrereviewTool(options);
@@ -1081,7 +1081,7 @@ test('0.6.5 CLIP: multimodal text→image and pHash+CLIP image search', async ()
     assert.equal(repeat.ok, true, repeat.detail);
     assert.equal(requests.length, before, '第二次文本检索应全部命中缓存');
 
-    const noClip = createDesignTool(resolveOptions({}));
+    const noClip = createDesignTool(resolveOptions({ strictEvidence: false }));
     const noEndpoint = await noClip.execute({ action: 'search', imageText: '红色' }, exec(cwd));
     assert.equal(noEndpoint.ok, false);
     assert.match(noEndpoint.summary, /designClipEndpoint/);

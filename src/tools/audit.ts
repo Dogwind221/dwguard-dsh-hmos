@@ -21,7 +21,9 @@ import type { DesignCard, DesignReworkSuggestion } from '../design.js';
 import { clearDesignReworkQueue, writeDesignReworkQueue } from '../design.js';
 import { appendOutboxDsh } from '../dispatch.js';
 import { appendCalibration, dimensionVerdicts } from '../calibration.js';
+import { parseActualInput } from '../actual.js';
 import { collectDeviceEvidence } from '../device.js';
+import { readObservation } from '../observation.js';
 import { EvidenceError, missingEvidence, writeEvidenceBundle } from '../evidence.js';
 import { DIMENSIONS, DIMENSION_LABELS, SCREEN_FAMILIES } from '../model.js';
 import type { Check, TaskPack } from '../model.js';
@@ -79,13 +81,19 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
   }
   return rows.map((item, index) => {
     const label = `${TOOL}.checks[${index}]`;
+    let parsedActual;
+    try {
+      parsedActual = parseActualInput(item['actual']);
+    } catch (error) {
+      throw new Error(`${label}.actual：${error instanceof Error ? error.message : String(error)}`);
+    }
     return {
       criterionId: requiredString(item, 'criterionId', label, 40),
       result: requiredEnum(item, 'result', RESULTS, label),
       evidence: optionalString(item, 'evidence', label, 2000) ?? '',
       note: optionalString(item, 'note', label, 600),
       evidenceFiles: optionalStringArray(item, 'evidenceFiles', label, 8),
-      actual: optionalString(item, 'actual', label, 500),
+      ...parsedActual,
       device: optionalString(item, 'device', label, 200),
       family: optionalEnum(item, 'family', SCREEN_FAMILIES, label),
       profileRef: optionalString(item, 'profileRef', label, 40),
@@ -309,9 +317,23 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               description: '你独立取得的证据：命令输出、截图路径、布局树片段、测量数值。'
             },
             actual: {
-              type: 'string',
               description:
-                '实测值（可选但带 assertion 的判据必须给）：如 "12vp"、"720ms"、"4.9:1"。闸门用任务包里的 assertion 重算结论，断言不通过却标 pass 会被拒绝。'
+                '实测值（可选但带 assertion 的判据必须给）。优先结构化：{ value, unit?, samples?, aggregation? }；' +
+                '性能给 samples + max/p95/mean，禁止从自由文本提取第一个数字。字符串只用于文本断言。',
+              oneOf: [
+                { type: 'string' },
+                {
+                  type: 'object',
+                  properties: {
+                    value: { oneOf: [{ type: 'string' }, { type: 'number' }] },
+                    unit: { type: 'string' },
+                    samples: { type: 'array', items: { type: 'number' } },
+                    aggregation: { type: 'string', enum: ['max', 'p95', 'mean'] },
+                    observationRef: { type: 'string' }
+                  },
+                  additionalProperties: false
+                }
+              ]
             },
             device: { type: 'string', description: '取证设备序列号（matrix 模式必填）。' },
             family: {
@@ -422,6 +444,32 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       // Evidence first: a check that names a file must prove the file exists,
       // and the bundle is written before any verdict can be recorded.
       try {
+        const observationErrors: string[] = [];
+        for (const check of checks) {
+          const ref = check.measurement?.observationRef;
+          if (ref === undefined) continue;
+          const observation = await readObservation(paths, ref);
+          if (observation === null) {
+            observationErrors.push(`\`${check.criterionId}\` 的 observationRef \`${ref}\` 不存在或格式不正确。`);
+            continue;
+          }
+          if (check.device !== undefined && observation.device !== undefined && observation.device !== check.device) {
+            observationErrors.push(
+              `\`${check.criterionId}\` 的 observationRef 属于设备 \`${observation.device}\`，不是声明的 \`${check.device}\`。`
+            );
+          }
+          if (observation.specVersion !== undefined && observation.specVersion !== pack.specVersion) {
+            observationErrors.push(
+              `\`${check.criterionId}\` 的 observationRef 属于 spec v${observation.specVersion}，不是当前 v${pack.specVersion}。`
+            );
+          }
+        }
+        if (observationErrors.length > 0) {
+          return fail('Observation 校验失败。', {
+            detail: observationErrors.map((error) => `- ${error}`).join('\n'),
+            next: '重新用采集器（dwguard_deveco screenshot/layout）生成 observation，或改交 evidenceFiles。'
+          });
+        }
         const missing = await missingEvidence(paths, checks);
         if (missing.length > 0) {
           return fail(`证据文件不存在：${missing.join('、')}。本次审计未记录。`, {
@@ -435,7 +483,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         throw error;
       }
 
-      const baseGate = gateDelivery(pack, checks, findings, policy, profile, designCards);
+      const baseGate = gateDelivery(pack, checks, findings, policy, profile, designCards, options.strictEvidence);
       const failedCompares = compares.filter((compare) => !compare.pass);
       const gate =
         failedCompares.length === 0
@@ -524,7 +572,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         const acceptance = renderAcceptanceMarkdown(report, pack, paths, policy, profile, designCards);
         await writeTextAtomic(`${paths.artifactsDir}/acceptance-report.md`, acceptance);
         await clearDesignReworkQueue(paths);
-        await clearAuditProgress(paths);
+        await clearAuditProgress(paths, pack.specVersion);
         await updateState(paths, now, (current) => ({
           ...current,
           audits: current.audits + 1,
@@ -568,7 +616,7 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
         now,
         { kind: 'rework', id: `r-${id}`, from: 'dsh', to: 'deveco' }
       );
-      await clearAuditProgress(paths);
+      await clearAuditProgress(paths, pack.specVersion);
       await updateState(paths, now, (current) => ({
         ...current,
         audits: current.audits + 1,

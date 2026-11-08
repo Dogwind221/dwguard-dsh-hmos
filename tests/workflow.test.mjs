@@ -21,7 +21,7 @@ import { createPrereviewTool } from '../lib/tools/prereview.js';
 import { createSpecTool } from '../lib/tools/spec.js';
 import { createStatusTool } from '../lib/tools/status.js';
 
-const options = resolveOptions({});
+const options = resolveOptions({ strictEvidence: false });
 const specTool = createSpecTool(options);
 const prereviewTool = createPrereviewTool(options);
 const dispatchTool = createDispatchTool(options);

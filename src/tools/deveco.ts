@@ -19,7 +19,8 @@ import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
-import { acquireDeviceLock, defaultDevice, releaseDeviceLock } from '../device.js';
+import { acquireDeviceLock, defaultDevice, releaseDeviceLock, renewDeviceLease } from '../device.js';
+import { recordObservation } from '../observation.js';
 import { buildFallbackTiers, type FallbackStep } from '../fallback.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
@@ -77,6 +78,19 @@ interface JobFile {
   readonly command: string;
   readonly startedAt: string;
   readonly logFile: string;
+  /** Device lease held for the whole background job (0.8.5). */
+  readonly device?: string;
+  readonly deviceToken?: string;
+}
+
+/** Background lease heartbeat timers, keyed by deveco index. */
+const backgroundLeases = new Map<number, { readonly device: string; readonly token: string; readonly timer: NodeJS.Timeout }>();
+
+function stopBackgroundHeartbeat(index: number): void {
+  const lease = backgroundLeases.get(index);
+  if (lease === undefined) return;
+  clearInterval(lease.timer);
+  backgroundLeases.delete(index);
 }
 
 function pidAlive(pid: number): boolean {
@@ -326,7 +340,14 @@ export function createDevecoTool(
           if (raw === null) continue;
           try {
             const job = JSON.parse(raw) as JobFile;
-            jobs.push({ ...job, running: alive(job.pid) });
+            const running = alive(job.pid);
+            if (!running) {
+              stopBackgroundHeartbeat(job.index);
+              if (job.device !== undefined && job.deviceToken !== undefined) {
+                await releaseDeviceLock(paths, job.device, job.deviceToken);
+              }
+            }
+            jobs.push({ ...job, running });
           } catch {
             /* skip corrupt job file */
           }
@@ -363,6 +384,10 @@ export function createDevecoTool(
         }
         if (found === null) return fail(`找不到后台任务：${target}`);
         const stopped = await stopJob(found.pid);
+        stopBackgroundHeartbeat(found.index);
+        if (found.device !== undefined && found.deviceToken !== undefined) {
+          await releaseDeviceLock(paths, found.device, found.deviceToken);
+        }
         return stopped
           ? ok(`已停止 deveco-${found.index}（pid ${found.pid}）`, { next: '用 `jobs` 确认没有残留；日志仍在 artifacts 里。' })
           : fail(`停止 deveco-${found.index} 失败（pid ${found.pid}）`);
@@ -463,9 +488,11 @@ export function createDevecoTool(
           }
         }
         let lockHolder: string | null = null;
-        if (policy.pool.length > 0 && device !== undefined) {
-          const lock = await acquireDeviceLock(paths, device, `${TOOL}:pipeline`, policy.lockTimeoutMs, {
-            staleAfterMs: policy.lockTimeoutMs
+        let lockToken: string | null = null;
+        if (device !== undefined) {
+          const lock = await acquireDeviceLock(paths, device, `${TOOL}:pipeline:${Date.now()}`, policy.lockTimeoutMs, {
+            staleAfterMs: policy.lockTimeoutMs,
+            leaseTtlMs: Math.max(policy.lockTimeoutMs, 10 * 60_000)
           });
           if (!lock.ok) {
             return fail(lock.reason, {
@@ -473,6 +500,7 @@ export function createDevecoTool(
             });
           }
           lockHolder = device;
+          lockToken = lock.token;
         }
         await ensureShared(paths);
         const index = await nextIndex(paths.artifactsDir, 'deveco');
@@ -629,7 +657,7 @@ export function createDevecoTool(
             }
           }
         } finally {
-          if (lockHolder !== null) await releaseDeviceLock(paths, lockHolder);
+          if (lockHolder !== null && lockToken !== null) await releaseDeviceLock(paths, lockHolder, lockToken);
         }
         const record = {
           schemaVersion: 1,
@@ -644,7 +672,21 @@ export function createDevecoTool(
           steps: records,
           ...(failed === undefined ? {} : { failedStep: failed })
         };
-        await writeTextAtomic(`${dir}/pipeline.json`, `${JSON.stringify(record, null, 2)}\n`);
+        let observationRef: string | undefined;
+        if (failed === undefined) {
+          const observationFiles = [
+            `${dir}/pipeline.json`,
+            ...(layoutWritten ? [`${dir}/layout.json`] : []),
+            ...(existsSync(shotPath) ? [shotPath] : [])
+          ].filter((file) => existsSync(file));
+          observationRef = await recordObservation(
+            paths,
+            { action: 'pipeline', ...(device === undefined ? {} : { device }), specVersion, files: observationFiles },
+            now
+          );
+        }
+        const finalRecord = { ...record, ...(observationRef === undefined ? {} : { observationRef }) };
+        await writeTextAtomic(`${dir}/pipeline.json`, `${JSON.stringify(finalRecord, null, 2)}\n`);
         await updateState(paths, now, (current) => ({ ...current, lastDevecoAt: now }));
         const files = [displayPath(paths, `${dir}/pipeline.json`), ...(layoutWritten ? [displayPath(paths, `${dir}/layout.json`)] : [])];
         if (failed !== undefined) {
@@ -664,6 +706,7 @@ export function createDevecoTool(
             `- 证据：\`${displayPath(paths, `${dir}/pipeline.json`)}\``,
             `- 设备：${device ?? '默认'}`,
             `- specVersion：${specVersion}`,
+            ...(observationRef === undefined ? [] : [`- observationRef：\`${observationRef}\``]),
             '- 这只是执行证据；是否通过仍由 `dwguard_audit` 的四维判据决定。'
           ].join('\n'),
           files,
@@ -744,6 +787,17 @@ export function createDevecoTool(
       const useBackground = args['background'] === true && (action === 'build' || action === 'run' || action === 'log');
       if (useBackground) {
         await ensureShared(paths);
+        let backgroundDevice: string | undefined;
+        let backgroundToken: string | undefined;
+        if (deviceAction && device !== undefined) {
+          const lease = await acquireDeviceLock(paths, device, `${TOOL}:${action}:${Date.now()}`, policy.lockTimeoutMs, {
+            staleAfterMs: policy.lockTimeoutMs,
+            leaseTtlMs: 30 * 60_000
+          });
+          if (!lease.ok) return fail(lease.reason, { next: '等占用设备的任务结束后再启动后台任务。' });
+          backgroundDevice = device;
+          backgroundToken = lease.token;
+        }
         const index = await nextIndex(paths.artifactsDir, 'deveco');
         const dir = `${paths.artifactsDir}/deveco-${index}`;
         await ensureDir(dir);
@@ -752,6 +806,9 @@ export function createDevecoTool(
         try {
           pid = await startJob(binary, command, paths.workspace, logFile);
         } catch (error) {
+          if (backgroundDevice !== undefined && backgroundToken !== undefined) {
+            await releaseDeviceLock(paths, backgroundDevice, backgroundToken);
+          }
           return fail(`后台启动失败：${error instanceof Error ? error.message : String(error)}`);
         }
         const job: JobFile = {
@@ -760,9 +817,25 @@ export function createDevecoTool(
           pid,
           command: `${binary} ${command.join(' ')}`,
           startedAt: now,
-          logFile
+          logFile,
+          ...(backgroundDevice === undefined ? {} : { device: backgroundDevice }),
+          ...(backgroundToken === undefined ? {} : { deviceToken: backgroundToken })
         };
         await writeTextAtomic(`${dir}/job.json`, `${JSON.stringify(job, null, 2)}\n`);
+        if (backgroundDevice !== undefined && backgroundToken !== undefined) {
+          const timer = setInterval(() => {
+            void (async () => {
+              if (!alive(pid)) {
+                stopBackgroundHeartbeat(index);
+                await releaseDeviceLock(paths, backgroundDevice, backgroundToken);
+                return;
+              }
+              await renewDeviceLease(paths, backgroundDevice, backgroundToken, 30 * 60_000).catch(() => false);
+            })();
+          }, 60_000);
+          timer.unref?.();
+          backgroundLeases.set(index, { device: backgroundDevice, token: backgroundToken, timer });
+        }
         await updateState(paths, now, (current) => ({ ...current, lastDevecoAt: now }));
         return ok(`后台任务 deveco-${index} 已启动（pid ${pid}）`, {
           detail: [`任务：deveco-${index}`, `命令：\`${job.command}\``, `日志：\`${displayPath(paths, logFile)}\``].join('\n'),
@@ -772,10 +845,12 @@ export function createDevecoTool(
       }
 
       let lockHolder: string | null = null;
+      let lockToken: string | null = null;
       let lockNote = '';
-      if (deviceAction && policy.pool.length > 0 && device !== undefined && !useBackground) {
-        const lock = await acquireDeviceLock(paths, device, `${TOOL}:${action}`, policy.lockTimeoutMs, {
-          staleAfterMs: policy.lockTimeoutMs
+      if (deviceAction && device !== undefined) {
+        const lock = await acquireDeviceLock(paths, device, `${TOOL}:${action}:${Date.now()}`, policy.lockTimeoutMs, {
+          staleAfterMs: policy.lockTimeoutMs,
+          leaseTtlMs: Math.max(policy.lockTimeoutMs, 10 * 60_000)
         });
         if (!lock.ok) {
           return fail(lock.reason, {
@@ -783,6 +858,7 @@ export function createDevecoTool(
           });
         }
         lockHolder = device;
+        lockToken = lock.token;
         lockNote = lock.staleStolen ? '（回收了过期锁）' : lock.waitedMs > 0 ? `（排队 ${lock.waitedMs}ms）` : '';
       }
 
@@ -799,7 +875,7 @@ export function createDevecoTool(
           { next: '确认 Command Line Tool 已安装、`devecocli --version` 可运行；或改用 hdc/DevEco Studio 取证。' }
         );
       } finally {
-        if (lockHolder !== null) await releaseDeviceLock(paths, lockHolder);
+        if (lockHolder !== null && lockToken !== null) await releaseDeviceLock(paths, lockHolder, lockToken);
       }
 
       await ensureShared(paths);
@@ -888,10 +964,39 @@ export function createDevecoTool(
       if (a11ySummary !== null) {
         extraFiles.push(displayPath(paths, `${dir}/a11y.json`), displayPath(paths, `${dir}/a11y-summary.json`));
       }
+      let observationRef: string | undefined;
+      const observationFiles = [
+        ...(screenshotPath !== null && existsSync(screenshotPath) ? [screenshotPath] : []),
+        ...(existsSync(`${dir}/layout.json`) ? [`${dir}/layout.json`] : []),
+        ...(existsSync(`${dir}/a11y.json`) ? [`${dir}/a11y.json`] : [])
+      ];
+      if (deviceAction && result.code === 0 && observationFiles.length > 0) {
+        let observationSpecVersion: number | undefined;
+        const specRaw = await readTextOrNull(paths.specJson);
+        if (specRaw !== null) {
+          try {
+            const parsed = JSON.parse(specRaw) as { specVersion?: unknown };
+            if (typeof parsed.specVersion === 'number') observationSpecVersion = Math.trunc(parsed.specVersion);
+          } catch {
+            /* no spec version; observation still records files/device */
+          }
+        }
+        observationRef = await recordObservation(
+          paths,
+          {
+            action,
+            ...(device === undefined ? {} : { device }),
+            ...(observationSpecVersion === undefined ? {} : { specVersion: observationSpecVersion }),
+            files: observationFiles
+          },
+          now
+        );
+      }
       const detail = [
         `命令：\`${record.command}\``,
         `退出码：${result.code} · 耗时：${result.durationMs}ms`,
         `设备策略：${policy.mode === 'matrix' ? `矩阵 ${policy.matrix.length} 族 · 并发≤${policy.maxConcurrency}` : `单机（主机内存 ${policy.hostMemoryGb}GB）`}${lockNote}`,
+        ...(observationRef === undefined ? [] : [`observationRef：\`${observationRef}\`（可作为 audit 的结构化证据）`]),
         action === 'device'
           ? `设备池：${policy.pool.length === 0 ? '（未配置）' : policy.pool.map((entry) => `${entry.sn}（${entry.family}/${entry.kind}）`).join(' · ')}`
           : '',

@@ -9,12 +9,13 @@
  * @module dwguard-dsh-hmos/evidence
  */
 
-import { stat } from 'node:fs/promises';
-import { relative, resolve, isAbsolute } from 'node:path';
+import { createHash } from 'node:crypto';
+import { readFile, stat, writeFile } from 'node:fs/promises';
+import { extname, relative, resolve, isAbsolute } from 'node:path';
 
 import type { Check } from './model.js';
 import type { SharedPaths } from './paths.js';
-import { copyFileTo, ensureDir, fileExists, sha256File, writeTextAtomic } from './util/fs.js';
+import { ensureDir, fileExists, sha256File, writeTextAtomic } from './util/fs.js';
 
 /** Caps keep a stray 200MB recording out of the audit bundle. */
 const DEFAULT_PER_FILE_BYTES = 20 * 1024 * 1024;
@@ -80,6 +81,24 @@ export async function missingEvidence(paths: SharedPaths, checks: readonly Check
   return missing;
 }
 
+/** Safe extension for a stored evidence file; unknown types become `.bin`. */
+function safeExtension(file: string): string {
+  const ext = extname(file).toLowerCase();
+  return /^\.[a-z0-9]{1,8}$/.test(ext) ? ext : '.bin';
+}
+
+/** Write a copy exclusively (`wx`) and verify the bytes we wrote. */
+async function copyFileExclusive(source: string, destination: string, expectedSha: string): Promise<number> {
+  const data = await readFile(source);
+  await writeFile(destination, data, { flag: 'wx' });
+  const written = await readFile(destination);
+  const sha = createHash('sha256').update(written).digest('hex');
+  if (sha !== expectedSha || written.length !== data.length) {
+    throw new EvidenceError(`证据复制后校验失败：${destination}`);
+  }
+  return written.length;
+}
+
 /**
  * Copy every referenced file into the bundle and write `manifest.json`.
  * @param paths - resolved protocol layout.
@@ -120,15 +139,18 @@ export async function writeEvidenceBundle(
           `证据包超过总大小上限（${totalBytes} B）：加上 ${file} 会溢出。请只保留关键证据。`
         );
       }
-      const storedAs = `evidence/${file.replace(/[\\/]+/g, '__')}`;
+      const sha256 = await sha256File(source);
+      // The original path only lives in the manifest; the stored name is
+      // collision-free and content-addressed.
+      const storedAs = `evidence/${String(files.length + 1).padStart(6, '0')}-${sha256}${safeExtension(file)}`;
       const destination = resolve(dir, storedAs);
-      const bytes = await copyFileTo(source, destination);
+      const bytes = await copyFileExclusive(source, destination, sha256);
       copiedBytes += bytes;
       files.push({
         criterionId: check.criterionId,
         path: file,
         storedAs,
-        sha256: await sha256File(destination),
+        sha256,
         bytes
       });
     }

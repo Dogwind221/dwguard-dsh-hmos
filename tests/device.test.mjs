@@ -8,7 +8,7 @@ import { after, test } from 'node:test';
 process.env.DSH_HOME = await mkdtemp(join(tmpdir(), 'dwguard-home-'));
 
 import { resolveOptions } from '../lib/config.js';
-import { acquireDeviceLock, releaseDeviceLock, resolveDevicePolicy } from '../lib/device.js';
+import { acquireDeviceLock, deviceLockFile, readDeviceLock, releaseDeviceLock, resolveDevicePolicy } from '../lib/device.js';
 import { createAuditTool } from '../lib/tools/audit.js';
 import { createDispatchTool } from '../lib/tools/dispatch.js';
 import { createPrereviewTool } from '../lib/tools/prereview.js';
@@ -107,38 +107,48 @@ test('P3-A/C/D/E: host memory decides single vs matrix, overrides win, scope and
   assert.ok(forceMatrix.warnings.some((warning) => /手写覆盖/.test(warning)));
 });
 
-test('P3-F/H: the device lock serialises access and steals stale locks', async () => {
+test('P3-F/H/0.8.5: per-device leases use tokens and do not serialise different devices', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'dwguard-lock-'));
   dirs.push(dir);
   const paths = { shared: dir };
 
   const first = await acquireDeviceLock(paths, 'em-phone', 'audit-a', 5000, { staleAfterMs: 60_000 });
   assert.equal(first.ok, true);
+  assert.equal(typeof first.token, 'string');
   // A second job must wait (P3-H: no concurrent use of one device).
   const started = Date.now();
   const secondPromise = acquireDeviceLock(paths, 'em-phone', 'audit-b', 5000, { staleAfterMs: 60_000 });
   await new Promise((resolve) => setTimeout(resolve, 150));
   assert.equal((await acquireDeviceLock(paths, 'em-phone', 'audit-c', 100, { staleAfterMs: 60_000 })).ok, false);
-  await releaseDeviceLock(paths, 'em-phone');
+  // Different device gets its own lease immediately.
+  const other = await acquireDeviceLock(paths, 'em-wide', 'audit-other', 100, { staleAfterMs: 60_000 });
+  assert.equal(other.ok, true);
+  await releaseDeviceLock(paths, 'em-wide', other.token);
+  assert.equal(await releaseDeviceLock(paths, 'em-phone', 'wrong-token'), false);
+  await releaseDeviceLock(paths, 'em-phone', first.token);
   const second = await secondPromise;
   assert.equal(second.ok, true);
   assert.ok(Date.now() - started >= 100, 'second acquire should have waited');
-  await releaseDeviceLock(paths, 'em-phone');
+  await releaseDeviceLock(paths, 'em-phone', second.token);
 
-  // An old lock is considered stale and can be stolen (P3-F timeout handling).
-  await writeFile(
-    join(dir, '.device-lock.json'),
-    `${JSON.stringify({ sn: 'em-wide', holder: 'stuck', acquiredAt: '2000-01-01T00:00:00.000Z' })}\n`
-  );
-  const stale = await acquireDeviceLock(paths, 'em-phone', 'audit-d', 1000, { staleAfterMs: 1000 });
+  // An expired lease can be reclaimed by a different token.
+  const leased = await acquireDeviceLock(paths, 'em-fold', 'stuck', 1000, { leaseTtlMs: 10_000 });
+  assert.equal(leased.ok, true);
+  const file = deviceLockFile(paths, 'em-fold');
+  const raw = JSON.parse(await readFile(file, 'utf8'));
+  raw.expiresAt = '2000-01-01T00:00:00.000Z';
+  await writeFile(file, `${JSON.stringify(raw, null, 2)}\n`);
+  const stale = await acquireDeviceLock(paths, 'em-fold', 'audit-d', 1000, { staleAfterMs: 1000 });
   assert.equal(stale.ok, true);
   assert.equal(stale.staleStolen, true);
-  await releaseDeviceLock(paths, 'em-phone');
+  assert.notEqual(stale.token, leased.token);
+  assert.equal((await readDeviceLock(paths, 'em-fold'))?.token, stale.token);
+  await releaseDeviceLock(paths, 'em-fold', stale.token);
 });
 
 test('P3-B/P3-G: matrix audit refuses missing screen families, then passes with full coverage', async () => {
   const cwd = await workspace();
-  const options = resolveOptions({ hostMemoryGb: 32, devicePool: pool });
+  const options = resolveOptions({ strictEvidence: false, hostMemoryGb: 32, devicePool: pool });
   const set = tools(options);
   await ready(cwd, set);
 
@@ -177,7 +187,7 @@ test('P3-B/P3-G: matrix audit refuses missing screen families, then passes with 
 
 test('P3-A: 16GB host forces single-device audit and needs no family fields', async () => {
   const cwd = await workspace();
-  const options = resolveOptions({ hostMemoryGb: 16, devicePool: pool });
+  const options = resolveOptions({ strictEvidence: false, hostMemoryGb: 16, devicePool: pool });
   const set = tools(options);
   await ready(cwd, set);
   const result = await set.audit.execute(
@@ -200,6 +210,7 @@ test('P3-A: 16GB host forces single-device audit and needs no family fields', as
 test('P3-B waivers: allowMissingMatrixFamilies downgrades missing families to warnings', async () => {
   const cwd = await workspace();
   const options = resolveOptions({
+    strictEvidence: false,
     hostMemoryGb: 32,
     devicePool: pool.filter((entry) => entry.family === 'phone'),
     allowMissingMatrixFamilies: true
@@ -220,7 +231,7 @@ test('P3-B waivers: allowMissingMatrixFamilies downgrades missing families to wa
 
 test('matrix mode requires device/family on every check', async () => {
   const cwd = await workspace();
-  const options = resolveOptions({ hostMemoryGb: 32, devicePool: pool });
+  const options = resolveOptions({ strictEvidence: false, hostMemoryGb: 32, devicePool: pool });
   const set = tools(options);
   await ready(cwd, set);
   const result = await set.audit.execute(

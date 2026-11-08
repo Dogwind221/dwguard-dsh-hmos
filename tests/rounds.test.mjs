@@ -22,7 +22,7 @@ after(async () => {
   for (const dir of dirs) await rm(dir, { recursive: true, force: true });
 });
 
-const options = resolveOptions({});
+const options = resolveOptions({ strictEvidence: false });
 const specTool = createSpecTool(options);
 const prereviewTool = createPrereviewTool(options);
 const dispatchTool = createDispatchTool(options);

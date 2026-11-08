@@ -12,6 +12,9 @@
  * @module dwguard-dsh-hmos/web
  */
 
+import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
+
 import type { Options } from './config.js';
 import type { PluginContext } from './context.js';
 import { readBoard } from './board.js';
@@ -43,9 +46,26 @@ interface WebServerLike {
 interface BoardResponse {
   readonly generatedAt: string;
   readonly sharedDir: string;
-  readonly workspaces: ReadonlyArray<{ readonly path: string; readonly name: string; readonly lastSeen: string }>;
+  readonly workspaces: ReadonlyArray<{ readonly id: string; readonly name: string; readonly lastSeen: string }>;
   readonly active: string | null;
-  readonly board: Awaited<ReturnType<typeof readBoard>>;
+  readonly board: Awaited<ReturnType<typeof readBoard>> | null;
+}
+
+function workspaceId(path: string): string {
+  return createHash('sha256').update(resolve(path)).digest('hex').slice(0, 16);
+}
+
+function hostname(host: string): string {
+  if (host.startsWith('[')) {
+    const end = host.indexOf(']');
+    return end < 0 ? host : host.slice(1, end).toLowerCase();
+  }
+  return host.split(':')[0]?.toLowerCase() ?? host.toLowerCase();
+}
+
+function isLoopbackHost(host: string): boolean {
+  const name = hostname(host);
+  return name === 'localhost' || name === '127.0.0.1' || name === '::1';
 }
 
 function headerValue(request: IncomingLike, name: string): string | undefined {
@@ -83,25 +103,64 @@ function mount(ctx: PluginContext, options: Options): void {
           sendJson(response, 403, { error: 'cross-site request refused' });
           return;
         }
-        if (headerValue(request, 'host') === undefined) {
+        const host = headerValue(request, 'host');
+        if (host === undefined) {
           sendJson(response, 400, { error: 'missing host header' });
           return;
         }
+        if (options.boardToken.length === 0 && !isLoopbackHost(host)) {
+          sendJson(response, 403, { error: 'board is loopback-only; configure boardToken to allow remote hosts' });
+          return;
+        }
+        const token = headerValue(request, 'x-dwguard-token');
+        if (options.boardToken.length > 0 && token !== options.boardToken) {
+          sendJson(response, 403, { error: 'invalid board token' });
+          return;
+        }
+        const origin = headerValue(request, 'origin');
+        if (origin !== undefined) {
+          try {
+            const parsed = new URL(origin);
+            if (!isLoopbackHost(parsed.host) && hostname(parsed.host) !== hostname(host)) {
+              sendJson(response, 403, { error: 'cross-origin request refused' });
+              return;
+            }
+          } catch {
+            sendJson(response, 403, { error: 'invalid origin' });
+            return;
+          }
+        }
 
         const url = new URL(request.url ?? '/', 'http://localhost');
-        const requested = url.searchParams.get('cwd');
+        const requestedId = url.searchParams.get('workspace');
+        const requestedCwd = url.searchParams.get('cwd');
         const now = nowIso();
         try {
           const records = await listWorkspaces();
-          const workspaces = records.map((record) => ({
-            path: record.path,
+          const views = records.map((record) => ({
+            id: workspaceId(record.path),
             name: workspaceName(record.path),
             lastSeen: record.lastSeen
           }));
-          const active =
-            requested !== null && requested.trim().length > 0 ? requested.trim() : (workspaces[0]?.path ?? null);
-          const board = active === null ? null : await readBoard(active, options, now);
-          const body: BoardResponse = { generatedAt: now, sharedDir: options.sharedDir, workspaces, active, board };
+          let activeRecord = records[0] ?? null;
+          if (requestedId !== null && requestedId.trim().length > 0) {
+            const wanted = requestedId.trim();
+            activeRecord = records.find((record) => workspaceId(record.path) === wanted) ?? null;
+            if (activeRecord === null) {
+              sendJson(response, 403, { error: 'workspace is not registered' });
+              return;
+            }
+          } else if (requestedCwd !== null && requestedCwd.trim().length > 0) {
+            const wanted = resolve(requestedCwd.trim());
+            activeRecord = records.find((record) => resolve(record.path) === wanted) ?? null;
+            if (activeRecord === null) {
+              sendJson(response, 403, { error: 'workspace is not registered' });
+              return;
+            }
+          }
+          const active = activeRecord === null ? null : workspaceId(activeRecord.path);
+          const board = activeRecord === null ? null : await readBoard(activeRecord.path, options, now);
+          const body: BoardResponse = { generatedAt: now, sharedDir: options.sharedDir, workspaces: views, active, board };
           sendJson(response, 200, body);
         } catch (error) {
           ctx.logger?.warn?.(`[dwguard-hmos] 看板接口失败：${error instanceof Error ? error.message : String(error)}`);

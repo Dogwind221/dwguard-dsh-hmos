@@ -29,6 +29,7 @@ import { createScanTool } from './tools/scan.js';
 import { createShadowTool } from './tools/shadow.js';
 import { createSpecTool } from './tools/spec.js';
 import { createStatusTool } from './tools/status.js';
+import { withCommandIdempotency } from './idempotency.js';
 import { registerBoardRoute } from './web.js';
 
 /** Cordis plugin name. */
@@ -81,7 +82,7 @@ export function apply(ctx: PluginContext, config?: unknown): void {
     createConfirmTool(options, ctx),
     createKnowledgeTool(options, ctx),
     createStatusTool(options, ctx)
-  ];
+  ].map((tool) => withCommandIdempotency(tool, options, ctx));
   for (const tool of tools) {
     try {
       ctx.tools.register(tool);

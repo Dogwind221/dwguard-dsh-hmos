@@ -7,7 +7,8 @@
 import type { SharedState } from './model.js';
 import { emptyState } from './model.js';
 import type { SharedPaths } from './paths.js';
-import { listDir, readTextOrNull, writeTextAtomic } from './util/fs.js';
+import { withFileLock } from './lockfile.js';
+import { ensureDir, listDir, readTextOrNull, writeTextAtomic } from './util/fs.js';
 
 /**
  * Read the state document, repairing missing or corrupt fields in memory.
@@ -32,6 +33,7 @@ export async function readState(paths: SharedPaths, now: string): Promise<Shared
   };
   return {
     schemaVersion: 1,
+    revision: num('revision', 0),
     iteration: num('iteration', base.iteration),
     specVersion: num('specVersion', base.specVersion),
     prereviews: num('prereviews', base.prereviews),
@@ -71,28 +73,47 @@ export async function updateState(
   now: string,
   mutate: (state: SharedState) => SharedState
 ): Promise<SharedState> {
-  const current = await readState(paths, now);
-  const next = { ...mutate(current), updatedAt: now };
-  await writeState(paths, next);
-  return next;
+  return withFileLock(`${paths.stateFile}.lock`, async () => {
+    const current = await readState(paths, now);
+    const next = {
+      ...mutate(current),
+      revision: (current.revision ?? 0) + 1,
+      updatedAt: now
+    };
+    await writeState(paths, next);
+    return next;
+  });
 }
 
 /**
  * Next free numeric suffix for `<prefix>-<n>` files in a directory.
+ * The counter is reserved under a lock, so concurrent callers cannot both
+ * receive the same audit/deveco id.
  * @param dir - directory to scan.
  * @param prefix - file stem before the dash.
  */
 export async function nextIndex(dir: string, prefix: string): Promise<number> {
-  const entries = await listDir(dir);
-  let max = 0;
-  const pattern = new RegExp(`^${prefix}-(\\d+)(?:\\.(?:md|json))?$`);
-  for (const entry of entries) {
-    const match = pattern.exec(entry);
-    if (match?.[1] === undefined) continue;
-    const value = Number.parseInt(match[1], 10);
-    if (Number.isFinite(value) && value > max) max = value;
-  }
-  return max + 1;
+  return withFileLock(`${dir}/.index-${prefix}.lock`, async () => {
+    await ensureDir(dir);
+    const entries = await listDir(dir);
+    let max = 0;
+    const pattern = new RegExp(`^${prefix}-(\\d+)(?:\\.(?:md|json))?$`);
+    for (const entry of entries) {
+      if (entry === `.index-${prefix}.counter`) continue;
+      const match = pattern.exec(entry);
+      if (match?.[1] === undefined) continue;
+      const value = Number.parseInt(match[1], 10);
+      if (Number.isFinite(value) && value > max) max = value;
+    }
+    const raw = await readTextOrNull(`${dir}/.index-${prefix}.counter`);
+    if (raw !== null) {
+      const reserved = Number.parseInt(raw.trim(), 10);
+      if (Number.isFinite(reserved) && reserved > max) max = reserved;
+    }
+    const next = max + 1;
+    await writeTextAtomic(`${dir}/.index-${prefix}.counter`, `${next}\n`);
+    return next;
+  });
 }
 
 /** Latest numbered artifact of one kind, as parsed JSON. */

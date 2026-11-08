@@ -38,7 +38,7 @@ export declare function readAuditProgress(paths: SharedPaths): Promise<AuditProg
  * @param now - ISO timestamp.
  */
 export declare function recordDimension(paths: SharedPaths, specVersion: number, dimension: Dimension, passed: number, failed: number, note: string | undefined, now: string): Promise<AuditProgress>;
-/** Drop the progress document (after the final audit recorded all four). */
-export declare function clearAuditProgress(paths: SharedPaths): Promise<void>;
+/** Drop one version's progress directory (after the final audit recorded all four). */
+export declare function clearAuditProgress(paths: SharedPaths, specVersion?: number): Promise<void>;
 /** Dimensions that already returned for this pack version. */
 export declare function returnedDimensions(progress: AuditProgress | null, specVersion: number): Dimension[];

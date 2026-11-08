@@ -31,11 +31,14 @@ export interface DeviceConfig {
     readonly lockTimeoutMs: number;
     readonly warnings: readonly string[];
 }
-/** One lock record in `.shared/.device-lock.json`. */
+/** One lock record in `.device-locks/<id>.json` (0.8.5 per-device lease). */
 export interface DeviceLock {
     readonly sn: string;
-    readonly holder: string;
+    readonly token: string;
+    readonly jobId: string;
     readonly acquiredAt: string;
+    readonly heartbeatAt: string;
+    readonly expiresAt: string;
 }
 /**
  * Resolve the effective device policy from config values plus host memory.
@@ -71,13 +74,18 @@ export declare function collectDeviceEvidence(checks: ReadonlyArray<{
     apiLevel?: number;
     kind?: 'emulator' | 'real';
 }>;
-/** Path of the shared device lock. */
-export declare function deviceLockFile(paths: SharedPaths): string;
-/** Read the current device lock, if any. */
-export declare function readDeviceLock(paths: SharedPaths): Promise<DeviceLock | null>;
-/** Acquire outcome: success (with wait/stale info) or timeout. */
+/** Per-device lock directory. */
+export declare function deviceLocksDir(paths: SharedPaths): string;
+/** Lock file for one serial (hashed to a safe filename). */
+export declare function deviceLockFile(paths: SharedPaths, sn: string): string;
+/** Read one device's lease, or the first lease when `sn` is omitted. */
+export declare function readDeviceLock(paths: SharedPaths, sn?: string): Promise<DeviceLock | null>;
+/** All current leases (for status/reporting). */
+export declare function readDeviceLocks(paths: SharedPaths): Promise<DeviceLock[]>;
+/** Acquire outcome: success (with token) or timeout. */
 export type DeviceLockResult = {
     readonly ok: true;
+    readonly token: string;
     readonly waitedMs: number;
     readonly staleStolen: boolean;
 } | {
@@ -85,16 +93,19 @@ export type DeviceLockResult = {
     readonly reason: string;
 };
 /**
- * Acquire the shared device lock, waiting up to `timeoutMs`.
- *
- * A lock older than `staleAfterMs` (defaults to `timeoutMs`) is considered
- * stale and is stolen (the caller gets `staleStolen: true` so it can warn).
- * Waiting polls every `pollMs`.
+ * Acquire a per-device lease. Acquisition is `wx`-exclusive; a token is
+ * returned and is required to release/renew. Different devices use different
+ * files and therefore do not serialise against each other.
  */
 export declare function acquireDeviceLock(paths: SharedPaths, sn: string, holder: string, timeoutMs: number, options?: {
     readonly now?: string;
     readonly pollMs?: number;
     readonly staleAfterMs?: number;
+    readonly leaseTtlMs?: number;
+    readonly token?: string;
+    readonly jobId?: string;
 }): Promise<DeviceLockResult>;
-/** Release the lock when it belongs to `sn`. */
-export declare function releaseDeviceLock(paths: SharedPaths, sn: string): Promise<boolean>;
+/** Renew a lease only when the caller still owns its token. */
+export declare function renewDeviceLease(paths: SharedPaths, sn: string, token: string, ttlMs: number): Promise<boolean>;
+/** Release only when the caller still owns the token. */
+export declare function releaseDeviceLock(paths: SharedPaths, sn: string, token: string): Promise<boolean>;

@@ -12,6 +12,7 @@
 
 import type { Options } from './config.js';
 import type {
+  ActualInput,
   Check,
   CheckResult,
   Criterion,
@@ -19,6 +20,7 @@ import type {
   DeviceEvidence,
   Dimension,
   Finding,
+  MeasurementActual,
   ReviewDimension,
   ScreenFamily,
   Severity,
@@ -29,6 +31,7 @@ import {
   DIMENSION_LABELS,
   SCREEN_FAMILY_LABELS
 } from './model.js';
+import { formatMeasurement, measurementValue, parseActualInput } from './actual.js';
 import type { DeviceConfig } from './device.js';
 import { matrixFamilies } from './device.js';
 import type { AestheticProfile } from './aesthetic.js';
@@ -65,7 +68,9 @@ export interface CheckInput {
   readonly note?: string;
   readonly evidenceFiles?: readonly string[];
   /** Measured value for a criterion that carries an `assertion`. */
-  readonly actual?: string;
+  readonly actual?: ActualInput;
+  /** Structured measurement (also accepted directly by callers). */
+  readonly measurement?: MeasurementActual;
   /** Device serial the evidence was taken on. */
   readonly device?: string;
   /** Screen family the device belongs to. */
@@ -237,30 +242,41 @@ export function normalizeFindings(input: readonly FindingInput[]): Finding[] {
 
 /** Rebuild canonical checks from model input. */
 export function normalizeChecks(input: readonly CheckInput[]): Check[] {
-  return input.map((item) => ({
-    criterionId: inline(item.criterionId),
-    result: item.result,
-    evidence: inline(item.evidence),
-    ...(item.note === undefined ? {} : { note: inline(item.note) }),
-    ...(item.actual === undefined || item.actual.trim().length === 0 ? {} : { actual: item.actual.trim() }),
-    ...(item.device === undefined || item.device.trim().length === 0 ? {} : { device: item.device.trim() }),
-    ...(item.family === undefined ? {} : { family: item.family }),
-    ...(item.profileRef === undefined || item.profileRef.trim().length === 0
-      ? {}
-      : { profileRef: item.profileRef.trim() }),
-    ...(item.designRefs === undefined || item.designRefs.length === 0
-      ? {}
-      : { designRefs: [...new Set(item.designRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
-    ...(item.antiPatternRefs === undefined || item.antiPatternRefs.length === 0
-      ? {}
-      : { antiPatternRefs: [...new Set(item.antiPatternRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
-    ...(item.principleRefs === undefined || item.principleRefs.length === 0
-      ? {}
-      : { principleRefs: [...new Set(item.principleRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
-    ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
-      ? {}
-      : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
-  }));
+  return input.map((item) => {
+    const parsed =
+      item.measurement !== undefined
+        ? { measurement: item.measurement, actual: formatMeasurement(item.measurement) }
+        : typeof item.actual === 'string' || item.actual === undefined
+          ? { actual: item.actual?.trim() }
+          : parseActualInput(item.actual);
+    const actual = parsed.actual;
+    const measurement = parsed.measurement;
+    return {
+      criterionId: inline(item.criterionId),
+      result: item.result,
+      evidence: inline(item.evidence),
+      ...(item.note === undefined ? {} : { note: inline(item.note) }),
+      ...(actual === undefined || actual.length === 0 ? {} : { actual }),
+      ...(measurement === undefined ? {} : { measurement }),
+      ...(item.device === undefined || item.device.trim().length === 0 ? {} : { device: item.device.trim() }),
+      ...(item.family === undefined ? {} : { family: item.family }),
+      ...(item.profileRef === undefined || item.profileRef.trim().length === 0
+        ? {}
+        : { profileRef: item.profileRef.trim() }),
+      ...(item.designRefs === undefined || item.designRefs.length === 0
+        ? {}
+        : { designRefs: [...new Set(item.designRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
+      ...(item.antiPatternRefs === undefined || item.antiPatternRefs.length === 0
+        ? {}
+        : { antiPatternRefs: [...new Set(item.antiPatternRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
+      ...(item.principleRefs === undefined || item.principleRefs.length === 0
+        ? {}
+        : { principleRefs: [...new Set(item.principleRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
+      ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
+        ? {}
+        : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
+    };
+  });
 }
 
 function looksSelfReported(evidence: string): boolean {
@@ -274,32 +290,44 @@ export interface AssertionEvaluation {
   readonly reason: string;
 }
 
-function firstNumber(value: string): number | undefined {
-  const match = /-?\d+(?:\.\d+)?/.exec(value);
-  return match === null ? undefined : Number(match[0]);
-}
+
 
 /**
  * Recompute a criterion assertion from the measured `actual` value.
  *
- * Numeric matchers read the first number in `actual` (`"12vp"` → 12,
- * `"720ms"` → 720), so measurements can keep their unit in the evidence text.
+ * String measurements are accepted for text matchers (`equals` text,
+ * `contains`, `regex`, `oneOf`, `present`). Numeric matchers require a
+ * structured `{ value, unit?, samples?, aggregation? }` measurement; free-text
+ * "first number" extraction is not allowed (0.8.5).
  *
  * @param assertion - the frozen expectation from the task pack.
  * @param actual - the measured value the auditor supplied.
  * @returns the recomputed verdict and the comparison that produced it.
  */
-export function evaluateAssertion(assertion: CriterionAssertion, actual: string): AssertionEvaluation {
-  const measured = actual.trim();
+export function evaluateAssertion(assertion: CriterionAssertion, actual: ActualInput): AssertionEvaluation {
+  const measurement = typeof actual === 'string' ? undefined : actual;
+  let measured: string;
+  try {
+    measured = typeof actual === 'string' ? actual.trim() : formatMeasurement(actual);
+  } catch (error) {
+    return { verdict: 'fail', reason: `actual 无法聚合：${(error as Error).message}` };
+  }
   const expected = Array.isArray(assertion.expected)
     ? assertion.expected.map((item) => String(item))
     : assertion.expected === undefined
       ? undefined
       : [String(assertion.expected)];
-  const numeric = firstNumber(measured);
   const pass = (reason: string): AssertionEvaluation => ({ verdict: 'pass', reason });
   const fail = (reason: string): AssertionEvaluation => ({ verdict: 'fail', reason });
   const wanted = expected === undefined ? '' : (expected[0] ?? '');
+  const numeric = measurement === undefined ? undefined : Number(measurementValue(measurement));
+  const unitError = (): AssertionEvaluation | null => {
+    if (assertion.unit === undefined) return null;
+    if (measurement === undefined) return fail('数值断言必须使用结构化 actual，并带 unit');
+    if (measurement.unit === undefined) return fail(`actual 缺少 unit（期望 ${assertion.unit}）`);
+    if (measurement.unit !== assertion.unit) return fail(`actual 单位 ${measurement.unit} ≠ 期望 ${assertion.unit}`);
+    return null;
+  };
 
   switch (assertion.matcher) {
     case 'present':
@@ -307,11 +335,15 @@ export function evaluateAssertion(assertion: CriterionAssertion, actual: string)
         ? fail('actual 为空，不满足 present')
         : pass(`actual「${truncate(measured, 40)}」非空`);
     case 'equals': {
-      if (numeric !== undefined) {
-        const expectedNumber = firstNumber(wanted);
-        if (expectedNumber !== undefined && expectedNumber === numeric) {
+      if (typeof assertion.expected === 'number') {
+        if (measurement === undefined) return fail('数值 equals 必须使用结构化 actual');
+        const unitFailure = unitError();
+        if (unitFailure !== null) return unitFailure;
+        const expectedNumber = assertion.expected;
+        if (numeric !== undefined && Number.isFinite(numeric) && numeric === expectedNumber) {
           return pass(`actual ${numeric} = expected ${expectedNumber}`);
         }
+        return fail(`actual ${String(numeric)} ≠ expected ${expectedNumber}`);
       }
       return measured === wanted.trim()
         ? pass(`actual「${measured}」= expected「${wanted}」`)
@@ -337,21 +369,33 @@ export function evaluateAssertion(assertion: CriterionAssertion, actual: string)
         : fail(`actual「${truncate(measured, 40)}」不在 {${list.join(', ')}} 中`);
     }
     case 'range': {
-      if (numeric === undefined) return fail('actual 不是数值，无法与 range 比较');
+      if (measurement === undefined || numeric === undefined || !Number.isFinite(numeric)) {
+        return fail('range 必须使用结构化数值 actual');
+      }
+      const unitFailure = unitError();
+      if (unitFailure !== null) return unitFailure;
       const { min, max } = assertion;
       if (min !== undefined && numeric < min) return fail(`actual ${numeric} < min ${min}`);
       if (max !== undefined && numeric > max) return fail(`actual ${numeric} > max ${max}`);
       return pass(`actual ${numeric} ∈ [${min ?? '−∞'}, ${max ?? '∞'}]`);
     }
     case 'gte': {
-      if (numeric === undefined) return fail('actual 不是数值，无法与 gte 比较');
+      if (measurement === undefined || numeric === undefined || !Number.isFinite(numeric)) {
+        return fail('gte 必须使用结构化数值 actual');
+      }
+      const unitFailure = unitError();
+      if (unitFailure !== null) return unitFailure;
       const bound = Number(wanted);
       return Number.isFinite(bound) && numeric >= bound
         ? pass(`actual ${numeric} ≥ ${bound}`)
         : fail(`actual ${numeric} < ${bound}`);
     }
     case 'lte': {
-      if (numeric === undefined) return fail('actual 不是数值，无法与 lte 比较');
+      if (measurement === undefined || numeric === undefined || !Number.isFinite(numeric)) {
+        return fail('lte 必须使用结构化数值 actual');
+      }
+      const unitFailure = unitError();
+      if (unitFailure !== null) return unitFailure;
       const bound = Number(wanted);
       return Number.isFinite(bound) && numeric <= bound
         ? pass(`actual ${numeric} ≤ ${bound}`)
@@ -365,10 +409,10 @@ export function applyAssertionVerdicts(pack: TaskPack, checks: readonly Check[])
   const known = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
   return checks.map((check) => {
     const criterion = known.get(check.criterionId);
-    if (criterion?.assertion === undefined || check.actual === undefined || check.actual.length === 0) {
+    if (criterion?.assertion === undefined || (check.actual === undefined && check.measurement === undefined)) {
       return check;
     }
-    return { ...check, assertionVerdict: evaluateAssertion(criterion.assertion, check.actual).verdict };
+    return { ...check, assertionVerdict: evaluateAssertion(criterion.assertion, check.measurement ?? check.actual ?? '').verdict };
   });
 }
 
@@ -438,7 +482,8 @@ export function gateDelivery(
   findings: readonly Finding[],
   policy?: DeviceConfig,
   aesthetic?: AestheticProfile,
-  design?: ReadonlyMap<string, DesignCard>
+  design?: ReadonlyMap<string, DesignCard>,
+  strictEvidence = true
 ): Gate {
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -463,15 +508,33 @@ export function gateDelivery(
     if (check.result !== 'unverified' && check.evidence.length < 4) {
       errors.push(`${label} 判为「${RESULT_LABELS[check.result]}」但没有证据。`);
     }
+    const structuredEvidence =
+      (check.evidenceFiles?.length ?? 0) > 0 || check.measurement?.observationRef !== undefined;
+    if (strictEvidence && check.result === 'pass' && criterion.weight === 'must' && !structuredEvidence) {
+      errors.push(
+        `${label} 是 must 判据且判为「通过」，但没有结构化证据（\`evidenceFiles\` 或 \`actual.observationRef\`）；文字自述不能单独构成通过依据。`
+      );
+    }
+    if (
+      strictEvidence &&
+      policy?.mode === 'matrix' &&
+      check.result === 'pass' &&
+      criterion.weight === 'must' &&
+      check.device !== undefined &&
+      check.measurement?.observationRef === undefined
+    ) {
+      errors.push(`${label} 在 matrix 模式下的 must+pass 必须带采集器 \`actual.observationRef\`，不能只凭设备字段。`);
+    }
     if (check.result === 'fail') {
-      if (criterion.weight === 'must') {
-        errors.push(`${label} 的结论是「未通过」，must 判据未通过就不能宣告验收。`);
+      if (criterion.weight === 'must') {        errors.push(`${label} 的结论是「未通过」，must 判据未通过就不能宣告验收。`);
       } else {
         warnings.push(`${label} 的结论是「未通过」（should 判据），可以带风险通过但需写进遗留风险。`);
       }
     }
     if (looksSelfReported(check.evidence)) {
-      warnings.push(`${label} 的证据像执行者自述（「${truncate(check.evidence, 24)}」），DSH 需要独立取证。`);
+      const message = `${label} 的证据像执行者自述（「${truncate(check.evidence, 24)}」），DSH 需要独立取证。`;
+      if (strictEvidence) errors.push(message);
+      else warnings.push(message);
     }
     if (criterion.assertion !== undefined) {
       const described = assertionLabel(criterion.assertion);
@@ -482,7 +545,12 @@ export function gateDelivery(
           warnings.push(`${label} 带可执行断言（${described}），但缺少 \`actual\` 实测值，无法自动复核。`);
         }
       } else {
-        const evaluation = evaluateAssertion(criterion.assertion, check.actual);
+        if (strictEvidence && check.measurement === undefined) {
+          errors.push(
+            `${label} 的 \`actual\` 是自由文本；严格模式要求结构化测量 { value, unit?, samples?, aggregation? }。`
+          );
+        }
+        const evaluation = evaluateAssertion(criterion.assertion, check.measurement ?? check.actual);
         if (evaluation.verdict === 'fail' && check.result === 'pass') {
           errors.push(`${label} 的断言判定不通过（${evaluation.reason}），但检查结论是「通过」；两者矛盾，请复核 actual 或证据。`);
         } else if (evaluation.verdict === 'pass' && check.result === 'fail') {
@@ -611,6 +679,18 @@ export function gateDelivery(
         errors.push(
           `\`${check.criterionId}\` 在 matrix 模式（主机内存 ${policy.hostMemoryGb}GB）下缺少 \`device\` / \`family\`；矩阵取证必须标明设备与屏幕族。`
         );
+        continue;
+      }
+      if (policy.pool.length > 0) {
+        const pooled = policy.pool.find((entry) => entry.sn === check.device);
+        if (pooled === undefined) {
+          errors.push(`\`${check.criterionId}\` 的 device \`${check.device}\` 不在 devicePool 中；不能声明未配置的设备。`);
+        } else if (pooled.family !== check.family) {
+          errors.push(
+            `\`${check.criterionId}\` 的 device \`${check.device}\` 在设备池里属于「${SCREEN_FAMILY_LABELS[pooled.family]}」，` +
+              `但检查声明的是「${SCREEN_FAMILY_LABELS[check.family]}」。`
+          );
+        }
       }
     }
     for (const criterion of pack.criteria) {

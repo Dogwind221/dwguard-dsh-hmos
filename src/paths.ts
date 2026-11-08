@@ -31,6 +31,8 @@ export interface SharedPaths {
   readonly knowledgeIndex: string;
   /** Per-dimension audit progress, written as each audit sub-agent returns. */
   readonly auditProgress: string;
+  /** Split progress directory: `<specVersion>/<dimension>.json` (0.8.5). */
+  readonly auditProgressDir: string;
   /** Append-only gate calibration ledger (`knowledge/calibration.jsonl`). */
   readonly calibration: string;
   /** Aesthetic preference profile (`knowledge/aesthetic-profile.md`, table + JSON fence). */
@@ -103,6 +105,7 @@ export function resolvePaths(workspace: string, sharedDir: string): SharedPaths 
     questionMd: resolve(shared, 'tasks', 'question.md'),
     knowledgeIndex: resolve(shared, 'knowledge', 'index.json'),
     auditProgress: resolve(shared, 'artifacts', 'audit-progress.json'),
+    auditProgressDir: resolve(shared, 'artifacts', 'audit-progress'),
     calibration: resolve(shared, 'knowledge', 'calibration.jsonl'),
     aestheticProfileMd: resolve(shared, 'knowledge', 'aesthetic-profile.md'),
     aestheticHistory: resolve(shared, 'knowledge', 'aesthetic-history.jsonl'),

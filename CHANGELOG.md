@@ -4,6 +4,49 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.5 — 2026-11-08
+
+Security hardening for the six release blockers found in the 0.8.0 review.
+
+### Changed (breaking)
+
+- `strictEvidence` defaults to `true`: must + pass requires `evidenceFiles` or a
+  collector `observationRef`; self-report text is now an error, not a warning.
+- `actual` must be structured for numeric assertions:
+  `{ value, unit?, samples?, aggregation? }`. Free-text extraction of the first
+  number is removed; unit mismatches fail; multi-sample performance values need
+  `max` / `p95` / `mean`.
+- Matrix audits validate `device` against `devicePool` and require the family to
+  match; matrix must+pass also requires a collector `observationRef`, which
+  validates the collector device and spec version.
+- Board responses return workspace ids instead of absolute paths; the client uses
+  `?workspace=<id>`.
+
+### Added
+
+- Design-pack import hardening: requested name must equal `pack.json.name`;
+  `resolve`/`relative`/`realpath` containment; image sha256 validation; all paths
+  are validated before any copy/write.
+- Evidence bundle names are `evidence/000001-<sha256>.<ext>` and are created with
+  `wx`; destination bytes are re-hashed.
+- Per-device leases in `.device-locks/<hash>.json` with `token`, `jobId`,
+  `acquiredAt`, `heartbeatAt`, `expiresAt`; `wx` acquisition, token-checked
+  renew/release, background heartbeat, and different devices run independently.
+- State `revision` + lock-protected updates; atomic id reservation; per-dimension
+  progress files `audit-progress/<specVersion>/<dimension>.json`.
+- `commandId` on every tool via the idempotency ledger; re-submitting an id
+  returns the first result instead of repeating bookkeeping.
+- Board: loopback-only by default, optional `boardToken` (`x-dwguard-token`),
+  Host/Origin checks, registered-workspace allowlist, no absolute workspace
+  paths in responses.
+- `observationRef` support for collector evidence.
+
+### Tests
+
+- 161/161; added collision/path-traversal, strict evidence, structured actual,
+  device pool, per-device lease/background lifecycle, state CAS, index
+  reservation, progress split, commandId replay and board auth regressions.
+
 ## 0.8.0 — 2026-11-06
 
 The recovery/knowledge/execution release. This is a developer-side AI-native

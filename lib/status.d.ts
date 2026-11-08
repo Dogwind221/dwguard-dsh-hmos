@@ -43,7 +43,7 @@ export interface Snapshot {
     /** Current device lock, when one is held. */
     readonly deviceLock: {
         readonly sn: string;
-        readonly holder: string;
+        readonly jobId: string;
         readonly acquiredAt: string;
     } | null;
     readonly phase: Phase;

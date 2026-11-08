@@ -15,7 +15,7 @@ import { createDispatchTool } from '../lib/tools/dispatch.js';
 import { createPrereviewTool } from '../lib/tools/prereview.js';
 import { createSpecTool } from '../lib/tools/spec.js';
 
-const options = resolveOptions({});
+const options = resolveOptions({ strictEvidence: false });
 const specTool = createSpecTool(options);
 const prereviewTool = createPrereviewTool(options);
 const dispatchTool = createDispatchTool(options);
@@ -93,10 +93,10 @@ async function ready(cwd) {
 }
 
 const goodChecks = [
-  { criterionId: 'F-01', result: 'pass', evidence: '点打卡后 3→4，截图 artifacts/F-01.png', actual: '4' },
-  { criterionId: 'A-01', result: 'pass', evidence: '布局树 bounds 实测 12vp', actual: '12vp' },
-  { criterionId: 'P-01', result: 'pass', evidence: 'Profiler 3 次启动 700/720/760ms', actual: '720ms' },
-  { criterionId: 'X-01', result: 'pass', evidence: '截图取样计算对比度 4.9:1', actual: '4.9:1' }
+  { criterionId: 'F-01', result: 'pass', evidence: '点打卡后 3→4，截图 artifacts/F-01.png', actual: { value: 4 } },
+  { criterionId: 'A-01', result: 'pass', evidence: '布局树 bounds 实测 12vp', actual: { value: 12, unit: 'vp' } },
+  { criterionId: 'P-01', result: 'pass', evidence: 'Profiler 3 次启动 680/700/720ms', actual: { value: 720, unit: 'ms', samples: [680, 720, 700], aggregation: 'max' } },
+  { criterionId: 'X-01', result: 'pass', evidence: '截图取样计算对比度 4.9:1', actual: { value: 4.9, unit: 'ratio' } }
 ];
 
 test('spec freezes machine-checkable assertions and keeps them through validate', async () => {
@@ -162,7 +162,7 @@ test('audit refuses a pass that contradicts the assertion', async () => {
   await ready(cwd);
 
   const contradicting = goodChecks.map((check) =>
-    check.criterionId === 'P-01' ? { ...check, actual: '1240ms' } : check
+    check.criterionId === 'P-01' ? { ...check, actual: { value: 1240, unit: 'ms' } } : check
   );
   const result = await auditTool.execute({ note: '复测冷启动', checks: contradicting }, exec(cwd));
   assert.equal(result.ok, false);
@@ -193,21 +193,25 @@ test('audit refuses a pass without the required actual value', async () => {
 test('evaluateAssertion implements every matcher', () => {
   const pass = (assertion, actual) => evaluateAssertion(assertion, actual).verdict === 'pass';
   assert.equal(pass({ matcher: 'equals', expected: '4' }, '4'), true);
-  assert.equal(pass({ matcher: 'equals', expected: 4 }, '4 天'), true);
+  assert.equal(pass({ matcher: 'equals', expected: 4 }, { value: 4 }), true);
   assert.equal(pass({ matcher: 'equals', expected: '4' }, '3'), false);
   assert.equal(pass({ matcher: 'contains', expected: '连续' }, '连续天数 4'), true);
   assert.equal(pass({ matcher: 'contains', expected: '连续' }, '天数 4'), false);
   assert.equal(pass({ matcher: 'regex', expected: '^\\d+\\.\\d+:1$' }, '4.9:1'), true);
   assert.equal(pass({ matcher: 'regex', expected: '^\\d+:1$' }, 'abc'), false);
-  assert.equal(pass({ matcher: 'range', min: 8, max: 16 }, '12vp'), true);
-  assert.equal(pass({ matcher: 'range', min: 8, max: 16 }, '20vp'), false);
+  assert.equal(pass({ matcher: 'range', min: 8, max: 16 }, { value: 12, unit: 'vp' }), true);
+  assert.equal(pass({ matcher: 'range', min: 8, max: 16 }, { value: 20, unit: 'vp' }), false);
   assert.equal(pass({ matcher: 'range', min: 8 }, 'no number'), false);
-  assert.equal(pass({ matcher: 'gte', expected: 4.5 }, '4.9:1'), true);
-  assert.equal(pass({ matcher: 'gte', expected: 4.5 }, '3.9:1'), false);
-  assert.equal(pass({ matcher: 'lte', expected: 800 }, '720ms'), true);
-  assert.equal(pass({ matcher: 'lte', expected: 800 }, '1240ms'), false);
+  assert.equal(pass({ matcher: 'gte', expected: 4.5 }, { value: 4.9, unit: 'ratio' }), true);
+  assert.equal(pass({ matcher: 'gte', expected: 4.5 }, { value: 3.9, unit: 'ratio' }), false);
+  assert.equal(pass({ matcher: 'lte', expected: 800 }, { value: 720, unit: 'ms' }), true);
+  assert.equal(pass({ matcher: 'lte', expected: 800 }, { value: 1240, unit: 'ms' }), false);
   assert.equal(pass({ matcher: 'oneOf', expected: ['浅色', '深色'] }, '深色'), true);
   assert.equal(pass({ matcher: 'oneOf', expected: ['浅色', '深色'] }, '高对比'), false);
   assert.equal(pass({ matcher: 'present' }, 'hello'), true);
   assert.equal(pass({ matcher: 'present' }, '   '), false);
+  // Free-text numeric measurements are no longer accepted (0.8.5).
+  assert.equal(pass({ matcher: 'lte', expected: 800 }, '720ms'), false);
+  // Unit mismatch is a hard fail.
+  assert.equal(pass({ matcher: 'lte', expected: 800, unit: 'ms' }, { value: 720, unit: 's' }), false);
 });

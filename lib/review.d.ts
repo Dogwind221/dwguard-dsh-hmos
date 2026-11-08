@@ -10,7 +10,7 @@
  * @module dwguard-dsh-hmos/review
  */
 import type { Options } from './config.js';
-import type { Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence, Dimension, Finding, ReviewDimension, ScreenFamily, Severity, TaskPack } from './model.js';
+import type { ActualInput, Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence, Dimension, Finding, MeasurementActual, ReviewDimension, ScreenFamily, Severity, TaskPack } from './model.js';
 import type { DeviceConfig } from './device.js';
 import type { AestheticProfile } from './aesthetic.js';
 import type { BaselineCompareResult } from './baseline.js';
@@ -37,7 +37,9 @@ export interface CheckInput {
     readonly note?: string;
     readonly evidenceFiles?: readonly string[];
     /** Measured value for a criterion that carries an `assertion`. */
-    readonly actual?: string;
+    readonly actual?: ActualInput;
+    /** Structured measurement (also accepted directly by callers). */
+    readonly measurement?: MeasurementActual;
     /** Device serial the evidence was taken on. */
     readonly device?: string;
     /** Screen family the device belongs to. */
@@ -164,14 +166,16 @@ export interface AssertionEvaluation {
 /**
  * Recompute a criterion assertion from the measured `actual` value.
  *
- * Numeric matchers read the first number in `actual` (`"12vp"` → 12,
- * `"720ms"` → 720), so measurements can keep their unit in the evidence text.
+ * String measurements are accepted for text matchers (`equals` text,
+ * `contains`, `regex`, `oneOf`, `present`). Numeric matchers require a
+ * structured `{ value, unit?, samples?, aggregation? }` measurement; free-text
+ * "first number" extraction is not allowed (0.8.5).
  *
  * @param assertion - the frozen expectation from the task pack.
  * @param actual - the measured value the auditor supplied.
  * @returns the recomputed verdict and the comparison that produced it.
  */
-export declare function evaluateAssertion(assertion: CriterionAssertion, actual: string): AssertionEvaluation;
+export declare function evaluateAssertion(assertion: CriterionAssertion, actual: ActualInput): AssertionEvaluation;
 /** Fill `assertionVerdict` on checks whose criterion carries an assertion. */
 export declare function applyAssertionVerdicts(pack: TaskPack, checks: readonly Check[]): Check[];
 /**
@@ -190,7 +194,7 @@ export declare function gatePrereview(findings: readonly Finding[], note: string
  * @param findings - additional findings.
  * @param options - resolved options.
  */
-export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>): Gate;
+export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>, strictEvidence?: boolean): Gate;
 /** Summarize coverage of a delivery audit. */
 export declare function summarizeCoverage(pack: TaskPack, checks: readonly Check[], policy?: DeviceConfig): Coverage;
 /** Per-dimension coverage rows for the audit table. */

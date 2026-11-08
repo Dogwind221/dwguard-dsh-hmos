@@ -18,7 +18,7 @@ import { createAuditTool } from '../lib/tools/audit.js';
 import { createConfirmTool } from '../lib/tools/confirm.js';
 import { createSpecTool } from '../lib/tools/spec.js';
 
-const options = resolveOptions({});
+const options = resolveOptions({ strictEvidence: false });
 const aestheticTool = createAestheticTool(options);
 const specTool = createSpecTool(options);
 const auditTool = createAuditTool(options);

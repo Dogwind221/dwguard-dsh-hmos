@@ -352,7 +352,7 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
                   required: true,
                   enum: [...ASSERTION_MATCHERS],
                   description:
-                    'equals / contains / regex / range / gte / lte / oneOf / present。数值类吃 actual 里的第一个数字（如 "12vp" → 12）。'
+                    'equals / contains / regex / range / gte / lte / oneOf / present。数值类必须用结构化 actual：{ value, unit?, samples?, aggregation? }；性能断言给 samples + max/p95/mean，不再从自由文本提取数字。'
                 },
                 expected: {
                   oneOf: [{ type: 'string' }, { type: 'number' }],

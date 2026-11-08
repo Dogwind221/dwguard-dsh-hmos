@@ -50,7 +50,7 @@ export interface CriterionAssertion {
     readonly min?: number;
     /** Inclusive upper bound (`range`). */
     readonly max?: number;
-    /** Unit of the measured value (`ms`, `vp`, `ratio`…); documentation only. */
+    /** Unit expected for structured measurements; a mismatch is a gate error. */
     readonly unit?: string;
     /** Where the auditor should measure the value from. */
     readonly source?: string;
@@ -114,6 +114,25 @@ export interface Finding {
 }
 /** Result of verifying one criterion. */
 export type CheckResult = 'pass' | 'fail' | 'unverified';
+/** Allowed aggregation for a multi-sample measurement. */
+export declare const ACTUAL_AGGREGATIONS: readonly ["max", "p95", "mean"];
+/** How a multi-sample measurement is reduced to one value. */
+export type ActualAggregation = (typeof ACTUAL_AGGREGATIONS)[number];
+/** Structured measurement supplied for a criterion with an assertion. */
+export interface MeasurementActual {
+    /** Scalar value; ignored when `samples` and `aggregation` are present. */
+    readonly value: string | number;
+    /** Unit of the measurement (`ms`, `vp`, `ratio`…). */
+    readonly unit?: string;
+    /** Raw samples, e.g. cold-start times. */
+    readonly samples?: readonly number[];
+    /** Required when `samples` has more than one entry. */
+    readonly aggregation?: ActualAggregation;
+    /** Collector observation that produced this measurement. */
+    readonly observationRef?: string;
+}
+/** Accepted `actual` input: structured (preferred) or legacy text. */
+export type ActualInput = string | MeasurementActual;
 /** One criterion verification with independent evidence. */
 export interface Check {
     readonly criterionId: string;
@@ -122,9 +141,11 @@ export interface Check {
     readonly note?: string;
     /** Files backing this check, relative to `.shared/`; copied into the audit bundle. */
     readonly evidenceFiles?: readonly string[];
-    /** Measured value for a criterion that carries an `assertion`. */
+    /** Measured value for a criterion that carries an `assertion` (display form). */
     readonly actual?: string;
-    /** Machine verdict recomputed from `assertion` + `actual` by the audit gate. */
+    /** Structured measurement behind `actual` (0.8.5). */
+    readonly measurement?: MeasurementActual;
+    /** Machine verdict recomputed from `assertion` + `measurement` by the audit gate. */
     readonly assertionVerdict?: 'pass' | 'fail';
     /** Device serial the evidence was taken on (matrix mode requires it). */
     readonly device?: string;
@@ -178,6 +199,8 @@ export interface SharedState {
     readonly confirmedAt?: string;
     /** Pack version the latest confirmation belongs to. */
     readonly confirmedSpecVersion?: number;
+    /** Monotonic revision for optimistic concurrency (0.8.5). */
+    readonly revision?: number;
     /** Last phase written by a tool; `dwguard_status` re-derives it from artifacts. */
     readonly phase: string;
     readonly updatedAt: string;

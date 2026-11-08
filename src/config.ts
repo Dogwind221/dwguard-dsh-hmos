@@ -74,6 +74,10 @@ export const Config = z.object({
   maxAuditRounds: z.number().default(5),
   /** Hard stop: design searches allowed in one round (0.6.3 C). */
   maxDesignSearches: z.number().default(12),
+  /** 0.8.5: optional bearer token for the board route (empty = loopback-only). */
+  boardToken: z.string().default(''),
+  /** 0.8.5: must+pass requires structured evidence/observation; self-report is an error. */
+  strictEvidence: z.boolean().default(true),
   /** Max attempts for one harness step before a human decision (0.8.0). */
   harnessMaxRetries: z.number().default(3),
   /** Automatic fallback chain (0.8.0): MCP command, hdc and hvigor binaries. */
@@ -143,6 +147,10 @@ export interface Options {
   readonly maxAuditRounds: number;
   /** Design searches allowed per round (hard stop). */
   readonly maxDesignSearches: number;
+  /** 0.8.5: optional bearer token for the board route. */
+  readonly boardToken: string;
+  /** 0.8.5: strict evidence policy (default true). */
+  readonly strictEvidence: boolean;
   /** Max attempts for one harness step before a human decision (0.8.0). */
   readonly harnessMaxRetries: number;
   /** MCP fallback command (empty = skip MCP tier). */
@@ -194,6 +202,8 @@ const DEFAULTS: Options = {
   maxAuditRounds: 5,
   maxDesignSearches: 12,
   harnessMaxRetries: 3,
+  boardToken: '',
+  strictEvidence: true,
   devecoMcpCommand: 'deveco-mcp',
   hdcPath: 'hdc',
   hvigorPath: 'hvigorw',
@@ -272,6 +282,8 @@ export function resolveOptions(raw: unknown): Options {
     maxAuditRounds: positiveInt(input['maxAuditRounds'], DEFAULTS.maxAuditRounds, 1),
     maxDesignSearches: positiveInt(input['maxDesignSearches'], DEFAULTS.maxDesignSearches, 1),
     harnessMaxRetries: positiveInt(input['harnessMaxRetries'], DEFAULTS.harnessMaxRetries, 1),
+    boardToken: str(input['boardToken'], DEFAULTS.boardToken),
+    strictEvidence: input['strictEvidence'] === false ? false : true,
     devecoMcpCommand: str(input['devecoMcpCommand'], DEFAULTS.devecoMcpCommand),
     hdcPath: str(input['hdcPath'], DEFAULTS.hdcPath),
     hvigorPath: str(input['hvigorPath'], DEFAULTS.hvigorPath),

@@ -13,12 +13,15 @@
  * @module dwguard-dsh-hmos/device
  */
 
+import { createHash, randomUUID } from 'node:crypto';
+import { readdir, stat, writeFile } from 'node:fs/promises';
 import os from 'node:os';
+import { join, dirname } from 'node:path';
 
 import type { DeviceEntry, Dimension, ScreenFamily } from './model.js';
 import { DIMENSIONS, SCREEN_FAMILIES, isScreenFamily } from './model.js';
 import type { SharedPaths } from './paths.js';
-import { readTextOrNull, removeFile, writeTextAtomic } from './util/fs.js';
+import { ensureDir, readTextOrNull, removeFile, writeTextAtomic } from './util/fs.js';
 
 /** Per-dimension default matrix scope: adaptation dims across families, the rest on the bar phone. */
 export const DEFAULT_MATRIX_SCOPE: Readonly<Record<Dimension, readonly ScreenFamily[]>> = {
@@ -44,11 +47,14 @@ export interface DeviceConfig {
   readonly warnings: readonly string[];
 }
 
-/** One lock record in `.shared/.device-lock.json`. */
+/** One lock record in `.device-locks/<id>.json` (0.8.5 per-device lease). */
 export interface DeviceLock {
   readonly sn: string;
-  readonly holder: string;
+  readonly token: string;
+  readonly jobId: string;
   readonly acquiredAt: string;
+  readonly heartbeatAt: string;
+  readonly expiresAt: string;
 }
 
 function num(value: unknown, fallback: number): number {
@@ -234,77 +240,203 @@ export function collectDeviceEvidence(checks: ReadonlyArray<{ readonly device?: 
   return devices;
 }
 
-/** Path of the shared device lock. */
-export function deviceLockFile(paths: SharedPaths): string {
-  return `${paths.shared}/.device-lock.json`;
+/** Per-device lock directory. */
+export function deviceLocksDir(paths: SharedPaths): string {
+  return join(paths.shared, '.device-locks');
 }
 
-/** Read the current device lock, if any. */
-export async function readDeviceLock(paths: SharedPaths): Promise<DeviceLock | null> {
-  const raw = await readTextOrNull(deviceLockFile(paths));
-  if (raw === null) return null;
+/** Lock file for one serial (hashed to a safe filename). */
+export function deviceLockFile(paths: SharedPaths, sn: string): string {
+  const key = createHash('sha256').update(sn).digest('hex').slice(0, 32);
+  return join(deviceLocksDir(paths), `${key}.json`);
+}
+
+function parseLease(raw: string, sn: string): DeviceLock | null {
   try {
     const value = JSON.parse(raw) as Partial<DeviceLock>;
-    if (typeof value.sn !== 'string' || typeof value.holder !== 'string' || typeof value.acquiredAt !== 'string') return null;
-    return { sn: value.sn, holder: value.holder, acquiredAt: value.acquiredAt };
+    if (
+      value.sn !== sn ||
+      typeof value.token !== 'string' ||
+      typeof value.jobId !== 'string' ||
+      typeof value.acquiredAt !== 'string' ||
+      typeof value.heartbeatAt !== 'string' ||
+      typeof value.expiresAt !== 'string'
+    ) {
+      return null;
+    }
+    return {
+      sn: value.sn,
+      token: value.token,
+      jobId: value.jobId,
+      acquiredAt: value.acquiredAt,
+      heartbeatAt: value.heartbeatAt,
+      expiresAt: value.expiresAt
+    };
   } catch {
     return null;
   }
 }
 
-/** Acquire outcome: success (with wait/stale info) or timeout. */
+/** Read one device's lease, or the first lease when `sn` is omitted. */
+export async function readDeviceLock(paths: SharedPaths, sn?: string): Promise<DeviceLock | null> {
+  if (sn !== undefined) {
+    const raw = await readTextOrNull(deviceLockFile(paths, sn));
+    return raw === null ? null : parseLease(raw, sn);
+  }
+  const names = await readdir(deviceLocksDir(paths)).catch(() => [] as string[]);
+  for (const name of names.filter((item) => item.endsWith('.json')).sort()) {
+    const raw = await readTextOrNull(join(deviceLocksDir(paths), name)).catch(() => null);
+    if (raw === null) continue;
+    try {
+      const sn = (JSON.parse(raw) as { sn?: string }).sn;
+      if (typeof sn !== 'string') continue;
+      const parsed = parseLease(raw, sn);
+      if (parsed !== null) return parsed;
+    } catch {
+      /* skip corrupt lease */
+    }
+  }
+  return null;
+}
+
+/** All current leases (for status/reporting). */
+export async function readDeviceLocks(paths: SharedPaths): Promise<DeviceLock[]> {
+  const names = await readdir(deviceLocksDir(paths)).catch(() => [] as string[]);
+  const leases: DeviceLock[] = [];
+  for (const name of names.filter((item) => item.endsWith('.json')).sort()) {
+    const raw = await readTextOrNull(join(deviceLocksDir(paths), name)).catch(() => null);
+    if (raw === null) continue;
+    try {
+      const sn = (JSON.parse(raw) as { sn?: string }).sn;
+      if (typeof sn !== 'string') continue;
+      const lease = parseLease(raw, sn);
+      if (lease !== null) leases.push(lease);
+    } catch {
+      /* skip corrupt lease */
+    }
+  }
+  return leases;
+}
+
+/** Acquire outcome: success (with token) or timeout. */
 export type DeviceLockResult =
-  | { readonly ok: true; readonly waitedMs: number; readonly staleStolen: boolean }
+  | { readonly ok: true; readonly token: string; readonly waitedMs: number; readonly staleStolen: boolean }
   | { readonly ok: false; readonly reason: string };
 
+async function createExclusive(file: string, lease: DeviceLock): Promise<boolean> {
+  await ensureDir(dirname(file));
+  try {
+    await writeFile(file, `${JSON.stringify(lease, null, 2)}\n`, { flag: 'wx' });
+    return true;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') return false;
+    throw error;
+  }
+}
+
+function leaseFor(sn: string, token: string, jobId: string, ttlMs: number): DeviceLock {
+  const now = new Date().toISOString();
+  return {
+    sn,
+    token,
+    jobId,
+    acquiredAt: now,
+    heartbeatAt: now,
+    expiresAt: new Date(Date.now() + Math.max(10_000, ttlMs)).toISOString()
+  };
+}
+
 /**
- * Acquire the shared device lock, waiting up to `timeoutMs`.
- *
- * A lock older than `staleAfterMs` (defaults to `timeoutMs`) is considered
- * stale and is stolen (the caller gets `staleStolen: true` so it can warn).
- * Waiting polls every `pollMs`.
+ * Acquire a per-device lease. Acquisition is `wx`-exclusive; a token is
+ * returned and is required to release/renew. Different devices use different
+ * files and therefore do not serialise against each other.
  */
 export async function acquireDeviceLock(
   paths: SharedPaths,
   sn: string,
   holder: string,
   timeoutMs: number,
-  options: { readonly now?: string; readonly pollMs?: number; readonly staleAfterMs?: number } = {}
+  options: {
+    readonly now?: string;
+    readonly pollMs?: number;
+    readonly staleAfterMs?: number;
+    readonly leaseTtlMs?: number;
+    readonly token?: string;
+    readonly jobId?: string;
+  } = {}
 ): Promise<DeviceLockResult> {
   const pollMs = options.pollMs ?? 150;
-  const staleAfterMs = options.staleAfterMs ?? timeoutMs;
   const started = Date.now();
+  const token = options.token ?? randomUUID();
+  const jobId = options.jobId ?? holder;
+  const ttlMs = options.leaseTtlMs ?? Math.max(timeoutMs, 60_000);
+  let staleStolen = false;
   for (;;) {
-    const current = await readDeviceLock(paths);
-    if (current === null || (current.sn === sn && current.holder === holder)) {
-      await writeTextAtomic(
-        deviceLockFile(paths),
-        `${JSON.stringify({ sn, holder, acquiredAt: options.now ?? new Date().toISOString() }, null, 2)}\n`
-      );
-      return { ok: true, waitedMs: Date.now() - started, staleStolen: false };
+    const current = await readDeviceLock(paths, sn);
+    if (current === null) {
+      const info = await stat(deviceLockFile(paths, sn)).catch(() => null);
+      if (info !== null) {
+        // A crash may leave an unparsable lease; reclaim it after a short grace.
+        if (Date.now() - info.mtimeMs > 5_000) {
+          await removeFile(deviceLockFile(paths, sn));
+          continue;
+        }
+        if (Date.now() - started >= timeoutMs) {
+          return { ok: false, reason: `设备 ${sn} 的租约文件不可读，等待超时。` };
+        }
+        await new Promise((resolve) => setTimeout(resolve, pollMs));
+        continue;
+      }
+      const lease = leaseFor(sn, token, jobId, ttlMs);
+      if (await createExclusive(deviceLockFile(paths, sn), lease)) {
+        return { ok: true, token, waitedMs: Date.now() - started, staleStolen };
+      }
+      continue;
     }
-    const acquired = Date.parse(current.acquiredAt);
-    if (Number.isFinite(acquired) && Date.now() - acquired > staleAfterMs) {
-      await writeTextAtomic(
-        deviceLockFile(paths),
-        `${JSON.stringify({ sn, holder, acquiredAt: options.now ?? new Date().toISOString() }, null, 2)}\n`
-      );
-      return { ok: true, waitedMs: Date.now() - started, staleStolen: true };
+    if (current.token === token) {
+      await renewDeviceLease(paths, sn, token, ttlMs);
+      return { ok: true, token, waitedMs: Date.now() - started, staleStolen };
+    }
+    if (Date.parse(current.expiresAt) <= Date.now()) {
+      const again = await readDeviceLock(paths, sn);
+      if (again?.token === current.token) {
+        await removeFile(deviceLockFile(paths, sn));
+        staleStolen = true;
+        continue;
+      }
     }
     if (Date.now() - started >= timeoutMs) {
       return {
         ok: false,
-        reason: `设备 ${current.sn} 被 ${current.holder} 占用（${current.acquiredAt}），等待 ${Math.round((Date.now() - started) / 1000)}s 超时`
+        reason: `设备 ${current.sn} 被 ${current.jobId} 占用（${current.acquiredAt}），等待 ${Math.round((Date.now() - started) / 1000)}s 超时`
       };
     }
     await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
 }
 
-/** Release the lock when it belongs to `sn`. */
-export async function releaseDeviceLock(paths: SharedPaths, sn: string): Promise<boolean> {
-  const current = await readDeviceLock(paths);
-  if (current === null || current.sn !== sn) return false;
-  await removeFile(deviceLockFile(paths));
+/** Renew a lease only when the caller still owns its token. */
+export async function renewDeviceLease(
+  paths: SharedPaths,
+  sn: string,
+  token: string,
+  ttlMs: number
+): Promise<boolean> {
+  const current = await readDeviceLock(paths, sn);
+  if (current === null || current.token !== token) return false;
+  const next: DeviceLock = {
+    ...current,
+    heartbeatAt: new Date().toISOString(),
+    expiresAt: new Date(Date.now() + Math.max(10_000, ttlMs)).toISOString()
+  };
+  await writeTextAtomic(deviceLockFile(paths, sn), `${JSON.stringify(next, null, 2)}\n`);
+  return true;
+}
+
+/** Release only when the caller still owns the token. */
+export async function releaseDeviceLock(paths: SharedPaths, sn: string, token: string): Promise<boolean> {
+  const current = await readDeviceLock(paths, sn);
+  if (current === null || current.token !== token) return false;
+  await removeFile(deviceLockFile(paths, sn));
   return true;
 }

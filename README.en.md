@@ -68,13 +68,37 @@ acceptance evidence. Design cards/refs are contrast evidence, not criteria.
 
 CLI/device verification and limits: [docs/0.8.0-verification.md](docs/0.8.0-verification.md) (Pura 90 emulator, not a physical phone).
 
+## Security hardening (0.8.5)
+
+0.8.5 fixes the six P0 findings from the 0.8.0 review. Some defaults are
+intentionally breaking:
+
+1. `strictEvidence` defaults to `true`; a must+pass needs `evidenceFiles` or a
+   collector `observationRef`; self-report text is an error.
+2. `actual` is structured (`value/unit/samples/aggregation`); free-text numeric
+   extraction is gone, unit mismatches fail, and performance samples need
+   `max/p95/mean`.
+3. Matrix checks verify pool membership and family; matrix must+pass also requires
+   a collector `observationRef`, which verifies the collector device and spec
+   version.
+4. State uses a lock + revision; dimension progress is split per
+   `audit-progress/<specVersion>/<dimension>.json`; ids are reserved under a
+   lock; every tool accepts `commandId` for idempotency.
+5. Per-device leases (`token`, expiry, heartbeat); background jobs hold the
+   lease for their whole lifetime; release must match the token.
+6. Design packs validate name/path/realpath before any write; evidence files use
+   collision-free names + `wx`; the board is loopback-only or `boardToken`,
+   `cwd` must be a registered workspace, and paths are not returned.
+
+See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
+
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.0).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.5).
 
-> **0.8.0** adds the cross-session harness journal, 14 SOPs + 32 engineering
-> facts, and `deveco pipeline/sign/resume`. App-side AI is out of scope; a phone
-> is not a development runtime. Check the npm registry for the current version.
+> **0.8.5 is the security-hardening release**: strict evidence, structured
+> `actual`, per-device leases, concurrency/id fixes, design-pack path safety and
+> board authentication. See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
 
 ### Install from npm
 
@@ -84,9 +108,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.0`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.0` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.0` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.5`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.5` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.5` |
 
 Omit the version to follow the latest release.
 
@@ -95,7 +119,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.0`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.5`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -104,7 +128,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.8.0   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.8.5   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -160,11 +184,11 @@ self-report never becomes a `pass`.
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
-| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; defaults to the pool's bar phone and serialises device actions via `.shared/.device-lock.json` |
+| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; device actions use per-device leases (token/expiry/heartbeat) and background jobs hold theirs for their whole lifetime |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
-| `dwguard_audit` | Four-dimension audit; checks carry `actual` for asserted criteria and `device` + `family` in matrix mode; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
+| `dwguard_audit` | Four-dimension audit; strict mode requires structured `evidenceFiles`/`observationRef` for must+pass, rejects self-report text, requires structured `actual` (unit/samples/aggregation), validates matrix pool/family and observation device/specVersion; a `profileRef` that is missing or `superseded` fails the gate; reports render the aesthetic-profile column and the baseline-diff section; evidence bundle; acceptance report or rework order |
 | `dwguard_aesthetic` | Aesthetic learning (0.6.1) + cross-project templates (0.6.4): `profile`, `baseline`, `compare`, `learn`, `template` (list/get/export/import). Writes need `source` + `confidence`, changing an active value needs `confirmed: true`; `learn` only proposes unless `apply: true` **and** `confirmed: true`; `baseline save` needs a passing audit + user confirmation; `template import` needs `confirmed: true` (`merge` supersedes local conflicts) |
 | `dwguard_design` | Design reference library (0.6.2–0.7.0): `library init/ingest/list`, `search` (filters incl. module/tone/density + `image` + `imageText` + `kind: principle`), `brief` (brand constraints / principles for direction / patterns for implementation), `recommend` (3 options), `capture-pack` (freeze after audit + confirmation, supports `supersedes`), `pack-feedback` (useful/off), `benchmark` (top-3 pack hit rate), `pack registry/export/import/migrate`, `feedback`, `capture`, `stats`. `hybrid` supports `openai`/`dashscope`; metadata includes `moduleTags`/`tone`/`density`/derived `colorProfile` and `preview`; `capture`/`capture-pack`/`pack import` need `confirmed: true` (capture-pack also needs audit + confirmation evidence); budgets hard-stop |
 | `dwguard_harness` | Cross-session run journal + persistent queue: `status / checkpoint / resume / retry / fail / fallback / close` in `.shared/harness/run.json`; `enqueue / queue / claim / complete / task-fail` in `.shared/harness/queue.json`; `scripts/harness-worker.mjs` can be scheduled externally |
@@ -315,6 +339,8 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     maxAuditRounds: 5      # hard cap on audits per round
     maxDesignSearches: 12  # hard cap on design searches per round
     harnessMaxRetries: 3   # attempts per harness step before human decision
+    strictEvidence: true   # must+pass needs structured evidence; self-report is an error
+    boardToken: ""         # empty = loopback-only; otherwise x-dwguard-token is required
     devecoMcpCommand: deveco-mcp  # fallback tier 2; empty = skip
     hdcPath: hdc                  # fallback tier 3 hdc
     hvigorPath: hvigorw           # fallback tier 3 hvigor
@@ -355,7 +381,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 147 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 161 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

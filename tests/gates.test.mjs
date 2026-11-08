@@ -109,7 +109,8 @@ test('delivery passes when every must criterion has evidence', () => {
     pack.criteria.map((criterion) => ({
       criterionId: criterion.id,
       result: 'pass',
-      evidence: `artifacts/${criterion.id}.png 与布局树片段`
+      evidence: `artifacts/${criterion.id}.png 与布局树片段`,
+      evidenceFiles: [`artifacts/${criterion.id}.png`]
     }))
   );
   const gate = gateDelivery(pack, checks, []);
