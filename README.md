@@ -353,7 +353,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 ### 0.8.7 L4 证据工程
 
 1. **CI 矩阵**：GitHub Actions 在 Ubuntu / Windows / macOS × Node 24 上执行 `npm ci → typecheck → build → git diff --exit-code → test → npm pack 内容校验`。
-2. **100 轮 soak**：`npm run soak:100` 用独立 `DSH_HOME` 顺序跑完整测试套件 100 次；本次 **100/100 通过、16,800 次测试执行、0 失败**，结果落到 `artifacts/soak/summary.json`，失败轮保留 `round-<n>.log`。
+2. **100 轮 soak**：`npm run soak:100` 用独立 `DSH_HOME` 顺序跑完整测试套件 100 次；本次 **100/100 通过、16,800 次测试执行、0 失败**，结果落到 `artifacts/soak/summary.json`，失败轮保留 `round-<n>.log`。CI 三平台实测：[#42480067250](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/runs/42480067250)。
 3. **这不是 L4 认证**：它只关闭“可重复性/跨平台/发布内容”三块证据；真实项目、物理设备、外部审计和外部采用仍需单独完成。
 
 **边界**：App 侧 AI（Intent/端侧模型/应用内智能体）不做；手机端不是开发运行时；多项目通过各自 `.shared` 隔离 + 设备锁串行，不做跨机器分布式 run state。
