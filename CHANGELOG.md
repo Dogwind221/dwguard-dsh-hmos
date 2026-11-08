@@ -4,6 +4,29 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.8 — 2026-11-08
+
+DshHoms visual redesign — direction A, "precision console".
+
+### Changed
+
+- Client UI (`lib/client.js`, no data/flow changes):
+  - near-black blue canvas with a subtle 24px grid behind the flow;
+  - header actions grouped into one segmented control (workspace / 中-EN / refresh);
+  - phase bar with semantic dot and mono workspace/version/round info;
+  - next-action callout with a 2px accent rail;
+  - refined node states (done/active/failed/pending), chips and live pulse;
+  - history card with a timeline rail and mono timestamps;
+  - monospace data/path/timestamp styling and improved secondary contrast;
+  - `prefers-reduced-motion` still disables all motion.
+- Palette moved to slate/cyan/emerald/amber/violet tokens.
+- Docs: `docs/0.8.8-ui.md` + static preview `docs/assets/dshhoms-0.8.8.png`.
+
+### Unchanged
+
+- Workspace selection, language dictionaries/localStorage, 15s refresh, flow
+  coordinates/rework loops, tools and audit logic.
+
 ## 0.8.7 — 2026-11-08
 
 L4 evidence engineering (not an L4 certification).

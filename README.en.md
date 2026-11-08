@@ -117,15 +117,25 @@ See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
 3. This is **not** an L4 certification: real projects, physical devices, external
    audit and external adoption remain separate evidence.
 
+## DshHoms visual (0.8.8)
+
+![DshHoms 0.8.8](docs/assets/dshhoms-0.8.8.png)
+
+Precision-console visual layer: grouped header controls, semantic phase bar,
+next-action callout, grid-backed flow canvas, timeline history and mono data
+type. Only the visual layer changed; workspace selection, dictionaries, refresh
+interval, flow geometry, tools and audit logic are untouched. See
+[docs/0.8.8-ui.md](docs/0.8.8-ui.md).
+
 See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.7).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.8).
 
-> **0.8.7 is the L4 evidence release**: three-OS CI matrix, stale-lib and pack
-> gates, and a 100-round full-suite soak. See
-> [docs/0.8.7-l4-evidence.md](docs/0.8.7-l4-evidence.md).
+> **0.8.8 is the DshHoms visual redesign**: direction A, "precision console" —
+> grouped header controls, phase bar, next-action callout, flow grid, timeline
+> and mono data type. See [docs/0.8.8-ui.md](docs/0.8.8-ui.md).
 
 ### Install from npm
 
@@ -135,9 +145,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.7`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.7` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.7` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.8`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.8` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.8` |
 
 Omit the version to follow the latest release.
 
@@ -146,7 +156,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.7`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.8`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -155,7 +165,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.8.7   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.8.8   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```

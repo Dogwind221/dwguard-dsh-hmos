@@ -82,9 +82,9 @@ flowchart TD
 
 要求：DSH `0.2.1-rc.x`（`engines.dsh: >=0.2.1-rc.0 <0.3.0`）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.8.7）。
+npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.8.8）。
 
-> **0.8.7 是 L4 证据工程版**：三平台 CI 矩阵、陈旧 lib 检查、pack 门禁、100 轮全量测试 soak。详见 [docs/0.8.7-l4-evidence.md](docs/0.8.7-l4-evidence.md)。
+> **0.8.8 是 DshHoms 可视化界面美化版**：方向 A「精密控制台」——控制台式头部、状态条、下一步提示、流程图网格、时间线与等宽数据字体。详见 [docs/0.8.8-ui.md](docs/0.8.8-ui.md)。
 
 ### 从 npm 拉取（推荐）
 
@@ -92,9 +92,9 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 
 | 入口 | 命令 / 操作 |
 | --- | --- |
-| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@0.8.7`） |
-| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.7` |
-| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.7` |
+| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@0.8.8`） |
+| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.8` |
+| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.8` |
 
 安装器会从 npm registry 解析版本；想跟最新版就省略版本号。下文分别说明桌面版与 CLI profile 的细节。
 
@@ -108,7 +108,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 ### 桌面版：应用内安装
 
 1. 左侧栏打开 **插件** → 右上 **添加插件**；
-2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.8.7`）→ 安装、选配置层、确认；
+2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.8.8`）→ 安装、选配置层、确认；
 3. 装完按提示重启应用（托盘里也要退出）。
 
 同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
@@ -120,7 +120,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 dsh plugin --profile web add dwguard-dsh-hmos
 
 # 固定版本
-dsh plugin --profile web add dwguard-dsh-hmos@0.8.7
+dsh plugin --profile web add dwguard-dsh-hmos@0.8.8
 
 # 机器上没有 dsh 命令时，用 npm 上的 CLI 包
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
@@ -356,6 +356,17 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 2. **100 轮 soak**：`npm run soak:100` 用独立 `DSH_HOME` 顺序跑完整测试套件 100 次；本次 **100/100 通过、16,800 次测试执行、0 失败**，结果落到 `artifacts/soak/summary.json`，失败轮保留 `round-<n>.log`。CI 三平台实测：[#42480067250](https://github.com/Dogwind221/dwguard-dsh-hmos/actions/runs/42480067250)。
 3. **这不是 L4 认证**：它只关闭“可重复性/跨平台/发布内容”三块证据；真实项目、物理设备、外部审计和外部采用仍需单独完成。
 
+### 0.8.8 DshHoms 视觉：精密控制台
+
+![DshHoms 0.8.8](docs/assets/dshhoms-0.8.8.png)
+
+- 顶部工作区/中英/刷新整合为一个 segmented 控件组；
+- 阶段状态条、下一步 callout、语义 chip 分层；
+- 流程画布加入 24px 网格、节点状态色和当前节点呼吸光；
+- 历史改为卡片 + 时间线，时间/路径用等宽字体；
+- 只改视觉层，不动流程图坐标、工作区切换、词典和自动刷新；
+- 详细 token 与取舍见 [docs/0.8.8-ui.md](docs/0.8.8-ui.md)。
+
 **边界**：App 侧 AI（Intent/端侧模型/应用内智能体）不做；手机端不是开发运行时；多项目通过各自 `.shared` 隔离 + 设备锁串行，不做跨机器分布式 run state。
 
 ### 四个 Skill
@@ -570,7 +581,7 @@ npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.8.7 && git push origin v0.8.7`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.8.8 && git push origin v0.8.8`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 
