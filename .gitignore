@@ -1,6 +1,7 @@
 node_modules/
 .scratch/
 .shared/
+artifacts/
 *.tgz
 *.log
 .DS_Store

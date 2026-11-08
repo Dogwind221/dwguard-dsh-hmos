@@ -8,7 +8,7 @@
  * @module dwguard-dsh-hmos/lockfile
  */
 
-import { open, stat, unlink } from 'node:fs/promises';
+import { open, stat, unlink, type FileHandle } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import { ensureDir } from './util/fs.js';
@@ -31,14 +31,19 @@ export async function withFileLock<T>(
   await ensureDir(dirname(file));
   const started = Date.now();
   for (;;) {
-    let handle;
+    let handle: FileHandle | undefined;
     try {
       handle = await open(file, 'wx');
       await handle.writeFile(`${process.pid}\n`, 'utf8');
       await handle.close();
       break;
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error;
+      if (handle !== undefined) await handle.close().catch(() => undefined);
+      const code = (error as NodeJS.ErrnoException).code;
+      // Windows can return EPERM/EACCES for a transient lock file race
+      // (antivirus/indexer). Treat those as contention and retry instead of
+      // failing the whole command.
+      if (code !== 'EEXIST' && code !== 'EPERM' && code !== 'EACCES') throw error;
       const info = await stat(file).catch(() => null);
       if (info !== null && Date.now() - info.mtimeMs > staleMs) {
         await unlink(file).catch(() => undefined);

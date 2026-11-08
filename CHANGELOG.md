@@ -4,6 +4,29 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.8.7 — 2026-11-08
+
+L4 evidence engineering (not an L4 certification).
+
+### Added
+
+- CI matrix: Ubuntu / Windows / macOS × Node 24, with `npm ci`, typecheck,
+  build, stale-`lib/` check, tests and `npm pack` gate.
+- `npm run soak:100`: sequential full-suite repeatability run with isolated
+  `DSH_HOME` per round; writes `artifacts/soak/summary.json` and keeps failure
+  logs as `artifacts/soak/round-<n>.log`. Result: 100/100 rounds, 16,800 test
+  executions, 0 failures.
+- Soak runner caps captured output and kills the process tree on timeout/overflow.
+- Windows lock retry: `EPERM`/`EACCES` from an `open(..., 'wx')` lock race are
+  treated as contention (found by soak round 6), not a fatal command error.
+- `artifacts/` is ignored; soak evidence stays local.
+
+### Notes
+
+- CI matrix and soak close the repeatability/cross-platform/release-content
+  evidence gap; real projects, physical devices, independent audit and external
+  adoption are still required for L4.
+
 ## 0.8.6 — 2026-11-08
 
 Release-pipeline and runtime hardening.

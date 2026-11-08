@@ -107,16 +107,25 @@ See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
 8. Background `run/log` logs are checked every 5s and rotated to `output.log.1`
    + truncated above `maxDevecoLogBytes` (default 10MB).
 
+## L4 evidence (0.8.7)
+
+1. CI matrix: Ubuntu / Windows / macOS × Node 24 runs
+   `npm ci → typecheck → build → git diff --exit-code → test → npm pack check`.
+2. `npm run soak:100` runs the full suite 100 times sequentially with an isolated
+   `DSH_HOME`; result: **100/100 rounds, 16,800 test executions, 0 failures**.
+   Results land in `artifacts/soak/summary.json`.
+3. This is **not** an L4 certification: real projects, physical devices, external
+   audit and external adoption remain separate evidence.
+
 See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.6).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.7).
 
-> **0.8.6 is the release/runtime hardening release**: CI build/tag/pack gates,
-> Windows argument constraints, screenshot/decode/network/process bounds,
-> evidence symlink protection and vector-cache identity. See
-> [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
+> **0.8.7 is the L4 evidence release**: three-OS CI matrix, stale-lib and pack
+> gates, and a 100-round full-suite soak. See
+> [docs/0.8.7-l4-evidence.md](docs/0.8.7-l4-evidence.md).
 
 ### Install from npm
 
@@ -126,9 +135,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.6`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.6` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.6` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.7`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.7` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.7` |
 
 Omit the version to follow the latest release.
 
@@ -137,7 +146,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.6`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.7`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -146,7 +155,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.8.6   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.8.7   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```

@@ -31,6 +31,7 @@ const required = [
   'knowledge/sops.json',
   'knowledge/engineering.json',
   'scripts/harness-worker.mjs',
+  'scripts/soak.mjs',
   'preset/dwguard-hmos.cordis.yml',
   'cordis.patch.yml',
   'README.md',
