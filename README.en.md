@@ -127,15 +127,33 @@ type. Only the visual layer changed; workspace selection, dictionaries, refresh
 interval, flow geometry, tools and audit logic are untouched. See
 [docs/0.8.8-ui.md](docs/0.8.8-ui.md).
 
+## Device/automation CLI (0.9.0)
+
+```text
+node bin/dwguard.mjs doctor   --workspace <project>
+node bin/dwguard.mjs review   --workspace <project>
+node bin/dwguard.mjs bridge   --workspace <project> --once
+node bin/dwguard.mjs bench    --workspace <project> --faults
+node bin/dwguard.mjs bench    --workspace <project> --device --require-physical
+node bin/dwguard.mjs quickstart --dir <new-project> --api 24
+```
+
+`doctor` checks the toolchain/project/device; `review` recomputes evidence
+hashes and acceptance consistency; `bridge` queues new DevEco deliveries for
+`harness-worker`; `bench` covers fault cases and a device smoke test; no physical
+device means `blocked` (exit 2), never a fake pass. The 10-minute walkthrough is
+in [docs/quickstart-10min.md](docs/quickstart-10min.md).
+
 See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.8.8).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.0).
 
-> **0.8.8 is the DshHoms visual redesign**: direction A, "precision console" —
-> grouped header controls, phase bar, next-action callout, flow grid, timeline
-> and mono data type. See [docs/0.8.8-ui.md](docs/0.8.8-ui.md).
+> **0.9.0 adds device/automation foundations**: standalone `doctor`, evidence
+> `review`, DevEco `bridge`, physical-device/fault benchmarks and a 10-minute
+> quickstart. See [docs/0.9.0-plan.md](docs/0.9.0-plan.md) and
+> [docs/quickstart-10min.md](docs/quickstart-10min.md).
 
 ### Install from npm
 
@@ -145,9 +163,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.8.8`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.8.8` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.8.8` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.0`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.0` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.9.0` |
 
 Omit the version to follow the latest release.
 
@@ -156,7 +174,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.8.8`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.0`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -165,7 +183,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.8.8   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.9.0   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -421,7 +439,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 168 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 172 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

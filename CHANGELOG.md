@@ -4,6 +4,34 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.0 — 2026-11-09
+
+Device/automation foundations.
+
+### Added
+
+- Standalone CLI `bin/dwguard.mjs` (`dwguard-hmos`), no DSH process required:
+  - `doctor`: Node, project structure, `.shared`, disk, `devecocli`, `hdc`,
+    device/physical-device, device leases.
+  - `review`: recompute evidence SHA-256/size, storedAs/path containment,
+    manifest/audit/specVersion consistency, acceptance/rework consistency.
+  - `bridge`: parse DevEco `outbox-deveco.md`, append events, enqueue
+    `delivery-review` harness tasks with idempotent cursor.
+  - `bench --faults`: built-in fault cases; `bench --device` runs device smoke
+    (version/build/screenshot/layout) or reports `blocked` with exit 2.
+  - `quickstart`: `devecocli create` + build a 10-minute sample project without
+    hand-writing `entry/` or `AppScope/`.
+- Tests for doctor, review hash tampering, bridge idempotency and fault bench.
+- Docs: `docs/0.9.0-plan.md`, `docs/quickstart-10min.md`.
+
+### Boundaries
+
+- Physical-device evidence is only produced when a real device is connected;
+  emulator-only runs report the device kind and do not claim physical coverage.
+- `bridge` is a local file bridge; scheduling is left to Task Scheduler/cron or
+  `scripts/harness-worker.mjs`.
+- No cross-machine distributed state.
+
 ## 0.8.8 — 2026-11-08
 
 DshHoms visual redesign — direction A, "precision console".

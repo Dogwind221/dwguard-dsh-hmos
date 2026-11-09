@@ -1,10 +1,13 @@
 {
   "name": "dwguard-dsh-hmos",
-  "version": "0.8.8",
+  "version": "0.9.0",
   "description": "DwGuard-Dsh-Hmos — DSH 侧的鸿蒙双 Agent 编排与外部审计插件：任务包、对抗预审、派发、四维验收、返工与知识沉淀，外加设计参考库/范式包推荐、审计门禁、包级反馈与推荐基准。",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "bin": {
+    "dwguard-hmos": "bin/dwguard.mjs"
+  },
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
@@ -15,6 +18,7 @@
   },
   "files": [
     "lib/",
+    "bin/",
     "skills/",
     "knowledge/",
     "scripts/",
@@ -68,6 +72,10 @@
     "verify:publish": "node scripts/verify-publish.mjs",
     "soak": "node scripts/soak.mjs",
     "soak:100": "node scripts/soak.mjs --rounds 100",
+    "doctor": "node bin/dwguard.mjs doctor",
+    "review": "node bin/dwguard.mjs review",
+    "bridge": "node bin/dwguard.mjs bridge",
+    "bench": "node bin/dwguard.mjs bench",
     "prepublishOnly": "npm run typecheck && npm run build && npm test && node scripts/verify-publish.mjs",
     "release": "node scripts/release.mjs",
     "release:dry": "node scripts/release.mjs --bump=patch --dry-run"

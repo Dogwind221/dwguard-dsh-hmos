@@ -25,6 +25,7 @@ if (tag !== undefined && tag.length > 0) {
 }
 
 const required = [
+  'bin/dwguard.mjs',
   'lib/index.js',
   'lib/client.js',
   'lib/tools/audit.js',
