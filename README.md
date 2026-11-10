@@ -82,8 +82,10 @@ flowchart TD
 
 要求：DSH `0.2.1-rc.x`（`engines.dsh: >=0.2.1-rc.0 <0.3.0`）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.9.0）。
+npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.9.1）。
 
+> **0.9.1 修复插件市场兼容性**：`@deepseek-ai/dsh-tools` peer 从精确版本改为 `^0.2.1-rc.5`，避免 DSH Market 在 DSH `0.2.2-rc.1` 上把插件误判为 `aboveMax`。市场收录由 `awesome-dsh-plugin` 策展，npm 发布本身不会自动出现在市场。根因与复核见 [docs/0.9.1-market-compat.md](docs/0.9.1-market-compat.md)。
+>
 > **0.9.0 是设备/自动回传/独立复核基础版**：`doctor`、`review` 证据复核、DevEco `bridge` 自动回传、物理设备/故障注入基准，以及十分钟 quickstart。详见 [docs/0.9.0-plan.md](docs/0.9.0-plan.md) 和 [docs/quickstart-10min.md](docs/quickstart-10min.md)。
 
 ### 从 npm 拉取（推荐）
@@ -92,9 +94,9 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 
 | 入口 | 命令 / 操作 |
 | --- | --- |
-| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@0.9.0`） |
-| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.0` |
-| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.9.0` |
+| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@0.9.1`） |
+| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.1` |
+| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.9.1` |
 
 安装器会从 npm registry 解析版本；想跟最新版就省略版本号。下文分别说明桌面版与 CLI profile 的细节。
 
@@ -108,7 +110,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 ### 桌面版：应用内安装
 
 1. 左侧栏打开 **插件** → 右上 **添加插件**；
-2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.9.0`）→ 安装、选配置层、确认；
+2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@0.9.1`）→ 安装、选配置层、确认；
 3. 装完按提示重启应用（托盘里也要退出）。
 
 同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
@@ -120,7 +122,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 dsh plugin --profile web add dwguard-dsh-hmos
 
 # 固定版本
-dsh plugin --profile web add dwguard-dsh-hmos@0.9.0
+dsh plugin --profile web add dwguard-dsh-hmos@0.9.1
 
 # 机器上没有 dsh 命令时，用 npm 上的 CLI 包
 npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
@@ -600,12 +602,12 @@ npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.1-rc.5 @
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.9.0 && git push origin v0.9.0`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v0.9.1 && git push origin v0.9.1`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 
 1. `npm run build` 零错误；
-2. `npm test` 全绿（172 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 每设备 lease）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 四维审计+确认门禁、inbox 可移植 cards、范式卡学习；0.7.0 registry/supersedes、pack v2 迁移、import preview 重写、包级 feedback、top-3 benchmark；0.8.0 harness journal/queue/resume/retry/fallback、14 SOP+32 工程知识、deveco pipeline/sign/resume/自动 fallback、standalone worker；0.8.5 strict evidence/结构化 actual/observation、设计包路径安全、唯一证据名、state 锁/CAS、进度拆分、编号预留、commandId、后台设备 lease、看板 loopback/token；0.8.6 发布门禁、Windows 参数约束、截图校验、输出/进程树边界、证据 realpath、PNG/HTTP 上限、向量缓存身份；0.8.8 精密控制台视觉层；0.9.0 doctor/review/bridge/bench/quickstart 独立 CLI）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
+2. `npm test` 全绿（174 个用例：闸门规则、判据断言化（spec 校验 / 审计重算 / 矛盾拒绝）、设备策略（内存闸门 / 屏幕族矩阵 / 每设备 lease）、审美学习（AEST-A~K）、跨项目模板（export/merge/replace/confirmed）、设计参考库（RAG-A/B/C/E；P1 brief/design-request；P2 designRefs/antiPatternRefs 闸门与报告列；P3 feedback/capture；0.6.3 结构化过滤/品牌注入/预算/返工桥；0.6.4 AP 硬闸门、hybrid 重排与缓存、PNG pHash/直方图以图搜图；0.6.5 AP 自动继承、卡片包 export/import、CLIP 文本→图与多模态融合；0.6.6 DashScope 原生 embedding provider、语义召回并集与零字面重合召回；0.6.7 principle 卡/brief 双通道/principleRefs 对照/20 条奖项基准；0.6.8 module/tone/density/preview/colorProfile、3 套 recommend、capture-pack 四维审计+确认门禁、inbox 可移植 cards、范式卡学习；0.7.0 registry/supersedes、pack v2 迁移、import preview 重写、包级 feedback、top-3 benchmark；0.8.0 harness journal/queue/resume/retry/fallback、14 SOP+32 工程知识、deveco pipeline/sign/resume/自动 fallback、standalone worker；0.8.5 strict evidence/结构化 actual/observation、设计包路径安全、唯一证据名、state 锁/CAS、进度拆分、编号预留、commandId、后台设备 lease、看板 loopback/token；0.8.6 发布门禁、Windows 参数约束、截图校验、输出/进程树边界、证据 realpath、PNG/HTTP 上限、向量缓存身份；0.8.8 精密控制台视觉层；0.9.0 doctor/review/bridge/bench/quickstart 独立 CLI；0.9.1 市场 peer 范围回归）、spec 校验、完整工作流、逐维审计进度、证据包、静态扫描、规则目录、协议回执、影子审查与去重、UI 树自动抓取、用户确认、跨轮隔离、校准账本、看板历史、客户端装配、DevEco CLI 取证、设备取证动作、IDE 优先路由、证据复用、后台任务、卡住看门狗、发布脚本与版本一致性、注册）；
 3. `dsh --profile web --dump-config` 出现 `# == dwguard-dsh-hmos`；
 4. 另起一个实例 `dsh --profile web --no-open --port 0` 真实加载，无 `dwguard` 相关失败；
 5. 重启 GUI 后在会话里调 `dwguard_status` 验证。

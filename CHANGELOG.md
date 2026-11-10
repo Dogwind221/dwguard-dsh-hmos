@@ -4,6 +4,21 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.1 — 2026-11-10
+
+DSH Market compatibility fix.
+
+### Fixed
+
+- `peerDependencies["@deepseek-ai/dsh-tools"]` changed from exact
+  `0.2.1-rc.5` to `^0.2.1-rc.5`. DSH Market compares every
+  `@deepseek-ai/dsh-*` peer against the **host** DSH version; the exact pin
+  was classified as `aboveMax` on DSH `0.2.2-rc.1`, hiding the plugin as
+  incompatible in discovery/install preflight.
+- Added the missing catalog submission metadata instructions/doc; npm publish
+  alone does not list a plugin in DSH Market (the catalog is curated by
+  `awesome-dsh-plugin`).
+
 ## 0.9.0 — 2026-11-09
 
 Device/automation foundations.
