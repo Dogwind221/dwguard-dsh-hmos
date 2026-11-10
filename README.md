@@ -84,7 +84,7 @@ flowchart TD
 
 npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 0.9.2）。
 
-> **0.9.2 补 0.2.2 运行时 peer**：`@deepseek-ai/cordis` 改为 `~4.0.5 || ~4.1.0`，`@deepseek-ai/schemastery` 改为 `~3.18.5 || ~3.19.0`，并在 `@deepseek-ai/dsh-tools@0.2.2-rc.1` 上完成 typecheck/build/boot 验证；devDependency 同步 pin 到 0.2.2-rc.1。
+> **0.9.2 补 0.2.2 运行时 peer**：`@deepseek-ai/cordis` 改为 `~4.0.5 || ~4.1.0`，`@deepseek-ai/schemastery` 改为 `~3.18.5 || ~3.19.0`，并在 `@deepseek-ai/dsh-tools@0.2.2-rc.1` 上完成 typecheck/build/boot 验证；devDependency 同步 pin 到 0.2.2-rc.1。实测记录见 [docs/0.9.2-runtime.md](docs/0.9.2-runtime.md)。
 >
 > **0.9.1 修复插件市场兼容性**：`@deepseek-ai/dsh-tools` peer 从精确版本改为 `^0.2.1-rc.5`，避免 DSH Market 在 DSH `0.2.2-rc.1` 上把插件误判为 `aboveMax`。市场收录由 `awesome-dsh-plugin` 策展，npm 发布本身不会自动出现在市场。根因与复核见 [docs/0.9.1-market-compat.md](docs/0.9.1-market-compat.md)。
 >

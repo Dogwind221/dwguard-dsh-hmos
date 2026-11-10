@@ -153,7 +153,8 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 > **0.9.2 aligns the 0.2.2 runtime peers**: `@deepseek-ai/cordis` is now
 > `~4.0.5 || ~4.1.0`, `@deepseek-ai/schemastery` is `~3.18.5 || ~3.19.0`, and
 > the dev dependency is pinned to `@deepseek-ai/dsh-tools@0.2.2-rc.1` with a
-> typecheck/build/boot verification on that host.
+> typecheck/build/boot verification on that host. See
+> [docs/0.9.2-runtime.md](docs/0.9.2-runtime.md).
 >
 > **0.9.1 fixes DSH Market compatibility**: the `@deepseek-ai/dsh-tools` peer
 > is now `^0.2.1-rc.5` instead of an exact pin. DSH Market compares host-line
