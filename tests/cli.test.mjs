@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 
-import { benchmark, bridge, doctor, review } from '../bin/dwguard.mjs';
+import { benchmark, bridge, checker, doctor, review } from '../bin/dwguard.mjs';
 
 const dirs = [];
 after(async () => {
@@ -80,6 +80,47 @@ test('bridge consumes only new deliveries and queues a review task', async () =>
   assert.equal(queue.tasks[0].step, 'delivery-review');
   const second = await bridge(cwd, { once: true });
   assert.equal(second.newEntries.length, 0);
+});
+
+test('checker is read-only and reports requiredEvidence gaps', async () => {
+  const cwd = await workspace();
+  await writeFile(
+    join(cwd, '.shared', 'tasks', 'spec.json'),
+    `${JSON.stringify({
+      schemaVersion: 1,
+      specVersion: 3,
+      criteria: [{
+        id: 'A-01',
+        dimension: 'aesthetic',
+        statement: '视觉改动有 before/after',
+        verify: '截图',
+        requiredEvidence: ['screenshot_before', 'screenshot_after']
+      }]
+    }, null, 2)}\n`
+  );
+  await writeFile(
+    join(cwd, '.shared', 'artifacts', 'audit-1.json'),
+    `${JSON.stringify({
+      id: 1,
+      specVersion: 3,
+      checks: [{
+        criterionId: 'A-01',
+        result: 'pass',
+        evidence: '只提供了 after',
+        evidenceFiles: ['artifacts/after.png'],
+        evidenceRefs: [{ path: 'artifacts/after.png', kind: 'screenshot_after' }]
+      }]
+    }, null, 2)}\n`
+  );
+  const before = await readFile(join(cwd, '.shared', 'artifacts', 'audit-1.json'), 'utf8');
+  const report = await checker(cwd, {});
+  assert.equal(report.command, 'checker');
+  assert.equal(report.ok, true);
+  assert.equal(report.coverage.required, 2);
+  assert.equal(report.coverage.satisfied, 1);
+  assert.ok(report.coverage.missing.some((gap) => gap.kind === 'screenshot_before'));
+  const after = await readFile(join(cwd, '.shared', 'artifacts', 'audit-1.json'), 'utf8');
+  assert.equal(after, before, 'checker must not rewrite audit artifacts');
 });
 
 test('fault benchmark records review/doctor/bridge fault cases', async () => {

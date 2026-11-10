@@ -55,6 +55,16 @@ export interface CriterionAssertion {
     /** Where the auditor should measure the value from. */
     readonly source?: string;
 }
+/** Evidence media a criterion can require (0.9.6). */
+export declare const EVIDENCE_KINDS: readonly ["screenshot", "screenshot_before", "screenshot_after", "layout_tree", "hilog", "measurement", "video", "a11y_tree", "text"];
+/** One allowed evidence media type. */
+export type EvidenceKind = (typeof EVIDENCE_KINDS)[number];
+/** Typed evidence attached to a check; the file must also be in `evidenceFiles`. */
+export interface EvidenceRef {
+    readonly path: string;
+    readonly kind: EvidenceKind;
+    readonly description?: string;
+}
 /** One falsifiable acceptance criterion. */
 export interface Criterion {
     /** Stable id, unique inside the pack (e.g. `F-01`). */
@@ -69,6 +79,8 @@ export interface Criterion {
     readonly ruleId?: string;
     /** Optional declarative expectation the audit gate can recompute. */
     readonly assertion?: CriterionAssertion;
+    /** Optional evidence media this criterion requires (0.9.6). */
+    readonly requiredEvidence?: readonly EvidenceKind[];
     /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`, 0.6.1). */
     readonly profileRef?: string;
     /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */
@@ -141,6 +153,8 @@ export interface Check {
     readonly note?: string;
     /** Files backing this check, relative to `.shared/`; copied into the audit bundle. */
     readonly evidenceFiles?: readonly string[];
+    /** Optional typed view over `evidenceFiles` (0.9.6). */
+    readonly evidenceRefs?: readonly EvidenceRef[];
     /** Measured value for a criterion that carries an `assertion` (display form). */
     readonly actual?: string;
     /** Structured measurement behind `actual` (0.8.5). */

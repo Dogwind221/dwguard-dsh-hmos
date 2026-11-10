@@ -9,7 +9,7 @@
  */
 import type { Options } from './config.js';
 import type { AestheticProfile } from './aesthetic.js';
-import type { Criterion, CriterionAssertion, CriterionWeight, Dimension, TaskPack } from './model.js';
+import type { Criterion, CriterionAssertion, CriterionWeight, Dimension, EvidenceKind, TaskPack } from './model.js';
 import type { SharedPaths } from './paths.js';
 /** The model-supplied shape of one criterion. */
 export interface CriterionInput {
@@ -22,6 +22,8 @@ export interface CriterionInput {
     readonly ruleId?: string;
     /** Optional machine-checkable expectation (see {@link normalizeAssertion}). */
     readonly assertion?: CriterionAssertion;
+    /** Optional typed evidence required for this criterion (0.9.6). */
+    readonly requiredEvidence?: readonly EvidenceKind[];
     /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`). */
     readonly profileRef?: string;
     /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */

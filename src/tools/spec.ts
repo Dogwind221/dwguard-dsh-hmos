@@ -11,8 +11,8 @@ import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
 import { readProfile } from '../aesthetic.js';
 import { DesignLibraryError, inheritedAntiPatterns, readDesignManifest } from '../design.js';
-import type { CriterionAssertion, TaskPack } from '../model.js';
-import { ASSERTION_MATCHERS, DIMENSIONS, DIMENSION_LABELS } from '../model.js';
+import type { CriterionAssertion, EvidenceKind, TaskPack } from '../model.js';
+import { ASSERTION_MATCHERS, DIMENSIONS, DIMENSION_LABELS, EVIDENCE_KINDS } from '../model.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { ensureShared } from '../scaffold.js';
@@ -73,6 +73,17 @@ function parseCriteria(raw: Record<string, unknown>): CriterionInput[] {
       if (normalized.error !== undefined) throw new ArgError(`${label}.assertion 无效：${normalized.error}`);
       assertion = normalized.assertion;
     }
+    const rawRequired = item['requiredEvidence'];
+    let requiredEvidence: EvidenceKind[] | undefined;
+    if (rawRequired !== undefined && rawRequired !== null) {
+      if (!Array.isArray(rawRequired)) throw new ArgError(`${label}.requiredEvidence 必须是数组。`);
+      requiredEvidence = [...new Set(rawRequired.map((value): EvidenceKind => {
+        if (typeof value !== 'string' || !(EVIDENCE_KINDS as readonly string[]).includes(value)) {
+          throw new ArgError(`${label}.requiredEvidence 含未知类型 \`${String(value)}\`；可选 ${EVIDENCE_KINDS.join(' / ')}。`);
+        }
+        return value as EvidenceKind;
+      }))];
+    }
     return {
       id: requiredString(item, 'id', label, 40),
       dimension: requiredEnum(item, 'dimension', DIMENSIONS, label),
@@ -84,6 +95,7 @@ function parseCriteria(raw: Record<string, unknown>): CriterionInput[] {
       designRefs: optionalStringArray(item, 'designRefs', label, 8),
       antiPatternRefs: optionalStringArray(item, 'antiPatternRefs', label, 8),
       principleRefs: optionalStringArray(item, 'principleRefs', label, 8),
+      ...(requiredEvidence === undefined ? {} : { requiredEvidence }),
       ...(assertion === undefined ? {} : { assertion })
     };
   });
@@ -335,6 +347,12 @@ export function createSpecTool(options: Options, ctx?: PluginContext): ToolDefin
               items: { type: 'string' },
               description:
                 '设计原则卡 ID（0.6.7，如 `PR-0001`）：只做方向/对照，不直接当硬判据；写入/审计校验原则存在且 active，报告渲染「原则对照」。'
+            },
+            requiredEvidence: {
+              type: 'array',
+              items: { type: 'string', enum: [...EVIDENCE_KINDS] },
+              description:
+                '可选（0.9.6）：这条判据必须有的证据类型。审计时 checks[].evidenceRefs 必须覆盖这些类型；缺失则 pass 降级为 unverified。旧任务包不填则不启用。'
             },
             weight: {
               type: 'string',

@@ -4,6 +4,35 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.6 — 2026-11-11
+
+Non-breaking evidence contract (local only; not pushed).
+
+### Added
+
+- Optional `Criterion.requiredEvidence` with nine media types:
+  `screenshot`, `screenshot_before`, `screenshot_after`, `layout_tree`,
+  `hilog`, `measurement`, `video`, `a11y_tree`, `text`.
+- Optional `Check.evidenceRefs` typed view over the existing `evidenceFiles`
+  string array; a ref path must also be listed in `evidenceFiles`.
+- Missing declared evidence downgrades a `pass` to `unverified` before the
+  existing gate; must criteria then fail as before.
+- Optional `coverage.evidence { required, satisfied, missing }`; omitted when
+  the pack declares no required evidence.
+- Read-only `node bin/dwguard.mjs checker` reports required-evidence gaps and
+  coverage without writing acceptance/rework or touching `gate.pass`.
+- `screenshot_before` / `screenshot_after` are opt-in for visual-change
+  criteria; they do not apply retroactively to old aesthetic criteria.
+- Tests: `tests/evidence-contract.test.mjs`, checker test in `tests/cli.test.mjs`.
+- Docs: `docs/0.9.6-evidence-contract.md`.
+
+### Compatibility
+
+- `evidenceFiles` remains `string[]`; `schemaVersion` stays 1.
+- Legacy packs without `requiredEvidence` and legacy audits without typed refs
+  behave exactly as before.
+- 186/186 tests; typecheck clean.
+
 ## 0.9.5 — 2026-11-11
 
 Section-level design-guide indexing (local only; not pushed).

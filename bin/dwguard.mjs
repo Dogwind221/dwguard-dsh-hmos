@@ -320,6 +320,69 @@ async function enqueueBridgeTasks(paths, events) {
   return queue.tasks.length;
 }
 
+export async function checker(workspace, options = {}) {
+  const paths = workspacePaths(workspace);
+  const report = {
+    command: 'checker',
+    workspace: paths.root,
+    ok: true,
+    auditId: null,
+    notes: [],
+    coverage: { required: 0, satisfied: 0, missing: [] }
+  };
+  let spec;
+  let audit;
+  try {
+    spec = JSON.parse(await readFile(paths.spec, 'utf8'));
+    const files = await readdir(paths.artifacts);
+    const ids = files
+      .map((name) => /^audit-(\d+)\.json$/.exec(name))
+      .filter(Boolean)
+      .map((match) => Number(match[1]))
+      .sort((a, b) => b - a);
+    const id = Number.isInteger(options.audit) ? options.audit : ids[0];
+    if (id === undefined) throw new Error('no audit-<n>.json found');
+    report.auditId = id;
+    audit = JSON.parse(await readFile(join(paths.artifacts, `audit-${id}.json`), 'utf8'));
+  } catch (error) {
+    report.ok = false;
+    report.notes.push({ severity: 'warn', message: error instanceof Error ? error.message : String(error) });
+    return report;
+  }
+  const checks = Array.isArray(audit.checks) ? audit.checks : [];
+  for (const criterion of spec.criteria ?? []) {
+    const required = Array.isArray(criterion.requiredEvidence) ? criterion.requiredEvidence : [];
+    if (required.length === 0) continue;
+    const own = checks.filter((check) => check.criterionId === criterion.id);
+    const supplied = new Set(own.flatMap((check) => (check.evidenceRefs ?? []).map((ref) => ref.kind)));
+    for (const kind of required) {
+      report.coverage.required += 1;
+      if (supplied.has(kind)) {
+        report.coverage.satisfied += 1;
+      } else {
+        report.coverage.missing.push({ criterionId: criterion.id, kind });
+        report.notes.push({
+          severity: 'warn',
+          criterionId: criterion.id,
+          message: `缺少 requiredEvidence: ${kind}`
+        });
+      }
+    }
+    for (const check of own) {
+      for (const ref of check.evidenceRefs ?? []) {
+        if (!(check.evidenceFiles ?? []).includes(ref.path)) {
+          report.notes.push({
+            severity: 'warn',
+            criterionId: criterion.id,
+            message: `evidenceRefs 路径 ${ref.path} 未列入 evidenceFiles，不会进入证据包`
+          });
+        }
+      }
+    }
+  }
+  return report;
+}
+
 export async function bridge(workspace, options = {}) {
   const paths = workspacePaths(workspace);
   const report = { command: 'bridge', workspace: paths.root, newEntries: [], processed: 0, ok: true };
@@ -544,18 +607,23 @@ function print(report, json) {
     console.log(`build: ${report.build?.ok ? 'ok' : 'failed'}`);
     for (const line of report.next ?? []) console.log(`- ${line}`);
   }
+  if (report.notes !== undefined) {
+    for (const note of report.notes) console.log(`[${note.severity}]${note.criterionId ? ` ${note.criterionId}` : ''}: ${note.message}`);
+    if (report.coverage !== undefined) console.log(`evidence coverage: ${report.coverage.satisfied}/${report.coverage.required}`);
+  }
 }
 
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const command = args.help ? 'help' : process.argv[2];
   if (command === undefined || command === 'help') {
-    console.log('Usage: dwguard <doctor|review|bridge|bench|quickstart> [options]');
+    console.log('Usage: dwguard <doctor|review|checker|bridge|bench|quickstart> [options]');
     return;
   }
   let report;
   if (command === 'doctor') report = await doctor(args.workspace, args);
   else if (command === 'review') report = await review(args.workspace, args);
+  else if (command === 'checker') report = await checker(args.workspace, args);
   else if (command === 'bridge') {
     report = await bridge(args.workspace, args);
     if (!args.once) {

@@ -25,8 +25,8 @@ import { parseActualInput } from '../actual.js';
 import { collectDeviceEvidence } from '../device.js';
 import { readObservation } from '../observation.js';
 import { EvidenceError, missingEvidence, writeEvidenceBundle } from '../evidence.js';
-import { DIMENSIONS, DIMENSION_LABELS, SCREEN_FAMILIES } from '../model.js';
-import type { Check, TaskPack } from '../model.js';
+import { DIMENSIONS, DIMENSION_LABELS, EVIDENCE_KINDS, SCREEN_FAMILIES } from '../model.js';
+import type { Check, EvidenceRef, TaskPack } from '../model.js';
 import { displayPath } from '../paths.js';
 import { clearAuditProgress } from '../progress.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
@@ -43,6 +43,7 @@ import type {
 } from '../review.js';
 import {
   applyAssertionVerdicts,
+  applyRequiredEvidenceVerdicts,
   gateDelivery,
   normalizeChecks,
   normalizeFindings,
@@ -74,6 +75,18 @@ const SEVERITIES = ['blocker', 'major', 'minor'] as const;
 const REVIEW_DIMENSIONS = [...DIMENSIONS, 'architecture'] as const;
 const FINDING_STATUSES = ['open', 'dismissed', 'fixed'] as const;
 
+function parseEvidenceRefs(item: Record<string, unknown>, label: string): EvidenceRef[] | undefined {
+  if (item['evidenceRefs'] === undefined || item['evidenceRefs'] === null) return undefined;
+  const rows = arrayOfRecords(item, 'evidenceRefs', label, 16);
+  return rows.map((row, index) => ({
+    path: requiredString(row, 'path', `${label}.evidenceRefs[${index}]`, 300),
+    kind: requiredEnum(row, 'kind', EVIDENCE_KINDS, `${label}.evidenceRefs[${index}]`),
+    ...(optionalString(row, 'description', `${label}.evidenceRefs[${index}]`, 300) === undefined
+      ? {}
+      : { description: optionalString(row, 'description', `${label}.evidenceRefs[${index}]`, 300) })
+  }));
+}
+
 function parseChecks(raw: Record<string, unknown>): CheckInput[] {
   const rows = arrayOfRecords(raw, 'checks', TOOL, 128);
   if (rows.length === 0) {
@@ -93,6 +106,7 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
       evidence: optionalString(item, 'evidence', label, 2000) ?? '',
       note: optionalString(item, 'note', label, 600),
       evidenceFiles: optionalStringArray(item, 'evidenceFiles', label, 8),
+      evidenceRefs: parseEvidenceRefs(item, label),
       ...parsedActual,
       device: optionalString(item, 'device', label, 200),
       family: optionalEnum(item, 'family', SCREEN_FAMILIES, label),
@@ -128,6 +142,9 @@ function coverageLine(coverage: ReturnType<typeof summarizeCoverage>): string {
   if (coverage.failed > 0) parts.push(`${coverage.failed} 未通过`);
   if (coverage.unverified > 0) parts.push(`${coverage.unverified} 未验证`);
   if (coverage.missing.length > 0) parts.push(`${coverage.missing.length} 未覆盖`);
+  if (coverage.evidence !== undefined) {
+    parts.push(`证据类型 ${coverage.evidence.satisfied}/${coverage.evidence.required}`);
+  }
   return parts.join(' · ');
 }
 
@@ -370,6 +387,25 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               description:
                 '支撑这条结论的文件，写相对 `.shared/` 的路径（截图 / 布局树 / 日志）。工具会校验存在、复制进 artifacts/audit-<n>/evidence/ 并记 sha256；文件缺失时整次审计不落盘。'
             },
+            evidenceRefs: {
+              type: 'array',
+              description:
+                '可选：给 evidenceFiles 里的文件标类型（0.9.6）。requiredEvidence 只认这里声明的类型；路径必须同时在 evidenceFiles 中。',
+              items: {
+                type: 'object',
+                additionalProperties: false,
+                properties: {
+                  path: { type: 'string', required: true, description: '相对 `.shared/` 的证据路径，必须同时出现在 evidenceFiles。' },
+                  kind: {
+                    type: 'string',
+                    required: true,
+                    enum: [...EVIDENCE_KINDS],
+                    description: '证据类型；screenshot_before/after 只用于有视觉变更的判据。'
+                  },
+                  description: { type: 'string', description: '这条证据证明了什么（可选）。' }
+                }
+              }
+            },
             note: { type: 'string', description: '补充说明（可选）。' }
           }
         },
@@ -417,7 +453,10 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
       } catch (error) {
         if (!(error instanceof DesignLibraryError)) throw error;
       }
-      const checks = applyAssertionVerdicts(pack, normalizeChecks(parseChecks(args)));
+      const checks = applyRequiredEvidenceVerdicts(
+        pack,
+        applyAssertionVerdicts(pack, normalizeChecks(parseChecks(args)))
+      );
       const findings = normalizeFindings(parseFindings(args));
       const note = optionalString(args, 'note', TOOL, 2000) ?? '';
       const now = nowIso();

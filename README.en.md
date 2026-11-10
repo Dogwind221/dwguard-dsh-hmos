@@ -164,8 +164,15 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.5).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.6).
 
+> **0.9.6 adds a non-breaking evidence contract**: criteria may declare
+> `requiredEvidence`; checks may add typed `evidenceRefs` over `evidenceFiles`;
+> a pass missing a declared type is downgraded to `unverified`; optional
+> `coverage.evidence` reports type coverage; a read-only `checker` reports gaps
+> without writing reports or gating; `screenshot_before/after` are opt-in for
+> visual-change criteria. Legacy packs and audits keep the old behavior.
+>
 > **0.9.5 adds section-level design indexing**: 167 official Huawei UX
 > documents now expose `sections[]` (1,164 sections), each with heading path,
 > short summary, anchor, `HW-UX-*` and `DW-AES-*` / `DW-A11Y-*` mappings. The
@@ -203,9 +210,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.5`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.5` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.5` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.6`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.6` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.6` |
 
 Omit the version to follow the latest release.
 
@@ -214,7 +221,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.5`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.6`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -223,7 +230,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.9.5   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.9.6   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -479,7 +486,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 181 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 186 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

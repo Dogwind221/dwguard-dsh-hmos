@@ -11,7 +11,7 @@
 import type { Options } from './config.js';
 import type { AestheticProfile } from './aesthetic.js';
 import { AREA_LABELS, detectAestheticAreas, isAestheticId } from './aesthetic.js';
-import type { AssertionMatcher, Criterion, CriterionAssertion, CriterionWeight, Dimension, TaskPack } from './model.js';
+import type { AssertionMatcher, Criterion, CriterionAssertion, CriterionWeight, Dimension, EvidenceKind, TaskPack } from './model.js';
 import { findRule } from './rules.js';
 import {
   ASSERTION_MATCHERS,
@@ -19,6 +19,7 @@ import {
   DIMENSION_EVIDENCE,
   DIMENSION_LABELS,
   DIMENSION_PREFIX,
+  EVIDENCE_KINDS,
   isDimension
 } from './model.js';
 import type { SharedPaths } from './paths.js';
@@ -36,6 +37,8 @@ export interface CriterionInput {
   readonly ruleId?: string;
   /** Optional machine-checkable expectation (see {@link normalizeAssertion}). */
   readonly assertion?: CriterionAssertion;
+  /** Optional typed evidence required for this criterion (0.9.6). */
+  readonly requiredEvidence?: readonly EvidenceKind[];
   /** Aesthetic-profile entry this criterion follows (`AES-RADIUS-01`). */
   readonly profileRef?: string;
   /** Design-library cards this criterion follows (`DSG-0007`, 0.6.2). */
@@ -302,6 +305,16 @@ function criterionIssue(input: CriterionInput, index: number): Issue[] {
       issues.push({
         code: 'E_CRITERION_ASSERTION_INVALID',
         message: `判据 \`${label}\` 的 assertion 无效：${normalized.error}`,
+        criterionId: label
+      });
+    }
+  }
+
+  for (const kind of input.requiredEvidence ?? []) {
+    if (!(EVIDENCE_KINDS as readonly string[]).includes(kind)) {
+      issues.push({
+        code: 'E_CRITERION_EVIDENCE_KIND',
+        message: `判据 \`${label}\` 的 requiredEvidence 含有未知类型 \`${String(kind)}\`；可选 ${EVIDENCE_KINDS.join(' / ')}。`,
         criterionId: label
       });
     }
@@ -574,7 +587,10 @@ export function buildTaskPack(
       : {
           principleRefs: dedupe(criterion.principleRefs.map((ref) => inline(ref)).filter((ref) => ref.length > 0))
         }),
-    ...(criterion.assertion === undefined ? {} : { assertion: criterion.assertion })
+    ...(criterion.assertion === undefined ? {} : { assertion: criterion.assertion }),
+    ...(criterion.requiredEvidence === undefined || criterion.requiredEvidence.length === 0
+      ? {}
+      : { requiredEvidence: [...new Set(criterion.requiredEvidence)] })
   }));
   const constraints = dedupe((input.constraints ?? []).map((item) => inline(item)).filter((item) => item.length > 0));
   return {
@@ -662,7 +678,13 @@ export function parseTaskPack(raw: string | null): TaskPack | null {
               .filter((item2) => item2.length > 0)
           }
         : {}),
-      ...(assertion === undefined ? {} : { assertion })
+      ...(assertion === undefined ? {} : { assertion }),
+      ...(Array.isArray(entry['requiredEvidence'])
+        ? {
+            requiredEvidence: (entry['requiredEvidence'] as unknown[])
+              .filter((item2): item2 is EvidenceKind => typeof item2 === 'string' && (EVIDENCE_KINDS as readonly string[]).includes(item2))
+          }
+        : {})
     });
   }
   const strings = (key: string): string[] =>
@@ -726,6 +748,9 @@ export function renderSpecMarkdown(
           ? '—'
           : criterion.principleRefs.map((ref) => `\`${ref}\``).join('<br>'),
         criterion.assertion === undefined ? '—' : assertionLabel(criterion.assertion),
+        criterion.requiredEvidence === undefined || criterion.requiredEvidence.length === 0
+          ? '—'
+          : criterion.requiredEvidence.map((kind) => `\`${kind}\``).join('<br>'),
         criterion.statement,
         criterion.verify
       ]);
@@ -758,7 +783,7 @@ export function renderSpecMarkdown(
     '',
     `共 ${pack.criteria.length} 条（must ${must} / should ${should}）。验收由 DSH 独立取证，不采信执行者自述。`,
     '',
-    table(['ID', '维度', '权重', '规则', '审美档案', '设计参考', '反模式', '原则', '断言', '判据（可证伪）', '独立验证方式'], criteriaRows),
+    table(['ID', '维度', '权重', '规则', '审美档案', '设计参考', '反模式', '原则', '断言', '证据类型', '判据（可证伪）', '独立验证方式'], criteriaRows),
     '',
     ...(inherited === undefined || inherited.size === 0
       ? []

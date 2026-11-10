@@ -10,7 +10,7 @@
  * @module dwguard-dsh-hmos/review
  */
 import type { Options } from './config.js';
-import type { ActualInput, Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence, Dimension, Finding, MeasurementActual, ReviewDimension, ScreenFamily, Severity, TaskPack } from './model.js';
+import type { ActualInput, Check, CheckResult, Criterion, CriterionAssertion, DeviceEvidence, Dimension, EvidenceKind, EvidenceRef, Finding, MeasurementActual, ReviewDimension, ScreenFamily, Severity, TaskPack } from './model.js';
 import type { DeviceConfig } from './device.js';
 import type { AestheticProfile } from './aesthetic.js';
 import type { BaselineCompareResult } from './baseline.js';
@@ -36,6 +36,8 @@ export interface CheckInput {
     readonly evidence: string;
     readonly note?: string;
     readonly evidenceFiles?: readonly string[];
+    /** Optional typed view over `evidenceFiles` (0.9.6). */
+    readonly evidenceRefs?: readonly EvidenceRef[];
     /** Measured value for a criterion that carries an `assertion`. */
     readonly actual?: ActualInput;
     /** Structured measurement (also accepted directly by callers). */
@@ -60,12 +62,22 @@ export interface Gate {
     readonly warnings: readonly string[];
 }
 /** Coverage summary of one delivery audit. */
+export interface EvidenceCoverage {
+    readonly required: number;
+    readonly satisfied: number;
+    readonly missing: readonly {
+        readonly criterionId: string;
+        readonly kind: EvidenceKind;
+    }[];
+}
 export interface Coverage {
     readonly total: number;
     readonly passed: number;
     readonly failed: number;
     readonly unverified: number;
     readonly missing: readonly string[];
+    /** Typed-evidence coverage; omitted when the pack declares no requiredEvidence. */
+    readonly evidence?: EvidenceCoverage;
 }
 /** One dimension's row in the audit table. */
 export interface DimensionSummary {
@@ -195,6 +207,13 @@ export declare function gatePrereview(findings: readonly Finding[], note: string
  * @param options - resolved options.
  */
 export declare function gateDelivery(pack: TaskPack, checks: readonly Check[], findings: readonly Finding[], policy?: DeviceConfig, aesthetic?: AestheticProfile, design?: ReadonlyMap<string, DesignCard>, strictEvidence?: boolean): Gate;
+/** Typed-evidence coverage for criteria that declare `requiredEvidence`. */
+export declare function summarizeEvidenceCoverage(pack: TaskPack, checks: readonly Check[]): EvidenceCoverage;
+/**
+ * A pass without its declared evidence media is not a pass: downgrade it to
+ * `unverified` before the gate. Old packs (no `requiredEvidence`) are untouched.
+ */
+export declare function applyRequiredEvidenceVerdicts(pack: TaskPack, checks: readonly Check[]): Check[];
 /** Summarize coverage of a delivery audit. */
 export declare function summarizeCoverage(pack: TaskPack, checks: readonly Check[], policy?: DeviceConfig): Coverage;
 /** Per-dimension coverage rows for the audit table. */

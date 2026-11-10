@@ -19,6 +19,8 @@ import type {
   CriterionAssertion,
   DeviceEvidence,
   Dimension,
+  EvidenceKind,
+  EvidenceRef,
   Finding,
   MeasurementActual,
   ReviewDimension,
@@ -29,6 +31,7 @@ import type {
 import {
   DIMENSIONS,
   DIMENSION_LABELS,
+  EVIDENCE_KINDS,
   SCREEN_FAMILY_LABELS
 } from './model.js';
 import { formatMeasurement, measurementValue, parseActualInput } from './actual.js';
@@ -67,6 +70,8 @@ export interface CheckInput {
   readonly evidence: string;
   readonly note?: string;
   readonly evidenceFiles?: readonly string[];
+  /** Optional typed view over `evidenceFiles` (0.9.6). */
+  readonly evidenceRefs?: readonly EvidenceRef[];
   /** Measured value for a criterion that carries an `assertion`. */
   readonly actual?: ActualInput;
   /** Structured measurement (also accepted directly by callers). */
@@ -93,12 +98,20 @@ export interface Gate {
 }
 
 /** Coverage summary of one delivery audit. */
+export interface EvidenceCoverage {
+  readonly required: number;
+  readonly satisfied: number;
+  readonly missing: readonly { readonly criterionId: string; readonly kind: EvidenceKind }[];
+}
+
 export interface Coverage {
   readonly total: number;
   readonly passed: number;
   readonly failed: number;
   readonly unverified: number;
   readonly missing: readonly string[];
+  /** Typed-evidence coverage; omitted when the pack declares no requiredEvidence. */
+  readonly evidence?: EvidenceCoverage;
 }
 
 /** One dimension's row in the audit table. */
@@ -274,7 +287,23 @@ export function normalizeChecks(input: readonly CheckInput[]): Check[] {
         : { principleRefs: [...new Set(item.principleRefs.map((ref) => ref.trim()).filter((ref) => ref.length > 0))] }),
       ...(item.evidenceFiles === undefined || item.evidenceFiles.length === 0
         ? {}
-        : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] })
+        : { evidenceFiles: [...new Set(item.evidenceFiles.map((file) => file.trim()).filter((file) => file.length > 0))] }),
+      ...(item.evidenceRefs === undefined || item.evidenceRefs.length === 0
+        ? {}
+        : {
+            evidenceRefs: [...new Map(
+              item.evidenceRefs
+                .map((ref) => ({
+                  path: ref.path.trim(),
+                  kind: ref.kind,
+                  ...(ref.description === undefined || ref.description.trim().length === 0
+                    ? {}
+                    : { description: ref.description.trim() })
+                }))
+                .filter((ref) => ref.path.length > 0)
+                .map((ref) => [`${ref.path}\u0000${ref.kind}`, ref])
+            ).values()]
+          })
     };
   });
 }
@@ -510,6 +539,14 @@ export function gateDelivery(
     }
     const structuredEvidence =
       (check.evidenceFiles?.length ?? 0) > 0 || check.measurement?.observationRef !== undefined;
+    for (const ref of check.evidenceRefs ?? []) {
+      if (!(EVIDENCE_KINDS as readonly string[]).includes(ref.kind)) {
+        errors.push(`${label} 的 evidenceRefs 含有未知证据类型 \`${String(ref.kind)}\`。`);
+      }
+      if (!(check.evidenceFiles ?? []).includes(ref.path)) {
+        errors.push(`${label} 的 evidenceRefs 路径 \`${ref.path}\` 也必须列入 \`evidenceFiles\`，否则不会进证据包。`);
+      }
+    }
     if (strictEvidence && check.result === 'pass' && criterion.weight === 'must' && !structuredEvidence) {
       errors.push(
         `${label} 是 must 判据且判为「通过」，但没有结构化证据（\`evidenceFiles\` 或 \`actual.observationRef\`）；文字自述不能单独构成通过依据。`
@@ -570,6 +607,15 @@ export function gateDelivery(
     }
     if (own.some((item) => item.result === 'unverified')) {
       errors.push(`\`${criterion.id}\` 是 must 判据，但结论是「未验证」。`);
+    }
+  }
+  const evidenceCoverage = summarizeEvidenceCoverage(pack, checks);
+  for (const gap of evidenceCoverage.missing) {
+    const criterion = known.get(gap.criterionId);
+    if (criterion?.weight === 'must') {
+      errors.push(`\`${gap.criterionId}\` 缺少必需的 \`${gap.kind}\` 证据；不能以其它证据类型替代。`);
+    } else {
+      warnings.push(`\`${gap.criterionId}\` 缺少声明的 \`${gap.kind}\` 证据（should）。`);
     }
   }
   if (missing.length > 0) {
@@ -729,6 +775,49 @@ export function gateDelivery(
   return { pass: errors.length === 0, errors, warnings };
 }
 
+/** Typed-evidence coverage for criteria that declare `requiredEvidence`. */
+export function summarizeEvidenceCoverage(pack: TaskPack, checks: readonly Check[]): EvidenceCoverage {
+  let required = 0;
+  let satisfied = 0;
+  const missing: Array<{ criterionId: string; kind: EvidenceKind }> = [];
+  for (const criterion of pack.criteria) {
+    const kinds = criterion.requiredEvidence ?? [];
+    if (kinds.length === 0) continue;
+    const supplied = new Set(
+      checks
+        .filter((check) => check.criterionId === criterion.id)
+        .flatMap((check) => (check.evidenceRefs ?? []).map((ref) => ref.kind))
+    );
+    for (const kind of kinds) {
+      required += 1;
+      if (supplied.has(kind)) satisfied += 1;
+      else missing.push({ criterionId: criterion.id, kind });
+    }
+  }
+  return { required, satisfied, missing };
+}
+
+/**
+ * A pass without its declared evidence media is not a pass: downgrade it to
+ * `unverified` before the gate. Old packs (no `requiredEvidence`) are untouched.
+ */
+export function applyRequiredEvidenceVerdicts(pack: TaskPack, checks: readonly Check[]): Check[] {
+  const byId = new Map(pack.criteria.map((criterion) => [criterion.id, criterion]));
+  return checks.map((check) => {
+    const criterion = byId.get(check.criterionId);
+    const kinds = criterion?.requiredEvidence ?? [];
+    if (check.result !== 'pass' || kinds.length === 0) return check;
+    const supplied = new Set((check.evidenceRefs ?? []).map((ref) => ref.kind));
+    const missing = kinds.filter((kind) => !supplied.has(kind));
+    if (missing.length === 0) return check;
+    return {
+      ...check,
+      result: 'unverified',
+      note: `${check.note === undefined ? '' : `${check.note} `}缺少 requiredEvidence：${missing.join(', ')}`
+    };
+  });
+}
+
 /** Summarize coverage of a delivery audit. */
 export function summarizeCoverage(pack: TaskPack, checks: readonly Check[], policy?: DeviceConfig): Coverage {
   const must = pack.criteria.filter((criterion) => criterion.weight === 'must');
@@ -753,7 +842,15 @@ export function summarizeCoverage(pack: TaskPack, checks: readonly Check[], poli
     else if (own.some((check) => check.result === 'fail')) failed += 1;
     else passed += 1;
   }
-  return { total: must.length, passed, failed, unverified, missing };
+  const evidence = summarizeEvidenceCoverage(pack, checks);
+  return {
+    total: must.length,
+    passed,
+    failed,
+    unverified,
+    missing,
+    ...(evidence.required === 0 ? {} : { evidence })
+  };
 }
 
 /** Per-dimension coverage rows for the audit table. */
@@ -987,6 +1084,12 @@ export function renderAuditMarkdown(
       `${report.coverage.failed > 0 ? ` · ${report.coverage.failed} 未通过` : ''}` +
       `${report.coverage.unverified > 0 ? ` · ${report.coverage.unverified} 未验证` : ''}` +
       `${report.coverage.missing.length > 0 ? ` · ${report.coverage.missing.length} 未覆盖` : ''}`,
+    ...(report.coverage.evidence === undefined
+      ? []
+      : [
+          `> 证据类型：${report.coverage.evidence.satisfied}/${report.coverage.evidence.required}` +
+            `${report.coverage.evidence.missing.length > 0 ? ` · 缺 ${report.coverage.evidence.missing.length} 项` : ''}`
+        ]),
     '',
     '## 维度结论',
     '',
@@ -1190,6 +1293,9 @@ export function renderAcceptanceMarkdown(
     `# 验收报告 · ${pack.title}`,
     '',
     `> 结论：**通过**（四维齐全，must 判据 ${report.coverage.passed}/${report.coverage.total} 全部通过）` +
+      (report.coverage.evidence === undefined
+        ? ''
+        : `；证据类型 ${report.coverage.evidence.satisfied}/${report.coverage.evidence.required}`) +
       (failedCompares.length === 0 ? '' : `；注意：审美基线有 ${failedCompares.length} 个页面/状态未通过（见 §2.2）`),
     `> 任务包 v${pack.specVersion} · 审计 #${report.id} · ${report.createdAt}`,
     `> 任务包：\`${displayPath(paths, paths.specMd)}\` · 审计记录：\`${displayPath(paths, paths.artifactsDir)}/audit-${report.id}.md\``,
