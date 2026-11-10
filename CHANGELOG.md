@@ -4,6 +4,35 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.2 — 2026-11-10
+
+0.2.2 runtime peer alignment and boot verification.
+
+### Changed
+
+- `@deepseek-ai/cordis` peer: `~4.0.5 || ~4.1.0`.
+- `@deepseek-ai/schemastery` peer: `~3.18.5 || ~3.19.0`.
+- Dev dependencies pinned to the actually booted 0.2.2 pair:
+  `@deepseek-ai/cordis@4.1.0`, `@deepseek-ai/dsh-tools@0.2.2-rc.1`,
+  `@deepseek-ai/schemastery@3.19.0`.
+- `@deepseek-ai/dsh-tools` peer stays `^0.2.1-rc.5` (host/market compatible
+  with 0.2.1-rc.5 and 0.2.2-rc.1; rejects 0.3.0-rc.1).
+- README install commands now use DSH `0.2.2-rc.1` and the engines range
+  `>=0.2.1-rc.0 <0.3.0`.
+
+### Changed tests
+
+- `tests/market-compat.test.mjs` now evaluates the real verdict matrix with
+  semver prereleases: compatible on 0.2.1-rc.5 and 0.2.2-rc.1, incompatible
+  on 0.1.2 and 0.3.0-rc.1, old exact pin incompatible on 0.2.2-rc.1, and the
+  handwritten `<0.3.0` peer admits 0.3.0-rc.1 while the caret does not.
+
+### Verified
+
+- Typecheck and build against `@deepseek-ai/dsh-tools@0.2.2-rc.1`.
+- DSH boot on `0.2.2-rc.1` with this package (see `docs/0.9.2-runtime.md`).
+- npm package `0.9.2`.
+
 ## 0.9.1 — 2026-11-10
 
 DSH Market compatibility fix.

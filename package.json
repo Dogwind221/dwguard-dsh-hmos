@@ -1,6 +1,6 @@
 {
   "name": "dwguard-dsh-hmos",
-  "version": "0.9.1",
+  "version": "0.9.2",
   "description": "DwGuard-Dsh-Hmos — DSH 侧的鸿蒙双 Agent 编排与外部审计插件：任务包、对抗预审、派发、四维验收、返工与知识沉淀，外加设计参考库/范式包推荐、审计门禁、包级反馈与推荐基准。",
   "type": "module",
   "main": "lib/index.js",
@@ -81,9 +81,9 @@
     "release:dry": "node scripts/release.mjs --bump=patch --dry-run"
   },
   "peerDependencies": {
-    "@deepseek-ai/cordis": "~4.0.5",
+    "@deepseek-ai/cordis": "~4.0.5 || ~4.1.0",
     "@deepseek-ai/dsh-tools": "^0.2.1-rc.5",
-    "@deepseek-ai/schemastery": "~3.18.5"
+    "@deepseek-ai/schemastery": "~3.18.5 || ~3.19.0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {
@@ -97,9 +97,11 @@
     }
   },
   "devDependencies": {
-    "@deepseek-ai/dsh-tools": "0.2.1-rc.5",
-    "@deepseek-ai/schemastery": "3.18.5",
+    "@deepseek-ai/cordis": "4.1.0",
+    "@deepseek-ai/dsh-tools": "0.2.2-rc.1",
+    "@deepseek-ai/schemastery": "3.19.0",
     "@types/node": "^22.0.0",
+    "semver": "^7.7.3",
     "typescript": "5.6.3"
   },
   "repository": {

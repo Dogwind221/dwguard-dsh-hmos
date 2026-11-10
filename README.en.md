@@ -148,8 +148,13 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.1).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.2).
 
+> **0.9.2 aligns the 0.2.2 runtime peers**: `@deepseek-ai/cordis` is now
+> `~4.0.5 || ~4.1.0`, `@deepseek-ai/schemastery` is `~3.18.5 || ~3.19.0`, and
+> the dev dependency is pinned to `@deepseek-ai/dsh-tools@0.2.2-rc.1` with a
+> typecheck/build/boot verification on that host.
+>
 > **0.9.1 fixes DSH Market compatibility**: the `@deepseek-ai/dsh-tools` peer
 > is now `^0.2.1-rc.5` instead of an exact pin. DSH Market compares host-line
 > peers against the running DSH version, so the exact pin was classified
@@ -170,9 +175,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.1`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.1` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos@0.9.1` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.2`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.2` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.2` |
 
 Omit the version to follow the latest release.
 
@@ -181,7 +186,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.1`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.2`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -190,9 +195,9 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.9.1   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.9.2   # pin a version
 # without a global dsh CLI:
-npx @deepseek-ai/dsh@0.2.1-rc.5 plugin --profile web add dwguard-dsh-hmos
+npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
 
 From GitHub or a local checkout (CLI profiles only):
@@ -446,7 +451,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 174 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 176 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 
