@@ -19,18 +19,29 @@ citation: {
 
 | 语料 | 位置 | 规模 | 版本 |
 | --- | --- | --- | --- |
-| 华为设计文档 | `$DWG_DOCS_DIR/ux-design/`（默认 `~/harmony-docs/ux-design/`） | ~28 篇 / ~500 KB | `index.json` 内每篇 sha256 + 抓取时间 |
-| OpenHarmony 开发文档 | `$DWG_DOCS_DIR/openharmony-docs/` | 675 篇 / 10.6 MB | commit `f41b934`（2026-05-26） |
+| 华为设计指南索引（引用/摘要） | `docs/design-guide/index.json` | 167 篇 | 2026-11-10 抓取；每篇 sha256 + fetchedAt |
+| OpenHarmony 开发文档 | `$DWG_DOCS_DIR/openharmony-docs/` 或 `~/harmony-docs/kb/` | 13,822 篇 | 本机 `kb` 语料 |
 
-检索（子代理用工具，不用记路径）：
+0.9.4 起，华为设计文档的本地形态是**引用/摘要索引**，不是正文镜像：
+`docs/design-guide/index.json` 保存标题、官方 URL、Markdown sha256、字节数、
+抓取日期、短摘要、大纲和 `DW-*` 规则映射；**不保存正文、图片或可下载资产**。
+
+检索：
 
 ```text
-dwguard_rules list --dimension accessibility
-dwguard_rules get --ruleId AGC-RJ-013
-dwguard_rules search --query "点击热区"
+node scripts/search-design-guide.mjs "动效" --limit 5
+node scripts/search-design-guide.mjs --rule DW-AES-11 --limit 5
 ```
 
-命令行等价物：`node scripts/search-docs.mjs "点击热区" --limit=5`。语料目录默认读 `DWG_DOCS_DIR`，其次 `~/harmony-docs`，最后 `<workspace>/harmony-docs`；也可在插件配置里设 `docsDir`。
+旧的 `~/harmony-docs/ux-design/` 正文语料在本机不存在；规则 citation 仍保留
+官方 `.md` 链接，摘要索引用于快速定位，最终以官方原文为准。
+
+OpenHarmony 语料仍可用：
+
+```text
+dwguard_rules search --query "点击热区"
+node scripts/search-docs.mjs "点击热区" --limit=5
+```
 
 覆盖：**75 条规则中 66 条带 citation**（功能 30、审美 21、性能 11、无障碍 13）。没有官方出处的 9 条是 DwGuard 自定的验收口径（主路径、空态、幂等、状态恢复、图文比例、内存泄漏、定时器清理、非颜色编码、动效降级），保留 `source: 'DwGuard 验收规则'` 或扫描来源。
 

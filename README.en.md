@@ -144,12 +144,33 @@ hashes and acceptance consistency; `bridge` queues new DevEco deliveries for
 device means `blocked` (exit 2), never a fake pass. The 10-minute walkthrough is
 in [docs/quickstart-10min.md](docs/quickstart-10min.md).
 
+## Design knowledge (0.9.4)
+
+```powershell
+node scripts/fetch-design-guide.mjs --concurrency 6
+node scripts/search-design-guide.mjs "motion" --limit 5
+node scripts/render-design-foundations.mjs
+node --test tests/design-knowledge.test.mjs
+```
+
+`docs/design-guide/index.json` stores official URLs, markdown sha256, fetch date,
+short summaries, outlines and rule references; `docs/design-resources/index.json`
+is a link-only resource catalog with license/scope fields; and
+`docs/design-foundations.json` / `.md` binds the beginner design checklist to
+measurable `DW-AES-*` / `DW-A11Y-*` rules. No official bodies, images, icons or
+templates are stored.
+
 See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.2).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.4).
 
+> **0.9.4 adds design knowledge**: a citation/summary index of 167 official
+> Huawei UX design documents (sha256 + fetch date; no bodies/images/assets),
+> a link-only design-resource catalog, and a design-foundations checklist bound
+> to `DW-AES-*` / `DW-A11Y-*`. Local only, not pushed.
+>
 > **0.9.2 aligns the 0.2.2 runtime peers**: `@deepseek-ai/cordis` is now
 > `~4.0.5 || ~4.1.0`, `@deepseek-ai/schemastery` is `~3.18.5 || ~3.19.0`, and
 > the dev dependency is pinned to `@deepseek-ai/dsh-tools@0.2.2-rc.1` with a
@@ -176,9 +197,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.2`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.2` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.2` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.4`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.4` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.4` |
 
 Omit the version to follow the latest release.
 
@@ -187,7 +208,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.2`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.4`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -196,7 +217,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.9.2   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.9.4   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -452,7 +473,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 176 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 180 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

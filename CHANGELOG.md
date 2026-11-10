@@ -4,6 +4,28 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.4 — 2026-11-10
+
+Design-knowledge ingestion (local only; not pushed).
+
+### Added
+
+- `docs/design-guide/index.json`: 167 official Huawei UX documents indexed from
+  `llms/docs-ux-design.txt`, each with source URL, markdown sha256, byte count,
+  fetch date, short summary, outline and `DW-*` rule references. **No document
+  bodies, images or downloadable assets are stored.**
+- `scripts/fetch-design-guide.mjs` for reproducible refresh.
+- `docs/design-resources/index.json`: link-only cards for official design
+  portal/resources, component/icon/template guidance, DevEco toolchain and
+  accessibility; each card declares license, scope, usage and not-for.
+- `docs/design-foundations.json` + generated `docs/design-foundations.md`:
+  principles/layout/color/type/icon/motion/accessibility checklist, every item
+  bound to an existing measurable `DW-AES-*` / `DW-A11Y-*` rule plus official
+  guide references.
+- `tests/design-knowledge.test.mjs`: citation-only/no-body checks, resource
+  license/scope checks, rule/guide-reference closure and rendered-doc coverage.
+- `npm run design:guide`, `design:foundations`, `design:check`.
+
 ## 0.9.2 — 2026-11-10
 
 0.2.2 runtime peer alignment and boot verification.

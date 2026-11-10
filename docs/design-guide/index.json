@@ -1,0 +1,3605 @@
+{
+  "schemaVersion": 1,
+  "source": "https://developer.huawei.com/consumer/cn/llms/docs-ux-design.txt",
+  "sourceSha256": "7fade3d5912c53732db640989f16fb11958fdb9285f4bb164de7d4d95c3eed9e",
+  "sourceUpdateTime": "2026-11-09T20:01:50.806394635Z",
+  "fetchedAt": "2026-11-10T13:16:27.140Z",
+  "license": "Huawei official documentation terms; citation/summary only; no redistribution",
+  "count": 167,
+  "stored": "citation-and-summary-only; no document body, images or asset files",
+  "entries": [
+    {
+      "id": "HW-UX-001",
+      "title": "设计-应用设计-针对多设备设计-电脑",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/2in1-0000001777531700.md",
+      "leaf": "电脑",
+      "section": "针对多设备设计",
+      "summary": "电脑（针对多设备设计，官方原文见链接）",
+      "outline": [
+        "电脑"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "33d72443f129df5ba1b8161161d071cf05f32534dbec1f9405e7a3296be36fee",
+      "bytes": 572,
+      "fetchedAt": "2026-11-10T13:16:20.776Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-002",
+      "title": "设计-应用设计-元服务设计-最佳设计实践-账号",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/accounts-0000001967444380.md",
+      "leaf": "账号",
+      "section": "元服务设计 / 最佳设计实践",
+      "summary": "华为账号（Account Kit）提供简单、快速、安全的登录功能，让用户快捷地使用华为账号登录元服务，当元服务涉及账号体系和登录能力时，需规范使用华为账号能力。通过用户授权，华为账号可提供手机号、头像、收货地址、发票抬头等用户信息，无需用户手动输入复杂信息，帮助元服务更高效的完成履约流程。元服务设计时，建议按照官方规范指引进行设计实现。",
+      "outline": [
+        "账号",
+        "使用华为账号登录",
+        "概述",
+        "静默登录",
+        "获取华为账号用户信息",
+        "概述",
+        "获取头像",
+        "获取昵称"
+      ],
+      "ruleRefs": [],
+      "sha256": "011afb0f17400c18ec41b3f8d125655e044f55745e3dfd0c05f60e3c4cd2ab21",
+      "bytes": 8706,
+      "fetchedAt": "2026-11-10T13:16:20.814Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-003",
+      "title": "设计-应用设计-控件-展示类-索引条",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/alphabetindexer-0000001956975265.md",
+      "leaf": "索引条",
+      "section": "控件 / 展示类",
+      "summary": "索引条主要针对按字母顺序排序的列表进行快速定位。用于快速精确定位，如：联系人列表 (查找联系人)、天气、世界时钟 (添加城市)。开发相关描述请参考 AlphabetIndexer 文档。",
+      "outline": [
+        "索引条",
+        "如何使用",
+        "组件规则",
+        "控件构成",
+        "动态布局",
+        "视觉规则",
+        "沉浸光感",
+        "设备差异"
+      ],
+      "ruleRefs": [],
+      "sha256": "ff34bbd243ade1a7f388a6279e8dd07278c18926738c14a64ba8c849988cbf73",
+      "bytes": 9488,
+      "fetchedAt": "2026-11-10T13:16:20.730Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-004",
+      "title": "设计-应用设计-通用设计基础-动效-动效属性",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/animation-attributes-0000001797117229.md",
+      "leaf": "动效属性",
+      "section": "通用设计基础 / 动效",
+      "summary": "任何类型的动效都包含三大基本的动效属性：时长、曲线、帧率。这些基本属性形成了动效不可缺少的基本要素。通过组合这些基本的动效属性，可以塑造产品动效的不同风格特点，例如稳重、活泼、轻盈、舒缓等。",
+      "outline": [
+        "动效属性",
+        "时长",
+        "单位",
+        "复杂程度",
+        "区域范围",
+        "曲线",
+        "动效曲线概况",
+        "贝塞尔曲线"
+      ],
+      "ruleRefs": [
+        "DW-AES-11"
+      ],
+      "sha256": "0d8f402b1234a5530685bb1a02c871dc8626655c9f6bbb704888e9ec239821e8",
+      "bytes": 14644,
+      "fetchedAt": "2026-11-10T13:16:20.854Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-005",
+      "title": "设计-应用设计-通用设计基础-动效-设计原则",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/animation-design-principles-0000001750237392.md",
+      "leaf": "设计原则",
+      "section": "通用设计基础 / 动效",
+      "summary": "在设计动效过程中，要清楚地理解动效在系统中承载的作用，动效能体现页面的流畅过渡、对象的明确提示、元素的层级关系、产品的品牌印象等。动效要始终围绕操作符合用户心理预期，物体运动符合真实世界，元素表现形态凸显产品的品牌与调性。",
+      "outline": [
+        "设计原则",
+        "自然流畅",
+        "简洁高效",
+        "快速响应",
+        "运动一致",
+        "隐藏等待",
+        "凸显品牌"
+      ],
+      "ruleRefs": [
+        "DW-AES-11"
+      ],
+      "sha256": "d29f848f1ee3d08a49fa38d4f4cb11cfbbeebd3db6c0181bbc656180cdf17de7",
+      "bytes": 1887,
+      "fetchedAt": "2026-11-10T13:16:20.793Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-006",
+      "title": "设计-应用设计-针对多设备设计-电脑-应用设计",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/app-design-0000002353509845.md",
+      "leaf": "应用设计",
+      "section": "针对多设备设计 / 电脑",
+      "summary": "应用窗口的内容区作为展示信息的空间，需要根据业务类型合理选择布局、控件元素和响应式布局。",
+      "outline": [
+        "应用设计",
+        "应用布局",
+        "通栏布局",
+        "双分栏布局",
+        "三分栏布局",
+        "布局转换",
+        "使用多态控件",
+        "多窗口协同"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "9d41f5023ed34edc96cbd3febdc6fe29a8df52307d9c9406d5ccaf5d27846f15",
+      "bytes": 12023,
+      "fetchedAt": "2026-11-10T13:16:20.813Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-007",
+      "title": "设计-应用设计-针对多设备设计-智能穿戴-应用架构",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/application-architecture-0000002202799801.md",
+      "leaf": "应用架构",
+      "section": "针对多设备设计 / 智能穿戴",
+      "summary": "智能穿戴产品的信息布局需要根据当前应用的实际内容进行设计，根据手表界面信息的有无可规范为两大应用架构：非空界面通用架构和空界面架构。其中空界面架构，无需展示其他标题等导航类信息，使用简单图文告知当前界面状态即可。",
+      "outline": [
+        "应用架构",
+        "应用架构",
+        "应用导航",
+        "层级导航",
+        "平级导航",
+        "如何使用"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "feaa93f5d934ba5012459f1037f6d3df511fd4ebd36ea3f36c53dd6dd3ae1bc2",
+      "bytes": 9258,
+      "fetchedAt": "2026-11-10T13:16:20.981Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-008",
+      "title": "设计-应用设计-通用设计基础-视觉风格-应用图标",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/application-icon-0000001953444009.md",
+      "leaf": "应用图标",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "应用图标设计的核心是简洁、高效和品牌识别度。一个好的图标可以准确传达应用相关信息，也可以帮助用户快速定位你的应用。HarmonyOS图标设计旨在回归本源，通过现代化的语义表达，准确传达功能、服务和品牌。视觉上兼顾美观性和识别性；形式上兼收并蓄，和而不同。如果你需要一些图标设计的帮助，我们提供了相关的设计模板资源，请参阅设计模板和资源。",
+      "outline": [
+        "应用图标",
+        "概述",
+        "图形网格",
+        "色彩规则",
+        "多设备图标适配",
+        "手机、折叠屏、平板",
+        "电脑",
+        "智慧屏"
+      ],
+      "ruleRefs": [
+        "DW-AES-10",
+        "DW-AES-20"
+      ],
+      "sha256": "bdf72ff64cc17652a9dda69bb28d05de8ae59056bd269b1b4ba5fb9602682beb",
+      "bytes": 11183,
+      "fetchedAt": "2026-11-10T13:16:21.026Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-009",
+      "title": "设计-应用设计-控件-展示类-新事件标记",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/badge-0000001929816016.md",
+      "leaf": "新事件标记",
+      "section": "控件 / 展示类",
+      "summary": "应用中可能有需用户关注的新事件提醒，需要采用新事件标记来标识。开发能力相关请参考 Badge 文档。",
+      "outline": [
+        "新事件标记",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "d12d0ae3b0471f7fd7dad066fc7b57dc0c17d4561521960825b8e5e34735b891",
+      "bytes": 5532,
+      "fetchedAt": "2026-11-10T13:16:21.049Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-010",
+      "title": "设计-应用设计-元服务设计-最佳设计实践",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/best-practices-0000002004044485.md",
+      "leaf": "最佳设计实践",
+      "section": "元服务设计",
+      "summary": "最佳设计实践（元服务设计，官方原文见链接）",
+      "outline": [
+        "最佳设计实践"
+      ],
+      "ruleRefs": [],
+      "sha256": "156641b6f8eaeac15019b136efd67069652fe9a62d327167c9edf170099674c6",
+      "bytes": 126,
+      "fetchedAt": "2026-11-10T13:16:21.027Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-011",
+      "title": "设计-应用设计-控件-容器类-半模态面板",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/bindsheet-0000001956852753.md",
+      "leaf": "半模态面板",
+      "section": "控件 / 容器类",
+      "summary": "半模态面板是一种介于模态窗口和非模态窗口之间的设计元素，常用于需要用户注意但不完全阻断用户操作的场景。半模态面板应允许用户通过点击面板外部区域或特定的关闭按钮来关闭，且面板内的操作应尽量简化，避免复杂的交互流程。半模态的使用在手机端、平板及电脑设备中都极为广泛，在 HarmonyOS NEXT 中的半模态窗口会跟随设备屏幕和应用窗口的展示比例进行适当的布局适配，为用户提供最佳的使用体验。开发指导链接：详情可参照 BindSheet 相关文档介绍。",
+      "outline": [
+        "半模态面板",
+        "如何使用",
+        "构成",
+        "交互规则",
+        "视觉规则",
+        "沉浸光感",
+        "半模态比例与显示布局",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-15"
+      ],
+      "sha256": "015292c277d6757f056b222460ef31d9486a5762f8fd6b7cc3daa87da835d050",
+      "bytes": 20664,
+      "fetchedAt": "2026-11-10T13:16:21.092Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-012",
+      "title": "设计-应用设计-控件-展示类-空白",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/blank-0000001956815485.md",
+      "leaf": "空白",
+      "section": "控件 / 展示类",
+      "summary": "空白填充组件，在容器主轴方向上，空白填充组件具有自动填充容器空余部分的能力。仅当父组件为 Row/Column/Flex 时生效。开发相关能力请参考 Blank 文档。",
+      "outline": [
+        "空白",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "6f283895437d15ca378aa6c57c247665621009dc48cf66a06f83187feaa4be12",
+      "bytes": 3159,
+      "fetchedAt": "2026-11-10T13:16:21.014Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-013",
+      "title": "设计-应用设计-控件-导航类-底部页签",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/bottomtab-0000001956787789.md",
+      "leaf": "底部页签",
+      "section": "控件 / 导航类",
+      "summary": "移动设备中最常见的应用级导航控件，开发相关描述请参考 Tabs/BottomTabBarStyle 文档。",
+      "outline": [
+        "底部页签",
+        "如何使用",
+        "视觉规则",
+        "视觉反馈",
+        "沉浸光感",
+        "模糊材质",
+        "布局规则",
+        "悬浮式页签"
+      ],
+      "ruleRefs": [
+        "DW-AES-17"
+      ],
+      "sha256": "ca42d235c70dd59b85385d6e53cdaefb050c6385b1b859c6b877612a53f42420",
+      "bytes": 30219,
+      "fetchedAt": "2026-11-10T13:16:21.267Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-014",
+      "title": "设计-应用设计-系统特性&能力-系统特性-播控中心",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/broadcasting-control-0000001957017133.md",
+      "leaf": "播控中心",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "媒体播控用于显示当前设备正在播放的音视频媒体信息，以及帮助用户高效快捷地管理媒体内容的播放。",
+      "outline": [
+        "播控中心",
+        "媒体播控",
+        "媒体播控设计原则",
+        "播控模板构成",
+        "标题",
+        "歌词",
+        "封面图片",
+        "资源标签"
+      ],
+      "ruleRefs": [],
+      "sha256": "5ba04c8c56e25db5ec7f36724f500de7cbb1fc8cf80c20c73c129c4256f63349",
+      "bytes": 11036,
+      "fetchedAt": "2026-11-10T13:16:21.354Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-015",
+      "title": "设计-应用设计-控件-操作类-按钮",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/button-0000001929683228.md",
+      "leaf": "按钮",
+      "section": "控件 / 操作类",
+      "summary": "视按钮重要程度、屏幕空间大小、整体布局选择按钮类型。按钮重要程度：强调按钮>填充按钮>文字按钮。",
+      "outline": [
+        "按钮",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "组件规格",
+        "响应式布局",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-12"
+      ],
+      "sha256": "1f8caa94b937bfb1133eb54bcdeb840114a8d50c8f87043d4160e1def4affad8",
+      "bytes": 28316,
+      "fetchedAt": "2026-11-10T13:16:21.290Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-016",
+      "title": "设计-应用设计-应用设计最佳实践-汽车类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/cars-0000001930233436.md",
+      "leaf": "汽车类",
+      "section": "应用设计最佳实践",
+      "summary": "汽车类应用主要包括首页、汽车详情、3D 看车、车辆对比等核心的应用场景。在此类场景中，用户能够选择其感兴趣的汽车品牌和其车型，在页面中观看各种参数、配件、功能等，甚至还能看 3D 汽车模型或者是更换喜欢的配色进行观察。此类应用旨在让用户在选车看车时，使用大屏设备有更优的体验。",
+      "outline": [
+        "汽车类",
+        "首页",
+        "选车",
+        "车辆详情",
+        "全屏3D看车",
+        "询底价半模态",
+        "汽车评分",
+        "汽车PK"
+      ],
+      "ruleRefs": [],
+      "sha256": "6514db07c9b5d46df209acde43013763f13a0ee9cda6378d29c55eff8082453c",
+      "bytes": 6722,
+      "fetchedAt": "2026-11-10T13:16:21.252Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-017",
+      "title": "设计-应用设计-控件-选择类-勾选",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/checkbox-0000001957012561.md",
+      "leaf": "勾选",
+      "section": "控件 / 选择类",
+      "summary": "勾选用于表示用户同意该项的描述，明确接受该选项被选中。常见的场景如：USB 连接界面的\"不再提示\"，图片发送时的选中状态等。单个选项独自使用时请参考 Checkbox 文档，多个选项之间有父子级关系请参考 CheckboxGroup 文档。",
+      "outline": [
+        "勾选",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "55fc7b778fd8a23381b48657c1515be0b5bde199adee81d9f22ec585003ed958",
+      "bytes": 6853,
+      "fetchedAt": "2026-11-10T13:16:21.277Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-018",
+      "title": "设计-应用设计-控件-操作类-操作块",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/chips-0000001929842624.md",
+      "leaf": "操作块",
+      "section": "控件 / 操作类",
+      "summary": "一种块状的入口，可展示当前内容页签，也可包含图片和文本。常用于展示收件人，例如：邮件收件人或信息收件人。开发相关描述请参考 Chip 文档。",
+      "outline": [
+        "操作块",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "组件规格",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "8cd26ca5d589e413d61473db3e76a46c4a23c656e43db992ebec8cb92e2f7323",
+      "bytes": 6808,
+      "fetchedAt": "2026-11-10T13:16:21.305Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-019",
+      "title": "设计-应用设计-控件-导航类-子页签",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/chipsgroup-0000001929788350.md",
+      "leaf": "子页签",
+      "section": "控件 / 导航类",
+      "summary": "子页签控件是展示在应用程序顶部的切换类控件，主要用于在一个组件内切换不同页面内容。在移动端产品上，页签名称应简洁明了，清晰描述分类的内容。在系统中我们提供了传统的下划线样式子页签，开发相关可参考 Tabs/SubTabBarStyle 文档，此外，还有新增胶囊形态子页签，可定义样式及交互规格更丰富，可参阅 ChipGroup 描述文档。",
+      "outline": [
+        "子页签",
+        "交互规则",
+        "视觉规则",
+        "沉浸光感",
+        "组件规格",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-17"
+      ],
+      "sha256": "0dcb3cad7019ebb5d5828717ecd5bf77296ed60e4109a9cd297314b07ad19489",
+      "bytes": 10195,
+      "fetchedAt": "2026-11-10T13:16:21.428Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-020",
+      "title": "设计-应用设计-通用设计基础-视觉风格-色彩",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/color-0000001776857164.md",
+      "leaf": "色彩",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "在 HarmonyOS NEXT的色彩设计中，强调品牌色的特征性展示以及系统色彩的对比关系，通过色彩的层次结构传递视觉的连续性和界面的关联性。HarmonyOS NEXT 的色彩系统的体验目标是为所有人群而设计，体现更加包容性的设计，以不同用户群体的视角思考问题。",
+      "outline": [
+        "色彩",
+        "如何分层构建色彩",
+        "如何运作 Token 参数",
+        "如何使用 Token 参数",
+        "文本色与图标色",
+        "**组件容器色**",
+        "界面背景色",
+        "**系统基础与语义 Token 全量表**"
+      ],
+      "ruleRefs": [
+        "DW-AES-04"
+      ],
+      "sha256": "c517bf6f7d564aae6fcd681ba53dc7bb9427e7e8a8470d71d43b27531948dc1d",
+      "bytes": 72073,
+      "fetchedAt": "2026-11-10T13:16:21.641Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-021",
+      "title": "设计-应用设计-控件-选择类-色彩选择器",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/color-picker-0000002574393143.md",
+      "leaf": "色彩选择器",
+      "section": "控件 / 选择类",
+      "summary": "色彩选择器支持网格、光谱、滑块等主要选色方式，不透明度调整，屏幕取色与色值输入等次要选色方式，以及收藏常用颜色的功能，从而提高选色效率，常用于个性化配置颜色的场景，如画笔颜色、壁纸主题颜色等。",
+      "outline": [
+        "色彩选择器",
+        "如何使用",
+        "最佳实践",
+        "布局规则"
+      ],
+      "ruleRefs": [
+        "DW-AES-04"
+      ],
+      "sha256": "d8b9bc99a2e0b3b2bf3cea834bea1408d87d087d78fae4b0fa1bcb6e5e8a2e75",
+      "bytes": 8862,
+      "fetchedAt": "2026-11-10T13:16:21.505Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-022",
+      "title": "设计-应用设计-控件-操作类-核心操作栏",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_actionbar-0000002306891560.md",
+      "leaf": "核心操作栏",
+      "section": "控件 / 操作类",
+      "summary": "核心操作栏悬浮在页面下方，是用于承载核心操作和功能的系统组件。开发信息请参阅 HDS Action Bar 文档。",
+      "outline": [
+        "核心操作栏",
+        "如何使用",
+        "视觉规则",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "6c20d9bbef613fe9f2ce1f77f7802ea509e2c74b50a1dfba9472746b3f598a6b",
+      "bytes": 3419,
+      "fetchedAt": "2026-11-10T13:16:21.513Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-023",
+      "title": "设计-应用设计-控件-容器类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_container-0000001929604124.md",
+      "leaf": "容器类",
+      "section": "控件",
+      "summary": "容器类（控件，官方原文见链接）",
+      "outline": [
+        "容器类"
+      ],
+      "ruleRefs": [],
+      "sha256": "5914a22ee6a72c99972f88e3fc900178d965015821242e0e50167cc90af78856",
+      "bytes": 332,
+      "fetchedAt": "2026-11-10T13:16:21.508Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-024",
+      "title": "设计-应用设计-控件-操作类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_controls-0000001956922769.md",
+      "leaf": "操作类",
+      "section": "控件",
+      "summary": "操作类（控件，官方原文见链接）",
+      "outline": [
+        "操作类"
+      ],
+      "ruleRefs": [],
+      "sha256": "0a48c03d9fc472e40ec61e82a253586d415891ba415616312cc6d4c489b7b601",
+      "bytes": 892,
+      "fetchedAt": "2026-11-10T13:16:21.507Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-025",
+      "title": "设计-应用设计-控件-输入类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_input-0000001956762929.md",
+      "leaf": "输入类",
+      "section": "控件",
+      "summary": "输入类（控件，官方原文见链接）",
+      "outline": [
+        "输入类"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "987c7e2ac4a069c00b7b948fbb5885bb19182249bce2c783f90fa71b3ff200a8",
+      "bytes": 445,
+      "fetchedAt": "2026-11-10T13:16:21.643Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-026",
+      "title": "设计-应用设计-控件-导航类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_navigation-0000001929763488.md",
+      "leaf": "导航类",
+      "section": "控件",
+      "summary": "导航类（控件，官方原文见链接）",
+      "outline": [
+        "导航类"
+      ],
+      "ruleRefs": [],
+      "sha256": "da24cfb0303d85ac783d363fc1e28539bb5dd6254381578df7906de0f1d595f5",
+      "bytes": 445,
+      "fetchedAt": "2026-11-10T13:16:21.789Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-027",
+      "title": "设计-应用设计-控件-选择类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_selection-0000001929763496.md",
+      "leaf": "选择类",
+      "section": "控件",
+      "summary": "选择类（控件，官方原文见链接）",
+      "outline": [
+        "选择类"
+      ],
+      "ruleRefs": [],
+      "sha256": "663de26129eeca0af2f5423adf0da55bb6a4b1076d480bb2ffb1dfd87c08db98",
+      "bytes": 876,
+      "fetchedAt": "2026-11-10T13:16:21.699Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-028",
+      "title": "设计-应用设计-控件-展示类-即时操作",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_snackbar-0000002340726169.md",
+      "leaf": "即时操作",
+      "section": "控件 / 展示类",
+      "summary": "即时操作组件位于屏幕底部或固定位置，用于提供操作结果反馈、状态变更提示或轻量级通知。该组件支持自动关闭或手动关闭功能，确保不影响页面其他操作。",
+      "outline": [
+        "即时操作",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "7f79987c3cc5ff6ae245e8860b25ab36bc6a3a5cd535c1834ea2ae268febdba8",
+      "bytes": 8321,
+      "fetchedAt": "2026-11-10T13:16:21.899Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-029",
+      "title": "设计-应用设计-控件-展示类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/component_view-0000001929604116.md",
+      "leaf": "展示类",
+      "section": "控件",
+      "summary": "展示类（控件，官方原文见链接）",
+      "outline": [
+        "展示类"
+      ],
+      "ruleRefs": [],
+      "sha256": "9eea23a15cf3b806fa2e801dc0ee1e42ad8ac3d3bb4d1024560af845491a1fa9",
+      "bytes": 1632,
+      "fetchedAt": "2026-11-10T13:16:21.784Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-030",
+      "title": "设计-应用设计-针对多设备设计-电脑-设计概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/concept-0000002353669657.md",
+      "leaf": "设计概述",
+      "section": "针对多设备设计 / 电脑",
+      "summary": "电脑融合了屏幕触摸和键鼠的交互手段，保持便携性的同时能充分发挥设备生产力，帮助用户高效完成任务。",
+      "outline": [
+        "设计概述",
+        "体验设计点",
+        "保证基础体验",
+        "设计应用和服务体验",
+        "兼顾多设备形态体验",
+        "支持系统特性",
+        "系统特性",
+        "系统能力"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "f1bcbcc9d1f1ac45747698ca1a5d13d9339626f7d4c05bc2fb4c71b2dd5d29ef",
+      "bytes": 5826,
+      "fetchedAt": "2026-11-10T13:16:21.857Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-031",
+      "title": "设计-应用设计-应用设计最佳实践-便捷生活类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/convenient-life-0000001957252465.md",
+      "leaf": "便捷生活类",
+      "section": "应用设计最佳实践",
+      "summary": "便捷生活类场景主要包括点餐、观影、看攻略等。此类场景在宽屏上可以让用户拥有更高效和流畅的使用体验。",
+      "outline": [
+        "便捷生活类",
+        "首页的自适应布局",
+        "美食页面",
+        "搜索列表",
+        "店铺页",
+        "详情页",
+        "选规格",
+        "电影"
+      ],
+      "ruleRefs": [],
+      "sha256": "03b8609be3252b1ab8b137ae1ad222de3f5a7b810334dc1144168aa2312ab1ae",
+      "bytes": 17130,
+      "fetchedAt": "2026-11-10T13:16:21.915Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-032",
+      "title": "设计-应用设计-通用设计基础-视觉风格-圆角参数",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/corner-radius-parameter-0000002556468705.md",
+      "leaf": "圆角参数",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "圆角是UI设计中对矩形的直角边缘进行圆弧化处理的视觉规范，用于定义容器或控件的边角样式。",
+      "outline": [
+        "圆角参数",
+        "圆角使用原则",
+        "同层统一",
+        "层级正相关",
+        "通用圆角尺寸",
+        "通用圆角使用场景示例",
+        "系统通用超小圆角",
+        "系统通用小圆角"
+      ],
+      "ruleRefs": [
+        "DW-AES-03"
+      ],
+      "sha256": "84ac7802b3ead7f137d46ff4fe46069aef41dbe2f246fc50ffb5d171de36d300",
+      "bytes": 9731,
+      "fetchedAt": "2026-11-10T13:16:21.949Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-033",
+      "title": "设计-应用设计-控件-输入类-数字加减",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/counter-0000001929853284.md",
+      "leaf": "数字加减",
+      "section": "控件 / 输入类",
+      "summary": "数字加减控件是一种常见的输入控件,用于在移动端应用中输入或调整数值。开发能力相关可参考 Advance.Counter 和 Counter 文档。",
+      "outline": [
+        "数字加减",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "565ca90da620ae3c1510eb57e404732de7fce0cc8c7ce94122007b9d4f707167",
+      "bytes": 4226,
+      "fetchedAt": "2026-11-10T13:16:21.991Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-034",
+      "title": "设计-应用设计-系统特性&能力-系统特性-深色模式",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/dark-mode-0000001823255497.md",
+      "leaf": "深色模式",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "深色模式满足更多个性化的需求，基于人因研究设计了深色模式下舒适的颜色范围。深色模式开启后，浅色主题应用界面背景会变成深色，而文字、图标等前景会变成浅色。深色模式的界面上内容更加突出、在 OLED 屏幕的设备上更加省电、能够给用户带来视觉舒适感和沉浸式体验。",
+      "outline": [
+        "深色模式",
+        "设计原则",
+        "易读性",
+        "舒适性",
+        "一致性"
+      ],
+      "ruleRefs": [
+        "DW-AES-04",
+        "DW-AES-08"
+      ],
+      "sha256": "a81bd33710c265bca93873925a40ab3e3400aa653a65f53871d9c12b8b35c376",
+      "bytes": 19434,
+      "fetchedAt": "2026-11-10T13:16:22.164Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-035",
+      "title": "设计-应用设计-控件-展示类-数据可视化",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/datapanel-0000001956815481.md",
+      "leaf": "数据可视化",
+      "section": "控件 / 展示类",
+      "summary": "将传统数据转换成可视化的图形，把隐藏在数据中的信息以更加直观、友好、视觉化的方式直接展现于用户面前，提升用户获取数据信息的效率。环形进度数据开发相关能力请参考 DataPanel 文档，图标类数据开发相关能力请参考 Gauge 文档。",
+      "outline": [
+        "数据可视化",
+        "如何使用",
+        "类别",
+        "界面布局",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "9535899c82ac6d30233f1bc29d579051b4380b0e6e15f2135ea7e1a4eac5bd51",
+      "bytes": 11283,
+      "fetchedAt": "2026-11-10T13:16:22.036Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-036",
+      "title": "设计-应用设计-通用设计基础-动效",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-animation-0000001750078484.md",
+      "leaf": "动效",
+      "section": "通用设计基础",
+      "summary": "动效（通用设计基础，官方原文见链接）",
+      "outline": [
+        "动效"
+      ],
+      "ruleRefs": [
+        "DW-AES-11"
+      ],
+      "sha256": "7c96e5dbc7ee73c2038b319d1b234751229fd753040d0f114f72f595bd21a101",
+      "bytes": 623,
+      "fetchedAt": "2026-11-10T13:16:22.133Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-037",
+      "title": "设计-应用设计-通用设计基础-动效-概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-animation-overview-0000001750985338.md",
+      "leaf": "概述",
+      "section": "通用设计基础 / 动效",
+      "summary": "HarmonyOS 动效引力体系，围绕回归本源设计理念，打造自然、流畅、品质一体的操作体验。",
+      "outline": [
+        "概述",
+        "引力动效体系"
+      ],
+      "ruleRefs": [
+        "DW-AES-11"
+      ],
+      "sha256": "6e1c239f892e1685946f7b1b87de253ffa9b2252ca31ca010357508a51e00925",
+      "bytes": 1372,
+      "fetchedAt": "2026-11-10T13:16:22.142Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-038",
+      "title": "设计-应用设计-通用设计基础-设计理念",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-concepts-0000001795698445.md",
+      "leaf": "设计理念",
+      "section": "通用设计基础",
+      "summary": "在万物互联的时代，我们每天都会接触到很多不同形态的设备，每种设备在特定的场景下能够为我们解决一些特定的问题，表面看起来我们能够做到的事情更多了，但每种设备在使用时都是孤立的，提供的服务也都局限于特定的设备，我们的生活并没有变得更好更便捷，反而变得非常复杂。HarmonyOS 的诞生旨在解决这些问题，在纷繁复杂的世界中回归本源，建立平衡，连接万物。",
+      "outline": [
+        "设计理念",
+        "One",
+        "Harmonious",
+        "Universe"
+      ],
+      "ruleRefs": [],
+      "sha256": "2237869a86e0d7e67ce3cce3d0427a045cfe58999719db751d145e2d1f63d761",
+      "bytes": 3013,
+      "fetchedAt": "2026-11-10T13:16:22.163Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-039",
+      "title": "设计-应用设计-通用设计基础-全球化",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-globalization-0000001748539688.md",
+      "leaf": "全球化",
+      "section": "通用设计基础",
+      "summary": "国际化简称「i18n」，是一种趋同的设计方式，通过一种方案去满足不同国家的需求。",
+      "outline": [
+        "全球化",
+        "视觉",
+        "文字与图片",
+        "颜色",
+        "图标",
+        "插画",
+        "Emoji 表情",
+        "手势"
+      ],
+      "ruleRefs": [],
+      "sha256": "d7a306b3b6c82145b72208d4b891a36e93bad06eb6c9fc18f90d98422e15de7f",
+      "bytes": 11703,
+      "fetchedAt": "2026-11-10T13:16:22.253Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-040",
+      "title": "设计-应用设计-通用设计基础-布局",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-layout-0000001748539680.md",
+      "leaf": "布局",
+      "section": "通用设计基础",
+      "summary": "布局（通用设计基础，官方原文见链接）",
+      "outline": [
+        "布局"
+      ],
+      "ruleRefs": [
+        "DW-AES-01",
+        "DW-AES-05"
+      ],
+      "sha256": "ce2e249de0e4c6a798044b8e9c5d8b52521f27e1d3843660cb1b61af5c33e8bf",
+      "bytes": 419,
+      "fetchedAt": "2026-11-10T13:16:22.275Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-041",
+      "title": "设计-应用设计-通用设计基础-布局-布局基础",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-layout-basics-0000001795579413.md",
+      "leaf": "布局基础",
+      "section": "通用设计基础 / 布局",
+      "summary": "布局不是静态固定的，当显示环境发生变化时，如横竖屏切换、调节字体大小、应用分屏，要及时调整内容的布局方式以适应变化。",
+      "outline": [
+        "布局基础",
+        "窗口状态",
+        "设备类型",
+        "窗口宽度/高度",
+        "折叠屏窗口状态",
+        "横竖屏状态",
+        "虚拟像素单位：vp",
+        "字体像素单位：fp"
+      ],
+      "ruleRefs": [
+        "DW-AES-01",
+        "DW-AES-05"
+      ],
+      "sha256": "bf7d05a2dbc887236e1716b93e211810b97d1660ae85d7993f2b2d5da4585478",
+      "bytes": 15366,
+      "fetchedAt": "2026-11-10T13:16:22.440Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-042",
+      "title": "设计-应用设计-针对多设备设计-折叠屏-设计原则",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-principles-0000001957023989.md",
+      "leaf": "设计原则",
+      "section": "针对多设备设计 / 折叠屏",
+      "summary": "折叠态或支架态下，屏幕被划分为 2 个显示区域，一个主要显示屏幕，一个次要显示屏幕。",
+      "outline": [
+        "设计原则",
+        "折叠屏形态",
+        "体验设计点"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "d9615b070ec25827bd359fedb88cb6d175681323e7c1b862e0edc08073e0e61d",
+      "bytes": 2023,
+      "fetchedAt": "2026-11-10T13:16:22.374Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-043",
+      "title": "设计-应用设计-通用设计基础-布局-响应式布局方法",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-responsive-layout-method-0000001795698449.md",
+      "leaf": "响应式布局方法",
+      "section": "通用设计基础 / 布局",
+      "summary": "根据使用场景，提供了以下 8 种不同的布局方法，在面向多端应用设计过程中不同的方法可以叠加使用。",
+      "outline": [
+        "响应式布局方法",
+        "自适应拉伸",
+        "自适应缩放",
+        "自适应延伸",
+        "自适应折行",
+        "缩进布局",
+        "挪移布局",
+        "重复布局"
+      ],
+      "ruleRefs": [
+        "DW-AES-01",
+        "DW-AES-05"
+      ],
+      "sha256": "86d4b0bf6d65698b7c5b72972c21a88923d54cafa4919c8e63482c364aa273e0",
+      "bytes": 11140,
+      "fetchedAt": "2026-11-10T13:16:22.392Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-044",
+      "title": "设计-应用设计-通用设计基础-布局-响应式应用架构",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-responsive-layout-structure-0000001748539684.md",
+      "leaf": "响应式应用架构",
+      "section": "通用设计基础 / 布局",
+      "summary": "响应式布局方法也用于应用导航，当应用窗口发生变化时，应用导航方式也会随着窗口达到对应断点值而发生变化，通过导航方式的调整提高交互的易用性。",
+      "outline": [
+        "响应式应用架构",
+        "侧边Tab",
+        "分栏",
+        "侧边导航栏"
+      ],
+      "ruleRefs": [
+        "DW-AES-01",
+        "DW-AES-05"
+      ],
+      "sha256": "507c0cfdae337f5a81bc14a0cce376fa2a8aa37541ae91a848e60401bf36dabc",
+      "bytes": 5100,
+      "fetchedAt": "2026-11-10T13:16:22.384Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-045",
+      "title": "设计-应用设计-通用设计基础-界面用语",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/design-ui-language-0000001795698453.md",
+      "leaf": "界面用语",
+      "section": "通用设计基础",
+      "summary": "使用让用户感到舒适、被理解、被尊重的表达方式。避免过于正式、机械、或傲慢的表达。 使用\"您\"、\"您的\" 直接称呼用户，像界面直接和用户交谈一样。让用户感受到与他相关，而不是在阅读枯燥的系统说明文。 注意不要完全按照说话的方式写作，以免过于口语化和冗长。",
+      "outline": [
+        "界面用语",
+        "写作原则",
+        "内容设计指导",
+        "语气语调",
+        "场景写作指导",
+        "删除",
+        "确定弹出框",
+        "异常提示"
+      ],
+      "ruleRefs": [],
+      "sha256": "38957d9cc073af07a62558ae18aaead468195ac9cb441182a2613d278a643db3",
+      "bytes": 28713,
+      "fetchedAt": "2026-11-10T13:16:22.443Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-046",
+      "title": "设计-应用设计-控件-容器类-弹出框",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/dialog-0000001957012569.md",
+      "leaf": "弹出框",
+      "section": "控件 / 容器类",
+      "summary": "弹出框是一种模态窗口，在弹出框消失之前，用户无法操作其他界面内容，是一种对用户在进行界面交互过程中干扰性比较强的控件。通常弹出框用来展示用户当前需要执行的操作或必须关注的信息，其他情况不建议使用弹出框，可考虑应用内通知等其他非模态窗口控件。",
+      "outline": [
+        "弹出框",
+        "如何使用",
+        "组件规则",
+        "控件构成",
+        "视觉规则",
+        "基础规则",
+        "沉浸光感",
+        "设备差异"
+      ],
+      "ruleRefs": [
+        "DW-AES-15"
+      ],
+      "sha256": "fa77cdff7b08551d238f3a7ecadbc4c663d8c4b089d60fa2dc9aeee1dcb39fde",
+      "bytes": 19415,
+      "fetchedAt": "2026-11-10T13:16:22.557Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-047",
+      "title": "设计-应用设计-控件-展示类-分隔器",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/divider-0000001956815469.md",
+      "leaf": "分隔器",
+      "section": "控件 / 展示类",
+      "summary": "分隔器主要用于区分不同内容元素和组别，可用于列表或界面布局。分割线相关基础属性配置参考 Divider 文档。",
+      "outline": [
+        "分隔器",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "8271bc1010928a889796a4483dbb1fbae49c72a45401c987b607ebaa37de492c",
+      "bytes": 4279,
+      "fetchedAt": "2026-11-10T13:16:22.608Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-048",
+      "title": "设计-应用设计-针对多设备设计-折叠屏-阔折叠",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/flip-0000002321233974.md",
+      "leaf": "阔折叠",
+      "section": "针对多设备设计 / 折叠屏",
+      "summary": "阔折叠手机是折叠手机的一种，以其宽阔的横向视窗为核心特征，展开态接近书本比例，旨在提供更符合人类视觉习惯的宽屏体验。相较于内屏，外屏幕尺寸较小，对应用的显示和操作要求更高，需要有针对性的设计，确保应用在不同折叠形态间均能提供直观、舒适的交互体验。",
+      "outline": [
+        "阔折叠",
+        "通用基础体验设计",
+        "布局完整",
+        "导航条适配",
+        "状态栏适配",
+        "多窗适配",
+        "画中画适配",
+        "通用应用架构"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "8cb9bca0f31aba6ac965aa7236c3a14c6ce99ed83cdd1a5a59dc9887817a421c",
+      "bytes": 20344,
+      "fetchedAt": "2026-11-10T13:16:22.711Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-049",
+      "title": "设计-应用设计-系统特性&能力-系统特性-闪控球和闪控窗",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/floatview-0000002624640357.md",
+      "leaf": "闪控球和闪控窗",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "闪控球和闪控窗是悬浮于应用界面上层的轻量化窗口，支持信息展示和轻量任务处理，可实现灵活、安全、便捷地跨应用操作，适配各类高频交互场景。",
+      "outline": [
+        "闪控球和闪控窗",
+        "闪控球",
+        "基础交互",
+        "视觉规格",
+        "闪控窗",
+        "基础交互",
+        "视觉规格",
+        "闪控窗与悬浮窗区别"
+      ],
+      "ruleRefs": [],
+      "sha256": "fbc59d3a92bd53835c00a243a3f1af169e5187cf69b1852315bc46857bbb95ac",
+      "bytes": 10216,
+      "fetchedAt": "2026-11-10T13:16:22.644Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-050",
+      "title": "设计-应用设计-针对多设备设计-折叠屏-双折叠",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/foldable-0000002352875141.md",
+      "leaf": "双折叠",
+      "section": "针对多设备设计 / 折叠屏",
+      "summary": "|------------------------------------------------------------------------------------------------------------------------------| |折叠屏设备的三种形态分别为折叠态、展开态和悬停态。 折叠态便于随身携带和单手操作，适合移动场景下的便捷使用；展开态屏幕变宽，能够充分展示应用内容，适合多任务处理和沉浸式体验；悬停态则处于完全展开和折叠的中间状态，设备可稳定放置，让用户解放双手。|",
+      "outline": [
+        "双折叠",
+        "概述",
+        "基础要求",
+        "信息完整",
+        "交互跟手",
+        "横屏适配",
+        "挖孔适配",
+        "文字适配"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "d836c30717993effddc7c95776217de6b635bfb89fa7a129e4ade0ab073d5a7f",
+      "bytes": 114179,
+      "fetchedAt": "2026-11-10T13:16:22.913Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-051",
+      "title": "设计-应用设计-针对多设备设计-电脑-折叠电脑",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/foldable-pc-0000002322600098.md",
+      "leaf": "折叠电脑",
+      "section": "针对多设备设计 / 电脑",
+      "summary": "折叠电脑以\"沉浸无界、灵动流畅、直觉自然\"为核心设计理念，深度融合折叠屏的硬件特性与多模态交互需求，针对系统架构和桌面应用在多形态变换、应用适配、交互输入、系统动效表现等方面，为相关设计师和开发人员提供 UX 设计指南和规范，确保用户在任何场景下均能获得连贯且高效的使用体验。",
+      "outline": [
+        "折叠电脑",
+        "设计概述",
+        "设计原则",
+        "形态说明",
+        "适配原则",
+        "体验连续",
+        "体验增值",
+        "控件适配说明"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "e26df2212cc7ccf1f346d33161c68bc7c67ea9756c7253bf6d0f78248f468b9c",
+      "bytes": 20245,
+      "fetchedAt": "2026-11-10T13:16:22.746Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-052",
+      "title": "设计-应用设计-针对多设备设计-折叠屏",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/folding-screen-0000001929865346.md",
+      "leaf": "折叠屏",
+      "section": "针对多设备设计",
+      "summary": "折叠屏（针对多设备设计，官方原文见链接）",
+      "outline": [
+        "折叠屏"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "b29fdbe4055f5cd4af2f5c3a7ad9bb0794fffe8108809686876f6948de78de8d",
+      "bytes": 448,
+      "fetchedAt": "2026-11-10T13:16:22.801Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-053",
+      "title": "设计-应用设计-通用设计基础-视觉风格-鸿蒙黑体",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/font-0000001828772001.md",
+      "leaf": "鸿蒙黑体",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "HarmonyOS Sans 是一款无衬线字体，它没有额外的装饰笔画，结构更加简洁清晰，在 UI 界面上具有更良好的屏幕显示效果，并且能带来更高阅读效率。HarmonyOS Sans 在字体设计上考虑了多元的应用场景，优化字形显示的灰度效果，以达到在多端的应用场景下拥有一致的体验效果。",
+      "outline": [
+        "鸿蒙黑体",
+        "HarmonyOS Sans",
+        "系统默认字体",
+        "在现代屏显与人文笔意间寻找平衡",
+        "中文设计风格",
+        "拉丁设计风格",
+        "字体特性",
+        "数字与公式"
+      ],
+      "ruleRefs": [],
+      "sha256": "0294de46432c7ef7897f20238f9c75ea7b6aafaa19af2de9e1b00bb43853c559",
+      "bytes": 13076,
+      "fetchedAt": "2026-11-10T13:16:22.851Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-054",
+      "title": "设计-应用设计-应用设计最佳实践-游戏类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/games-0000001930189974.md",
+      "leaf": "游戏类",
+      "section": "应用设计最佳实践",
+      "summary": "游戏类应用注重用户的沉浸式体验，具有强互动性和操作性，在大屏设备上可以向用户展示更宽阔的游戏画面，提供更轻便高效的交互体验。",
+      "outline": [
+        "游戏类",
+        "游戏视野",
+        "战绩浅层化",
+        "补偿视野",
+        "完美视野",
+        "任务并行",
+        "拇指易用",
+        "双指缩放"
+      ],
+      "ruleRefs": [],
+      "sha256": "f632b0ef41717ce09c92a66e10ce0c9792ace16827eb43e874ee0d708bbeb59e",
+      "bytes": 16563,
+      "fetchedAt": "2026-11-10T13:16:22.902Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-055",
+      "title": "设计-应用设计-控件-概览",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/general_overview-0000001929599380.md",
+      "leaf": "概览",
+      "section": "控件",
+      "summary": "概览（控件，官方原文见链接）",
+      "outline": [
+        "概览",
+        "导航类",
+        "展示类",
+        "操作类",
+        "输入类",
+        "选择类",
+        "容器类"
+      ],
+      "ruleRefs": [],
+      "sha256": "fea3fcca249d8835cbe98e9e9826a2de22175a16753727a5db986b21c441b191",
+      "bytes": 22605,
+      "fetchedAt": "2026-11-10T13:16:22.969Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-056",
+      "title": "设计-应用设计-通用设计基础-动效-手势动效",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/gesture-animation-0000001797038213.md",
+      "leaf": "手势动效",
+      "section": "通用设计基础 / 动效",
+      "summary": "是指手势在终端屏幕上或者触摸板等输入设备上进行跟手操作的动效，大致分为滑动、点击、拖拽、捏合等持续操作动效，比如手势导航上滑、捏合照片等动效。我们主张无阻塞感的动效设计，结合运用HarmonyOS动效物理引擎，将自然属性运用到界面的操作中，比如摩擦力、弹性、碰撞影响等。",
+      "outline": [
+        "手势动效",
+        "概述",
+        "点击",
+        "滑动",
+        "翻动",
+        "夹捏",
+        "拖拽",
+        "标题联动"
+      ],
+      "ruleRefs": [
+        "DW-AES-11"
+      ],
+      "sha256": "ac9d596637d45faa95f9a8c8d531a6044798154fd8414133856815855a75621c",
+      "bytes": 3256,
+      "fetchedAt": "2026-11-10T13:16:22.990Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-057",
+      "title": "设计-应用设计-系统特性&能力-系统特性-鸿蒙卡片",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/harmonyos-widget2-0000002731312633.md",
+      "leaf": "鸿蒙卡片",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "状态机卡片主要展示于负一屏状态机，其核心价值在于将任务可视化，稳定预期反馈，降低用户焦虑。相较于实况窗，状态机通知时续更长，流程更为完整。",
+      "outline": [
+        "鸿蒙卡片",
+        "卡片范围",
+        "状态机卡片",
+        "服务卡片",
+        "小艺建议卡片",
+        "抽象配图",
+        "场景插画",
+        "明确价值"
+      ],
+      "ruleRefs": [
+        "DW-AES-21"
+      ],
+      "sha256": "d30c9673259757bb2a9469ef399f94e961efe64fc617cae36b0b15845a6601c4",
+      "bytes": 15280,
+      "fetchedAt": "2026-11-10T13:16:22.998Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-058",
+      "title": "设计-应用设计-人机交互-光标交互",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-cursor-0000001795531205.md",
+      "leaf": "光标交互",
+      "section": "人机交互",
+      "summary": "当用户使用指向设备 (鼠标、触摸板、 AR/VR 手柄等) 与应用程序进行间接交互时，光标指向的对象和光标本身应提供适当的视觉反馈以表达对象的可交互性。同时，应考虑相比手指触摸的交互，利用光标精细化操作和悬浮操作的特性，以提升应用生产力、简化交互任务和增强信息展示。本节规范主要适用于使用鼠标和触摸板来操作平面光标的场景，基本设计原则可推广至 AR/VR 手柄等空间交互场景。",
+      "outline": [
+        "光标交互",
+        "设计原则",
+        "指针样式",
+        "选择类指针",
+        "移动类指针",
+        "调整类指针",
+        "拖拽类指针",
+        "其他指针"
+      ],
+      "ruleRefs": [],
+      "sha256": "06e05834412cab6e3128f7438885b998df5b143528456f4533db78baa932a503",
+      "bytes": 14455,
+      "fetchedAt": "2026-11-10T13:16:23.044Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-059",
+      "title": "设计-应用设计-人机交互-焦点导航",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-focus-0000001748650376.md",
+      "leaf": "焦点导航",
+      "section": "人机交互",
+      "summary": "当用户使用键盘、电视遥控器、车机摇杆/旋钮等非指向性输入设备与应用程序进行间接交互时，基于焦点的导航和交互是重要的输入手段。本节描述了基于焦点交互的通用设计原则规范，针对各输入方式和各控件的细化的焦点交互方法请参考各输入方式和各控件的具体章节。开发相关描述请参阅焦点事件文档。",
+      "outline": [
+        "焦点导航",
+        "内置支持，多端一致",
+        "提供焦点初始默认的位置",
+        "可遍历所有可获焦元素",
+        "默认可遍历",
+        "绝对走焦顺序",
+        "相对走焦顺序",
+        "按区域获得焦点提高走焦效率"
+      ],
+      "ruleRefs": [
+        "DW-A11Y-03",
+        "DW-A11Y-12"
+      ],
+      "sha256": "3863930b49f090003c8b733f2b431971c8ac5655e27f7134651d581488af110f",
+      "bytes": 12717,
+      "fetchedAt": "2026-11-10T13:16:23.070Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-060",
+      "title": "设计-应用设计-人机交互-交互事件归一",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-interaction-events-0000001795531217.md",
+      "leaf": "交互事件归一",
+      "section": "人机交互",
+      "summary": "为了让应用在全场景多设备上都能获得一致自然的交互体验，需要为不同交互状态下的各种输入设备设计适合的交互方式。在传统的开发模式中需要为不同的输入设备进行适配开发，工作量巨大。",
+      "outline": [
+        "交互事件归一",
+        "交互规范",
+        "悬浮",
+        "点击",
+        "双击",
+        "长按",
+        "上下文菜单",
+        "拖拽"
+      ],
+      "ruleRefs": [],
+      "sha256": "4df5b60682fd0281637a07c272f4cd116f3a38e56c060cf18a501a220100bab8",
+      "bytes": 11640,
+      "fetchedAt": "2026-11-10T13:16:23.156Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-061",
+      "title": "设计-应用设计-人机交互-键盘",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-keyboard-0000001928070488.md",
+      "leaf": "键盘",
+      "section": "人机交互",
+      "summary": "键盘是一种重要的生产力输入设备，优秀的键盘使用体验应允许用户快速准确输入文本，双手无需离开键盘即可在系统和应用内使用导航、访问所有的功能以及保证无障碍体验，用户通常使用键盘快捷键一步直达某些功能。走焦顺序、走焦交互等设计原则请参考焦点导航章节。",
+      "outline": [
+        "键盘",
+        "快捷键设计策略和原则",
+        "设计策略",
+        "设计原则",
+        "焦点导航快捷键",
+        "应用通用快捷键",
+        "通用编辑",
+        "文本编辑"
+      ],
+      "ruleRefs": [
+        "DW-A11Y-12"
+      ],
+      "sha256": "fc81001a84bade311c3df5b356170130737418704ea974baa5d0ee7c3ad85b53",
+      "bytes": 5964,
+      "fetchedAt": "2026-11-10T13:16:23.279Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-062",
+      "title": "设计-应用设计-人机交互-鼠标",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-mouse-0000001930021626.md",
+      "leaf": "鼠标",
+      "section": "人机交互",
+      "summary": "鼠标是一种典型的指向型输入设备，具备像素级的输入精度。它非常适合用于对交互精度有较高要求的生产力应用场景，或是用于与布局较为密集的界面进行交互。",
+      "outline": [
+        "鼠标",
+        "鼠标与触摸交互的关系"
+      ],
+      "ruleRefs": [],
+      "sha256": "417071c1c87a87cc7fd438dabc6e3b6d0d8341f715024097d6db56132457ce23",
+      "bytes": 2636,
+      "fetchedAt": "2026-11-10T13:16:23.220Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-063",
+      "title": "设计-应用设计-人机交互-概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-overview-0000001795410269.md",
+      "leaf": "概述",
+      "section": "人机交互",
+      "summary": "在全场景的数字体验中，越来越多类型的智能终端设备分布在用户的日常生活中，可交互的用户界面广泛存在于智能手机、平板、电脑、智能穿戴、电视、车机、虚拟现实（VR）和增强现实（AR）等设备上。应用可能在多种设备上运行或在单一设备上被用户通过多种输入方式操控，这需要其用户界面能够自动识别和支持不同的输入设备，以便用户以习惯的、舒适的方法与其进行交互。",
+      "outline": [
+        "概述"
+      ],
+      "ruleRefs": [],
+      "sha256": "b78623b4a226eb63499dacba2b5d4d2954140a91fb907edf1f842f2b04ab0c1a",
+      "bytes": 1621,
+      "fetchedAt": "2026-11-10T13:16:23.208Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-064",
+      "title": "设计-应用设计-人机交互-常用交互",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-scenes-0000001748650380.md",
+      "leaf": "常用交互",
+      "section": "人机交互",
+      "summary": "常用交互（人机交互，官方原文见链接）",
+      "outline": [
+        "常用交互"
+      ],
+      "ruleRefs": [],
+      "sha256": "492f512e08300aa8993ef4e5e76150182ffd1e5175552e0fdcd9cfe63d0654b9",
+      "bytes": 243,
+      "fetchedAt": "2026-11-10T13:16:23.159Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-065",
+      "title": "设计-应用设计-人机交互-常用交互-拖拽",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-scenes-drag-0000001795410277.md",
+      "leaf": "拖拽",
+      "section": "人机交互 / 常用交互",
+      "summary": "拖拽是在应用程序内部、在应用程序之间传输数据的可视化操作方式。 拖拽操作可以让用户使用标准手势 (用手指按住并移动、用鼠标按住并移动、触控笔按住并移动) 在应用程序之间、在应用程序内部传输数据。拖拽操作基于移动和复制的目的，如文件管理器中将内容拖拽到文件夹内为移动，网页中的照片拖拽到记事本中为复制。开发相关描述请参阅拖拽事件文档。",
+      "outline": [
+        "拖拽",
+        "拖拽的定义",
+        "拖拽的对象",
+        "拖拽的流程",
+        "发起拖拽",
+        "触屏拖拽",
+        "鼠标拖拽",
+        "拖拽中"
+      ],
+      "ruleRefs": [],
+      "sha256": "1bda85eb678cc22e27b0bc348ff38fe8ac3ad77d441b227940729486dbf03cfb",
+      "bytes": 15672,
+      "fetchedAt": "2026-11-10T13:16:23.369Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-066",
+      "title": "设计-应用设计-人机交互-常用交互-框选",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-scenes-selection-0000001957005521.md",
+      "leaf": "框选",
+      "section": "人机交互 / 常用交互",
+      "summary": "框选是指通过使用指针拖动选择框，使被框到的文本、文件等被选中。框选对象后，内容支持键鼠操作如拖拽、弹出菜单、加减选等。框选的对象可以为单个控件也可以为多个控件，可以为同类型的对象也可以为不同类型的对象。",
+      "outline": [
+        "框选",
+        "发起框选",
+        "加减选",
+        "间序加减选",
+        "连续加减选",
+        "走焦加减选",
+        "视觉规则",
+        "鼠标框选底板色"
+      ],
+      "ruleRefs": [],
+      "sha256": "9871b23122b88658fedc2fcc02296e84f8829d660a8342d2f8480dd27e827237",
+      "bytes": 6023,
+      "fetchedAt": "2026-11-10T13:16:23.385Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-067",
+      "title": "设计-应用设计-人机交互-触控板",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-touchpad-0000002464444730.md",
+      "leaf": "触控板",
+      "section": "人机交互",
+      "summary": "触控板同时具备精细化指向型输入（鼠标）和多指触控手势输入（触屏） 的特性，使得触控板既适合用于对指点精度有较高要求的生产力应用，也适合用于基于触摸交互优化的用户界面。",
+      "outline": [
+        "触控板",
+        "基础手势",
+        "系统手势",
+        "多指手势",
+        "边缘手势",
+        "特殊手势"
+      ],
+      "ruleRefs": [],
+      "sha256": "20f0a647c1063705bd4367de41474122d6fea07896d5be5b7ec784ddc6fd3a02",
+      "bytes": 8822,
+      "fetchedAt": "2026-11-10T13:16:23.419Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-068",
+      "title": "设计-应用设计-人机交互-手势",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/hmi-touchscreen-0000001928273206.md",
+      "leaf": "手势",
+      "section": "人机交互",
+      "summary": "很多设备都拥有支持多点触控的屏幕，允许用户使用手指交互。它们与屏幕的接触状态、数量以及运动行为构成了触屏手势。在多数情况下，触屏可以支持多种体验，应将触屏手势作为用户首要的交互方式。",
+      "outline": [
+        "手势",
+        "触屏手势",
+        "基础手势",
+        "点击",
+        "长按",
+        "拖拽",
+        "滑动",
+        "双击"
+      ],
+      "ruleRefs": [],
+      "sha256": "01a12abde70b2a970f67d5dc0eebc5569b15353792e00673d976c9529b9bad01",
+      "bytes": 24688,
+      "fetchedAt": "2026-11-10T13:16:23.528Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-069",
+      "title": "设计-应用设计-系统特性&能力-系统能力-华为支付",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/huaweipay-0000002054558905.md",
+      "leaf": "华为支付",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "在使用华为支付图标时，请注意图标颜色和背景颜色的反差，避免图标要素不可读或者不易读。",
+      "outline": [
+        "华为支付",
+        "场景介绍",
+        "图标大小",
+        "背景控制",
+        "典型错误案例"
+      ],
+      "ruleRefs": [],
+      "sha256": "23ad5d352e2854072df774114cc6e733188280a0139cf69373f95c0accbbce2c",
+      "bytes": 1744,
+      "fetchedAt": "2026-11-10T13:16:23.463Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-070",
+      "title": "设计-应用设计-针对多设备设计-智能穿戴-人机交互",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/human-machine-interaction-0000002167648022.md",
+      "leaf": "人机交互",
+      "section": "针对多设备设计 / 智能穿戴",
+      "summary": "表冠作为智能穿戴设备特有的一种交互方式，又区分旋转、短按、双击和长按，建议规范操作方式以满足智能手表通用的、功能响应及时的使用场景。",
+      "outline": [
+        "人机交互",
+        "**表冠**",
+        "原则",
+        "类型",
+        "**智慧手势**",
+        "场景选择原则",
+        "类型",
+        "如何使用"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "5146084c899e98bde589e80935d22697b68840f4516b12c6192f38dbe21a1efc",
+      "bytes": 4251,
+      "fetchedAt": "2026-11-10T13:16:23.500Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-071",
+      "title": "设计-应用设计-系统特性&能力-系统能力-靠近发现",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/i-connect-0000002354482789.md",
+      "leaf": "靠近发现",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "用户可通过设备靠近，进行设备间的连接或协助新设备快速启用。可发现设备范围包括华为终端设备，鸿蒙智联设备以及开源鸿蒙 (OH) 智能生态设备。",
+      "outline": [
+        "靠近发现",
+        "基本分类与页面构成",
+        "华为终端设备以及智联生态设备",
+        "开源鸿蒙生态设备",
+        "交互规则",
+        "视觉规则",
+        "多端布局规范",
+        "文本区域规范"
+      ],
+      "ruleRefs": [],
+      "sha256": "3ced43ff723c9c67a4d692e7c12ef0dd79e13d679c109fb700096c5a6e3d744e",
+      "bytes": 6605,
+      "fetchedAt": "2026-11-10T13:16:23.595Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-072",
+      "title": "设计-应用设计-系统特性&能力-系统能力-华为账号开放登录",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/id-0000001880001344.md",
+      "leaf": "华为账号开放登录",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "华为账号提供登录体验设计规范，帮助用户使用已有的华为账号登录HarmonyOS生态内全部应用。遵循规范设计可享有以下好处：",
+      "outline": [
+        "华为账号开放登录",
+        "概述",
+        "使用原则",
+        "登录组件介绍",
+        "【华为账号一键登录】按钮",
+        "体验流程",
+        "使用规范",
+        "视觉规范"
+      ],
+      "ruleRefs": [],
+      "sha256": "d926b93967dcbac2968949e1d9fbe3aaa5c405c46da3c1eed59e9e75bf67b3be",
+      "bytes": 24200,
+      "fetchedAt": "2026-11-10T13:16:23.705Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-073",
+      "title": "设计-应用设计-控件-展示类-图片",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/image-0000001956975273.md",
+      "leaf": "图片",
+      "section": "控件 / 展示类",
+      "summary": "图片作为界面布局填充内容的基础组件，常用于在应用中显示图片信息。 图片支持加载 PixelMap、ResourceStr 和DrawableDescriptor 类型的数据源，支持 png、jpg、jpeg、bmp、svg、webp、gif 和 heif 类型的图片格式。",
+      "outline": [
+        "图片",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "1f4aa607061d44cb60d1c7a1e0ce7e259693aff6a9b07c8b0d9ebbaad2a08f48",
+      "bytes": 21088,
+      "fetchedAt": "2026-11-10T13:16:23.709Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-074",
+      "title": "设计-应用设计-通用设计基础-视觉风格-沉浸光感",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/immersivelight-0000002612101053.md",
+      "leaf": "沉浸光感",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "在数字界面中，光不仅是照明的工具，更是塑造空间、传递反馈、引导注意力的核心语言。HarmonyOS 沉浸光感（Immersive Light）并非单纯的光影特效升级，而是一次从\"视觉层\"向\"感知层\"的体验跃迁。",
+      "outline": [
+        "沉浸光感",
+        "光设计语言",
+        "用户体验与个性定义",
+        "设计与开发",
+        "场景规范"
+      ],
+      "ruleRefs": [],
+      "sha256": "26cdbe3b4ef24f76feb364e903940c4eb26b37bca1690a1deabd79f6c6dbfa64",
+      "bytes": 7105,
+      "fetchedAt": "2026-11-10T13:16:23.682Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-075",
+      "title": "设计-应用设计-通用设计基础-视觉风格-间隔参数",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/interval-parameter-0000002562577161.md",
+      "leaf": "间隔参数",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "间隔是 UI 设计中用于控制界面元素与元素、元素与容器之间空白距离的布局规范，用于定义界面的疏密关系、呼吸空间与视觉层次。",
+      "outline": [
+        "间隔参数",
+        "间隔使用规则",
+        "常用间隔类型",
+        "多设备屏幕边缘间隔尺寸",
+        "多设备间隔使用场景示例",
+        "泛手机",
+        "智慧屏",
+        "穿戴"
+      ],
+      "ruleRefs": [],
+      "sha256": "4555fe41945a3195ecd70981df9099a3beab2b4f4eabf66078a0e00332ec6ab0",
+      "bytes": 12660,
+      "fetchedAt": "2026-11-10T13:16:23.766Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-076",
+      "title": "设计-应用设计-控件-容器类-列表",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/list-0000001929853910.md",
+      "leaf": "列表",
+      "section": "控件 / 容器类",
+      "summary": "列表是展示重复性内容的常用界面元素，良好的列表设计可以提高用户的浏览和查找效率。列表的通用组件能力可以参阅 List 控件规格，关于列表的布局能力以及组合能力可以参阅 ListItem 以及 ListItemGroup 文档。",
+      "outline": [
+        "列表",
+        "如何使用",
+        "组件规则",
+        "视觉规则",
+        "可横滑列表",
+        "设备差异",
+        "手机设备",
+        "电脑设备"
+      ],
+      "ruleRefs": [
+        "DW-AES-13",
+        "DW-AES-21"
+      ],
+      "sha256": "4a0825e47e41a632e89d18f23a3731ba227a379728bcd2a36604bed60b1898e8",
+      "bytes": 34808,
+      "fetchedAt": "2026-11-10T13:16:23.888Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-077",
+      "title": "设计-应用设计-控件-操作类-菜单",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/menu-0000001957001877.md",
+      "leaf": "菜单",
+      "section": "控件 / 操作类",
+      "summary": "一种临时性弹出窗口，用于展示用户可执行的操作。开发相关描述请参考 Menu 文档。",
+      "outline": [
+        "菜单",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "响应式布局",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "7a7994a617d9bcbcbe655c7c066535b977267cf1b0e9f82755cb1fbe31361e8f",
+      "bytes": 6376,
+      "fetchedAt": "2026-11-10T13:16:23.817Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-078",
+      "title": "设计-应用设计-应用设计最佳实践-移动支付类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/mobile-payment-0000001957421613.md",
+      "leaf": "移动支付类",
+      "section": "应用设计最佳实践",
+      "summary": "移动支付类应用主要包括收付款、余额、账单、扫一扫、转账等典型业务场景。此类应用，在多端设备的设计适配过程中，需充分利用大屏设备优势，提升浏览和交互效率。",
+      "outline": [
+        "移动支付类",
+        "首页",
+        "收付款",
+        "余额页",
+        "账单页",
+        "扫一扫",
+        "卡包&银行卡",
+        "转账&支付"
+      ],
+      "ruleRefs": [],
+      "sha256": "761203f56ab88648db20cb3b2923609875be231d2434b5212cfb561051f1ccaa",
+      "bytes": 5810,
+      "fetchedAt": "2026-11-10T13:16:23.880Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-079",
+      "title": "设计-应用设计-系统特性&能力-系统特性-导航条",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/navigation-0000001957075737.md",
+      "leaf": "导航条",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "导航条是 HarmonyOS 系统的典型特征，是手势导航等重要功能的提示入口，是应用必须适配的要求。",
+      "outline": [
+        "导航条",
+        "设计原则",
+        "沉浸式背景",
+        "导航条适配",
+        "可滚动页面",
+        "可滚动列表实例",
+        "可滚动网页示例",
+        "底部固定控件&键盘"
+      ],
+      "ruleRefs": [],
+      "sha256": "8bf0e4f35beee3cbc1e79e372c59f3c737410296ac7770c2651e7714b0c7af27",
+      "bytes": 19042,
+      "fetchedAt": "2026-11-10T13:16:23.998Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-080",
+      "title": "设计-应用设计-应用设计最佳实践-办公类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/office-0000002315825496.md",
+      "leaf": "办公类",
+      "section": "应用设计最佳实践",
+      "summary": "商务办公类应用一般效率优先，用于日常文档处理、日程会议管理等场景，满足撰写文档、团队协作、日常管理等需求。此类应用有以下特征：",
+      "outline": [
+        "办公类",
+        "高效应用布局",
+        "布局灵活切换",
+        "文档多开"
+      ],
+      "ruleRefs": [],
+      "sha256": "b42c848e0485f05f6bc7168249b6375533ca4a6b4a2f2024024c13a7071acfcb",
+      "bytes": 5459,
+      "fetchedAt": "2026-11-10T13:16:23.940Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-081",
+      "title": "设计-应用设计-系统特性&能力-系统能力-碰一碰",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/onehop-0000002354602581.md",
+      "leaf": "碰一碰",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "用户可通过设备间碰一碰，快速进行超近场分享。当前支持手机与手机、手机与电脑进行碰一碰分享。手机设备之间碰一碰可通过设备顶部碰一碰实现，手机与电脑则通过手机顶部轻触屏幕实现分享。关于碰一碰分享的开发适配指南，请参阅 Share Kit。",
+      "outline": [
+        "碰一碰",
+        "适用场景",
+        "碰一碰分享界面构成",
+        "卡片模板",
+        "图片、视频类卡片模板",
+        "文件类卡片模板",
+        "链接类卡片模板",
+        "其他卡片模板"
+      ],
+      "ruleRefs": [],
+      "sha256": "16b33a1472f8783dbb689318e418cef3b2c9d0ff71488884839abfc1fb8cd097",
+      "bytes": 7117,
+      "fetchedAt": "2026-11-10T13:16:23.997Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-082",
+      "title": "设计-应用设计-针对多设备设计-平板",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/pad-0000001823654157.md",
+      "leaf": "平板",
+      "section": "针对多设备设计",
+      "summary": "平板是很多用户经常使用的设备，用户使用平板来影音娱乐，阅读学习以及办公创作，系统和应用的体验对用户至关重要。",
+      "outline": [
+        "平板",
+        "应用和服务设计",
+        "保证基础体验",
+        "设计应用和服务体验",
+        "支持系统特性",
+        "应用架构",
+        "窗口布局",
+        "窗口切换"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "62b5436d79f8b053163e672bef221b4581a1d9b68bd21c3040c1d05e7f1ea62e",
+      "bytes": 10448,
+      "fetchedAt": "2026-11-10T13:16:24.031Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-083",
+      "title": "设计-应用设计-系统特性&能力-系统能力-平行视界",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/parallel_view-0000002588655180.md",
+      "leaf": "平行视界",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "平行视界是一种针对大屏设备 (折叠屏、平板) 开发的系统级应用显示技术。它打破了传统移动应用只能在单一页面显示的局限，允许同一个应用在屏幕上同时开启两个页面，实现\"一级页面左侧显示，二级页面右侧显示\"的布局模式，适用于折叠屏展开态、平板等宽屏设备。",
+      "outline": [
+        "平行视界",
+        "页面比例",
+        "典型价值场景",
+        "交互规格",
+        "导航模式",
+        "购物模式",
+        "平行视界与分栏体验对比",
+        "接入原则"
+      ],
+      "ruleRefs": [],
+      "sha256": "69cb37cd78c514b8eccc48017a977012b1ee637d73fc6b4ba95f6f191c9d9c50",
+      "bytes": 5564,
+      "fetchedAt": "2026-11-10T13:16:24.022Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-084",
+      "title": "设计-应用设计-控件-输入类-图案锁",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/patternlock-0000001929853902.md",
+      "leaf": "图案锁",
+      "section": "控件 / 输入类",
+      "summary": "这是一种通过绘制图案的行为作为解锁方式的控件。开发能力相关可参考 PatternLock 文档。",
+      "outline": [
+        "图案锁",
+        "如何使用",
+        "基础构成及场景示意",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "4db590cb1ce0d3e25bc0f13be77ab4ed037f746032645b39ba283afe74801cf7",
+      "bytes": 2730,
+      "fetchedAt": "2026-11-10T13:16:24.040Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-085",
+      "title": "设计-应用设计-针对多设备设计-手机",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/phone-0000001776694632.md",
+      "leaf": "手机",
+      "section": "针对多设备设计",
+      "summary": "手机是用户最常使用的设备，用户使用手机来进行社交、娱乐、购物、理财等各项活动，手机已经渗透到用户工作和生活中的方方面面，系统、应用和服务体验的好坏对用户至关重要。",
+      "outline": [
+        "手机",
+        "应用和服务设计",
+        "保证基础体验",
+        "设计应用和服务体验",
+        "支持系统特性",
+        "系统特性"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "bad05e5019fd2cbd4b35280ecb15bb4d110bd2fde2d4462e41412c90a4f58929",
+      "bytes": 5674,
+      "fetchedAt": "2026-11-10T13:16:24.170Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-086",
+      "title": "设计-应用设计-控件-选择类-选择器",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/picker-0000001956852749.md",
+      "leaf": "选择器",
+      "section": "控件 / 选择类",
+      "summary": "当需要从单个维度或多个维度进行组合选择时使用。滚轮选择器开发相关描述请参阅 UIPickerComponent。月历视图选择器开发相关描述请参阅 CalendarPicker 文档。",
+      "outline": [
+        "选择器",
+        "类型",
+        "如何使用",
+        "自定义选择器",
+        "时间日期选择器",
+        "月历视图选择器",
+        "布局规则",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "1f1320b948af1f2e20a0e96946d4062484f67ffa5cf565039df3842d69c9ed10",
+      "bytes": 16757,
+      "fetchedAt": "2026-11-10T13:16:24.262Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-087",
+      "title": "设计-应用设计-系统特性&能力-系统特性-画中画",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/pip-0000001927422624.md",
+      "leaf": "画中画",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "画中画是一种视频内容或视频通话的显示方式，利用\"画中画\"可以在使用其他应用的同时，观看视频内容或使用视频通话，覆盖场景包括视频播放、直播、视频通话、视频会议等。",
+      "outline": [
+        "画中画",
+        "基础方式",
+        "窗口大小调节",
+        "窗口最小化",
+        "窗口控制面板",
+        "视觉规格",
+        "窗口默认大小、位置",
+        "画中画窗口尺寸"
+      ],
+      "ruleRefs": [],
+      "sha256": "aee229eeffdf1263123358dcbcc78b86d8ff654c022561f6774bac6c2d9c53d2",
+      "bytes": 7102,
+      "fetchedAt": "2026-11-10T13:16:24.232Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-088",
+      "title": "设计-应用设计-控件-展示类-气泡提示",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/popup-0000001956975269.md",
+      "leaf": "气泡提示",
+      "section": "控件 / 展示类",
+      "summary": "通过临时弹出指向性气泡提示用户当前如何操作。开发相关能力请参考 Popup 文档。",
+      "outline": [
+        "气泡提示",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "7276d292ab732746bce14e533555fb7bb29d4f68f2c47e1ce7d7c1e9d9d33c76",
+      "bytes": 13139,
+      "fetchedAt": "2026-11-10T13:16:24.351Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-089",
+      "title": "设计-应用设计-应用设计最佳实践-概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/practices-overview-0000001746498066.md",
+      "leaf": "概述",
+      "section": "应用设计最佳实践",
+      "summary": "随着终端设备形态日益多样化，应用设计需要考虑界面能适配不同的屏幕尺寸、屏幕方向和设备类型。同时还需要保持多设备体验的连续性，改善多端独立的设计、尽可能降低开发者的工作量和维护成本。基于此 Harmony OS 为设计师提供了面向多设备的设计指南，让设计师在进行多端设计时有一套科学的方法，最大限度地减少设计的工作量，保障多端设计在一定程度的一致性。同时 Harmony OS 也提供了对应的技术能力，帮助开发者快速地进行多端应用设计。",
+      "outline": [
+        "概述",
+        "基础要求",
+        "导航适配",
+        "横竖屏&挖孔适配",
+        "多窗适配",
+        "弹出框适配",
+        "键鼠适配",
+        "体验评估标准"
+      ],
+      "ruleRefs": [],
+      "sha256": "7903b4e239355af0f4b0e7a7a1fba094e00d0f888ba2308e6fc5904a7495e009",
+      "bytes": 25738,
+      "fetchedAt": "2026-11-10T13:16:24.290Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-090",
+      "title": "设计-应用设计-系统特性&能力-系统能力-预览",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/preview-0000001957112409.md",
+      "leaf": "预览",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "\"预览\"功能通常指编辑详细文档内容之前，能先快速浏览或查看其内容。提供该系统级文件预览框架和能力，建立统一的\"一步预览\"体验。适用场景包含：",
+      "outline": [
+        "预览"
+      ],
+      "ruleRefs": [],
+      "sha256": "523e6dfc0b47ac28e954739f243832da0b8ba263427607d1e1506c182b3ccc8f",
+      "bytes": 2297,
+      "fetchedAt": "2026-11-10T13:16:24.272Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-091",
+      "title": "设计-应用设计-通用设计基础-隐私",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/privacy-0000001929972682.md",
+      "leaf": "隐私",
+      "section": "通用设计基础",
+      "summary": "|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|------------------------------",
+      "outline": [
+        "隐私",
+        "用户授权",
+        "按钮式授权控件",
+        "选择式授权控件",
+        "弹框授权",
+        "权限使用说明",
+        "用户不同意授权"
+      ],
+      "ruleRefs": [],
+      "sha256": "b5cdf3e3bba5e15dc6d21f03ad049e28379329c3546f0dd99e2a4a2abaa7b7a6",
+      "bytes": 5694,
+      "fetchedAt": "2026-11-10T13:16:24.412Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-092",
+      "title": "设计-应用设计-控件-展示类-进度条",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/progress-0000001929656644.md",
+      "leaf": "进度条",
+      "section": "控件 / 展示类",
+      "summary": "进度条是一种常见的移动端的进度控制类控件，用于在界面中告知用户 App 在载入内容或执行长时间操作时未卡死。无明确进度条 (HarmonyOS 特征动效) 请参考 LoadingProgress 文档，有明确进度条参照 Progress 文档。",
+      "outline": [
+        "进度条",
+        "如何使用",
+        "设备差异",
+        "穿戴设备",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-19"
+      ],
+      "sha256": "0aa00d5a7f4b62f3d7a1a17bd9bd03f4e7759dd4622b51d8b666474e0f563935",
+      "bytes": 5286,
+      "fetchedAt": "2026-11-10T13:16:24.456Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-093",
+      "title": "设计-应用设计-控件-展示类-二维码",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/qrcode-0000001929816020.md",
+      "leaf": "二维码",
+      "section": "控件 / 展示类",
+      "summary": "可将链接转换生成为二维码的样式来展示，用户使用设备扫描后即可获取链接地址或获得对应信息。相关开发能力参考 QRCode 文档。",
+      "outline": [
+        "二维码",
+        "如何使用",
+        "界面布局",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "d2d0f4442adb3e119266d794f36b1813a79968df893c13d526ca60b88fa929c6",
+      "bytes": 7579,
+      "fetchedAt": "2026-11-10T13:16:24.494Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-094",
+      "title": "设计-应用设计-控件-选择类-单选框",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/radio-0000001929853288.md",
+      "leaf": "单选框",
+      "section": "控件 / 选择类",
+      "summary": "单选是一种只能用于在互斥选项中进行选择的控件。开发相关描述请参考 Radio 文档。",
+      "outline": [
+        "单选框",
+        "使用场景",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "873cdc9706c8c23ba87b07a4e4caa07a2e2d509f91308fe32d60b04f3a92f2af",
+      "bytes": 4272,
+      "fetchedAt": "2026-11-10T13:16:24.505Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-095",
+      "title": "设计-应用设计-控件-选择类-评分条",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/rating-0000001929853906.md",
+      "leaf": "评分条",
+      "section": "控件 / 选择类",
+      "summary": "明确使用场景和评分规格。评分条控件是一种允许用户对某个对象进行星级评分的交互控件。通过一组五个元素让用户进行选择，通过激活元素数量来提供对应分数的映射。主要使用场景为：电商应用中对商品进行评分；在线服务评价中对服务质量进行评分；内容分享平台中对内容质量进行评分、游戏、应用，或软件评分等等。",
+      "outline": [
+        "评分条",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "36daad7233bc3adc2c385ffd92211755fed3b6dd51093f860b60a17dfbb29df0",
+      "bytes": 3436,
+      "fetchedAt": "2026-11-10T13:16:24.525Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-096",
+      "title": "设计-应用设计-应用设计最佳实践-影音娱乐类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/responsive-design-examples1-0000001957369849.md",
+      "leaf": "影音娱乐类",
+      "section": "应用设计最佳实践",
+      "summary": "长视频、短视频、直播、音乐等类型的应用或业务场景很常见。这类场景的核心都是沉浸式的视频播放和互动，围绕此核心场景，此类应用有如下特点：",
+      "outline": [
+        "影音娱乐类",
+        "长视频",
+        "沉浸式广告",
+        "自适应广告卡片",
+        "可缩放宫格卡片",
+        "长按播放预览",
+        "浅层级搜索",
+        "边看边评"
+      ],
+      "ruleRefs": [],
+      "sha256": "bb1e6cf6f283f39420a6a3929cb7c6bddd2eab4951a9de2b3e9df991700cfb0d",
+      "bytes": 19504,
+      "fetchedAt": "2026-11-10T13:16:24.631Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-097",
+      "title": "设计-应用设计-应用设计最佳实践-社交通讯类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/responsive-design-examples2-0000001793536901.md",
+      "leaf": "社交通讯类",
+      "section": "应用设计最佳实践",
+      "summary": "社交通讯类场景主要包括社交动态、IM 对话、通话、会议等类型的应用和场景。此类场景旨在让用户享受高效的浏览和互动交互。需要避免因为部分元素显示过大，导致大屏幕上交互效率降低。建议重点关注首页、详情页、对话页、通话页等，有针对性地适配以提高用户体验。",
+      "outline": [
+        "社交通讯类",
+        "分栏布局的 IM 对话",
+        "应用内分屏",
+        "视频通话",
+        "双人视频通话",
+        "多人视频通话",
+        "会议",
+        "会议的自适应布局"
+      ],
+      "ruleRefs": [],
+      "sha256": "f37fe55d62ff79402556865ecffbaf02477acafbf8367c219771421c9b2dd25f",
+      "bytes": 18738,
+      "fetchedAt": "2026-11-10T13:16:24.782Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-098",
+      "title": "设计-应用设计-应用设计最佳实践-拍摄美化类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/responsive-design-examples3-0000001746498074.md",
+      "leaf": "拍摄美化类",
+      "section": "应用设计最佳实践",
+      "summary": "拍摄美化场景主要包括拍摄、图片视频浏览以及图片视频的美化编辑等。拍摄美化类的应用通常有修图、加水印、加文本、特效处理等功能。在用户进行图像处理后，可以增强图片的观赏性和分享性。",
+      "outline": [
+        "拍摄美化类",
+        "沉浸式拍照",
+        "自适应布局",
+        "图片浏览",
+        "图片选择器",
+        "查看图片详情",
+        "图片编辑"
+      ],
+      "ruleRefs": [],
+      "sha256": "60cebd07af8eaa3a127a143e279b779774c4da07c9cb03c64f09eee2b226e93a",
+      "bytes": 3400,
+      "fetchedAt": "2026-11-10T13:16:24.666Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-099",
+      "title": "设计-应用设计-应用设计最佳实践-新闻阅读类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/responsive-design-examples4-0000001746657290.md",
+      "leaf": "新闻阅读类",
+      "section": "应用设计最佳实践",
+      "summary": "新闻阅读类应用，本质是信息的聚合。首页、详情页、阅读小说类页面是此类应用的典型核心场景。在宽屏设备中，首页需要进行延伸布局、重复布局等适配，以确保浏览效率更高；详情页使用左右布局往往能获得更舒适的阅读方式，达到边看边评的效果。阅读小说类页面适配时， 页面布局能够根据屏幕尺寸自动调整，保证用户在不同设备的阅读体验。",
+      "outline": [
+        "新闻阅读类",
+        "新闻类",
+        "首页",
+        "新闻详情页",
+        "阅读类",
+        "书架",
+        "书籍简介",
+        "阅读器"
+      ],
+      "ruleRefs": [],
+      "sha256": "7bf67553848dca1be1e697f310a597e54bb152b3d5923fe3755a63c66a0680cb",
+      "bytes": 15626,
+      "fetchedAt": "2026-11-10T13:16:24.771Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-100",
+      "title": "设计-应用设计-应用设计最佳实践-电商购物类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/responsive-design-examples5-0000001930419478.md",
+      "leaf": "电商购物类",
+      "section": "应用设计最佳实践",
+      "summary": "购物、买菜等服务类型的应用或业务场景，旨在让用户享受高效的浏览和互动。这类场景的核心是浏览商品、商品比价、直播购，因此，在大屏设备上可以向用户展示更多的商品选择，提供更轻便高效的交互体验。此类应用有如下特点：",
+      "outline": [
+        "电商购物类",
+        "首页",
+        "首页的沉浸广告",
+        "首页的卡片响应式布局",
+        "商品分类",
+        "商品搜索",
+        "商品详情",
+        "分屏购物比价"
+      ],
+      "ruleRefs": [],
+      "sha256": "10584af093626b9b94b2d6d28117182962f1a950275733390b5445f263962887",
+      "bytes": 15593,
+      "fetchedAt": "2026-11-10T13:16:24.814Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-101",
+      "title": "设计-应用设计-应用设计最佳实践-金融理财类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/responsive-design-examples6-0000001793536905.md",
+      "leaf": "金融理财类",
+      "section": "应用设计最佳实践",
+      "summary": "金融理财类应用的目的是让用户更加便捷地办理金融业务。常见的有银行理财，股票，基金等类型的应用和业务场景，核心场景有数据查看、交易、财经资讯阅读等。",
+      "outline": [
+        "金融理财类",
+        "首页的自适应布局",
+        "金融资讯页",
+        "列表变瀑布流",
+        "瀑布流的分栏布局",
+        "自选股",
+        "高效的分栏布局",
+        "交易页面"
+      ],
+      "ruleRefs": [],
+      "sha256": "80a9c50b3668f67a9817a1d92fe60f11758338deedc8e488bf905e86737e24c3",
+      "bytes": 10406,
+      "fetchedAt": "2026-11-10T13:16:24.676Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-102",
+      "title": "设计-应用设计-控件-展示类-滚动条",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/scrollbar-0000001956815473.md",
+      "leaf": "滚动条",
+      "section": "控件 / 展示类",
+      "summary": "滚动条控件用于显示当前界面视图所在位置，并提供滚动视图时动态展示位置变化进度的功能。滚动条通常出现在内容区域大于实际可视区域时，允许用户垂直或水平滚动查看其余内容的场景。开发能力相关请参考 ScrollBar 文档。",
+      "outline": [
+        "滚动条",
+        "如何使用",
+        "布局规则",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "d9ec4634bbf2862858c938aa68540e79cf4cd185b2166b09d079ac4784f74fdd",
+      "bytes": 8313,
+      "fetchedAt": "2026-11-10T13:16:24.882Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-103",
+      "title": "设计-应用设计-控件-输入类-搜索框",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/search-0000001956852741.md",
+      "leaf": "搜索框",
+      "section": "控件 / 输入类",
+      "summary": "提供用户搜索内容的输入区域。通过搜索，可以快速的找到并定位到想要的内容。搜索框还可以结合搜索历史记录，输入自动补全，语音输入等功能，方便用户快速输入查询。搜索框可以和业务功能放在一起使用，例如扫一扫。在搜索框有输入内容的时候，可以点击搜索框内的清除按钮，一键清除输入。开发能力相关可参考 Search 文档。",
+      "outline": [
+        "搜索框",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "952792cdc9dd8c57c66fd30af3e51762e2089d3cc2603eab4859371b4dc8ee5e",
+      "bytes": 15477,
+      "fetchedAt": "2026-11-10T13:16:24.850Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-104",
+      "title": "设计-应用设计-控件-选择类-分段按钮",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/segmentbutton-0000001929853292.md",
+      "leaf": "分段按钮",
+      "section": "控件 / 选择类",
+      "summary": "分段按钮用于对内容进行组别分类。也可以在多个选项中激活一个或多个按钮的控件。开发相关描述请参考 SegmentButton 文档。",
+      "outline": [
+        "分段按钮",
+        "如何使用",
+        "类型",
+        "视觉规则",
+        "沉浸光感",
+        "布局规则",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-12"
+      ],
+      "sha256": "c8032134504b1023ea84cebf69c338671f3a06712616d4990fa67203ab67a04f",
+      "bytes": 10411,
+      "fetchedAt": "2026-11-10T13:16:24.906Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-105",
+      "title": "设计-应用设计-控件-操作类-下拉按钮",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/select-0000001957001873.md",
+      "leaf": "下拉按钮",
+      "section": "控件 / 操作类",
+      "summary": "需过滤当前界面内容、快速切换类型 (如存储位置) ，或选项内容 (如设置密保问题) 时，使用下拉按钮。",
+      "outline": [
+        "下拉按钮",
+        "如何使用",
+        "视觉样式",
+        "沉浸光感",
+        "组件规格",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-12"
+      ],
+      "sha256": "15749ca8a36786101bb4478c712d7330b1cfb67044817a35e552d6a4e6bd9b34",
+      "bytes": 6464,
+      "fetchedAt": "2026-11-10T13:16:24.909Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-106",
+      "title": "设计-应用设计-系统特性&能力-系统能力-分享",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/share-0000001957076313.md",
+      "leaf": "分享",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "应用需通过\"分享\"图标或\"分享\"选项调用最新的分享控件。使用分享图标请参阅图标库 关于分享的开发适配指南，请参阅Share Kit",
+      "outline": [
+        "分享",
+        "分享一致性",
+        "分享面板构成",
+        "分享内容模板",
+        "大卡模版",
+        "横卡模式",
+        "分享方式区",
+        "基础交互"
+      ],
+      "ruleRefs": [],
+      "sha256": "cdc38f9e1cfa8cc68d96999b7250e440dde6af07602a40659d11db34336855a0",
+      "bytes": 9289,
+      "fetchedAt": "2026-11-10T13:16:25.020Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-107",
+      "title": "设计-应用设计-系统特性&能力-系统特性-桌面快捷方式",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/shortcat-0000002550987962.md",
+      "leaf": "桌面快捷方式",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "为了提升用户体验，可以为应用中常用功能创建桌面快捷方式，实现快速启动和一键直达特定功能，例如相机的\"快速拍照\"、便签的\"新建便签\"和地图的\"常用地点导航\"。用户通过快捷方式可以快速进入特定功能页面，提高了操作效率，也满足了用户个性化的工作流程和操作偏好",
+      "outline": [
+        "桌面快捷方式",
+        "概述",
+        "快捷方式桌面图标添加方式",
+        "方式一",
+        "方式二",
+        "快捷方式图标规范",
+        "图标资源样式",
+        "Svg 格式的图标资源"
+      ],
+      "ruleRefs": [],
+      "sha256": "080b4334f472b65e1881030559bdf5a994385d3a75d0a2ea51924a3b953db103",
+      "bytes": 3138,
+      "fetchedAt": "2026-11-10T13:16:25.031Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-108",
+      "title": "设计-应用设计-控件-选择类-滑动条",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/slider-0000001957012565.md",
+      "leaf": "滑动条",
+      "section": "控件 / 选择类",
+      "summary": "滑动条是一种常见的移动端的进度控制类控件，用于在界面中选择一个数值或调节某个设置。它通常由一个长条形的轨道和一个可以沿轨道滑动的拖动块组成。拖动块的位置代表了当前选择的数值，滑动条可以是水平或垂直方向的。开发相关文档请参考 Slider 文档。",
+      "outline": [
+        "滑动条",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "定制化场景",
+        "常用组合类型",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "83ada63c4cd1501fd53cb10832773d3d7200fa351eb38856ca194d7a87f0ef5b",
+      "bytes": 11247,
+      "fetchedAt": "2026-11-10T13:16:25.124Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-109",
+      "title": "设计-应用设计-针对多设备设计-智能座舱",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-cockpit-0000002045925712.md",
+      "leaf": "智能座舱",
+      "section": "针对多设备设计",
+      "summary": "智能座舱（针对多设备设计，官方原文见链接）",
+      "outline": [
+        "智能座舱"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "4f82e9c4ea2f9f5c6b2515e8021c5bf4859010c9556f7f4819233eac9ef7cf8c",
+      "bytes": 792,
+      "fetchedAt": "2026-11-10T13:16:25.097Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-110",
+      "title": "设计-应用设计-针对多设备设计-智能座舱-应用架构",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-cockpit-application-architecture-0000002592486434.md",
+      "leaf": "应用架构",
+      "section": "针对多设备设计 / 智能座舱",
+      "summary": "应用架构是应用对外呈现的基础结构，是系统风格的体现形式之一。通常情况下，三方应用一级界面建议跟车载鸿蒙自研应用保持类似架构，并遵循人因建议的最小图标、字号、热区大小等，保证应用整体体验一致性和操作的易用性，同时在多尺寸与比例的屏幕下要做好响应式布局，避免内容被不同屏幕截断而影响实际使用体验。典型应用架构包括：一级界面框架、侧边栏、内容区。",
+      "outline": [
+        "应用架构",
+        "一级界面框架",
+        "内容区"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "d3f658e19a5edeef9e2a5aeab15dd33e2bf1235308e6be1b0563465da40356af",
+      "bytes": 6901,
+      "fetchedAt": "2026-11-10T13:16:25.140Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-111",
+      "title": "设计-应用设计-针对多设备设计-智能座舱-基础体验要求",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-cockpit-basic-experience-0000002592646356.md",
+      "leaf": "基础体验要求",
+      "section": "针对多设备设计 / 智能座舱",
+      "summary": "座舱视觉与交互设计以驾乘人本需求为核心，坚守安全合规、简约直观、舒适低扰的原则。",
+      "outline": [
+        "基础体验要求",
+        "概述",
+        "交互操作要求",
+        "热区点击",
+        "主驾易操作",
+        "界面内按钮布局规范",
+        "视觉和信息呈现要求",
+        "关键信息布局优先"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "61d18efe63622a54d080834bfd862c0cfd5e8b18500fcae216589c919c77053b",
+      "bytes": 3496,
+      "fetchedAt": "2026-11-10T13:16:25.135Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-112",
+      "title": "设计-应用设计-针对多设备设计-智能座舱-HUAWEI HiCar",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-cockpit-hicar-0000002592646358.md",
+      "leaf": "HUAWEI HiCar",
+      "section": "针对多设备设计 / 智能座舱",
+      "summary": "为便于显示时间等信息，并方便用户在桌面、常用应用中跳转，HUAWEI HiCar 设有常显的系统导航条。有以下特点：",
+      "outline": [
+        "HUAWEI HiCar",
+        "深色模式",
+        "沉浸式导航条",
+        "导航与其他应用分屏"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "c7397c332063933047571d13ffecc4c56a6e185f90656732fedbcd6112046339",
+      "bytes": 1533,
+      "fetchedAt": "2026-11-10T13:16:25.245Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-113",
+      "title": "设计-应用设计-针对多设备设计-智能座舱-概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-cockpit-overview-0000002592486432.md",
+      "leaf": "概述",
+      "section": "针对多设备设计 / 智能座舱",
+      "summary": "智能汽车已经从交通工具演变成移动的智能空间，用于日常通勤、家庭出游、商务接待等场景。座舱内的屏幕也从一个演变成多个，覆盖前排驾驶所需的中控屏、仪表、HUD，后排驻车娱乐的幕布和吸顶屏，联动手机、手表、PAD、PC等全场景设备，结合车外投影大灯、舱内语音、手势等多模态交互，打造视觉、听觉、触觉等多感官的沉浸体验。智能座舱作为出行场景下的核心设备，围绕一瞥可见、一目了然、一触即达，努力为用户带来更加安全可控、智能易用、空间沉浸的驾乘体验。",
+      "outline": [
+        "概述",
+        "交互设计原则",
+        "保证基础体验",
+        "保证驾驶安全",
+        "视觉设计原则",
+        "内容易于阅读",
+        "目标易于操作",
+        "保持界面一致性"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "5d591a9932d02cd5d82b3718f8d1208ca15cd27de2a7384a899626529026dc02",
+      "bytes": 3625,
+      "fetchedAt": "2026-11-10T13:16:25.160Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-114",
+      "title": "设计-应用设计-针对多设备设计-智能座舱-系统架构",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-cockpit-system-architecture-0000002623086005.md",
+      "leaf": "系统架构",
+      "section": "针对多设备设计 / 智能座舱",
+      "summary": "通知/Toast是轻量化临时提示组件，用于推送状态变更、消息提醒、操作反馈，包含通知弹窗、Toast文字提示。",
+      "outline": [
+        "系统架构",
+        "桌面架构",
+        "桌面层级",
+        "桌面卡片",
+        "卡片简介",
+        "数据可视化",
+        "播控中心",
+        "多窗口分屏"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "006867d16b586f43fb732b6f6422d218f250ca0dc80260adcc44baa3c6e16166",
+      "bytes": 16624,
+      "fetchedAt": "2026-11-10T13:16:25.387Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-115",
+      "title": "设计-应用设计-针对多设备设计-智能座舱-设计基础",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-cockpit-ux-basic-0000002622965869.md",
+      "leaf": "设计基础",
+      "section": "针对多设备设计 / 智能座舱",
+      "summary": "布局不是静态固定的，当显示环境发生变化时，如横竖屏切换、调节字体大小、应用分屏，要及时调整内容的布局方式以适应变化。",
+      "outline": [
+        "设计基础",
+        "布局基础",
+        "响应式布局"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "496d68a810855327f120efe98967578a819187059517f03165e5e3f9f1b853fd",
+      "bytes": 2014,
+      "fetchedAt": "2026-11-10T13:16:25.259Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-116",
+      "title": "设计-应用设计-系统特性&能力-系统能力-智感握姿",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/smart-reachability-0000002556657823.md",
+      "leaf": "智感握姿",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "用户在很多场景下需要单手使用手机，屏幕越大，单手能稳定触达的范围越有限。例如：直板机的远端与顶部、折叠机内屏等区域。关键操作一旦落在这些区域，就会操作吃力、误触增多。",
+      "outline": [
+        "智感握姿",
+        "概述",
+        "设计背景",
+        "智感握姿",
+        "接入原则",
+        "典型场景",
+        "来电横幅",
+        "悬浮组件"
+      ],
+      "ruleRefs": [],
+      "sha256": "ac5c00240b9e47dd1db2acf95548354ad1805c9e2c3d66ba6719ab124daed1c8",
+      "bytes": 4854,
+      "fetchedAt": "2026-11-10T13:16:25.281Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-117",
+      "title": "设计-应用设计-针对多设备设计-智能穿戴-间隔参数",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/spacing-parameters-0000002202912577.md",
+      "leaf": "间隔参数",
+      "section": "针对多设备设计 / 智能穿戴",
+      "summary": "本节对通用性的元素间隔进行了定义。主要有元素、文本的边距；控件之间的上下左右间距；文本的间距、 段落间距等。开发者如有涉及以下场景页面，建议根据提供的间隔参数进行绘制。",
+      "outline": [
+        "间隔参数",
+        "类型",
+        "圆形表",
+        "屏幕边缘间距",
+        "控件间距",
+        "文本间距",
+        "方形表",
+        "屏幕边缘间距"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "4151c30b8ffa4c4425fe1024b44ff4313dcebb980c6b8bcd21de07bb5791c2c8",
+      "bytes": 12950,
+      "fetchedAt": "2026-11-10T13:16:25.300Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-118",
+      "title": "设计-应用设计-系统特性&能力-系统特性-状态栏",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/status-bar-0000001776775568.md",
+      "leaf": "状态栏",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "状态栏用于显示设备当前的状态信息，包括时间、WLAN、移动数据、电量等。状态栏一般显示在整个屏幕的顶部区域，与设备顶部的挖孔进行避让。",
+      "outline": [
+        "状态栏",
+        "状态栏设计原则",
+        "状态栏隐藏原则"
+      ],
+      "ruleRefs": [],
+      "sha256": "036a8818c1ad6940f2521871be2bb9c102cacc4c09eb842ef62c72386dd2953b",
+      "bytes": 2519,
+      "fetchedAt": "2026-11-10T13:16:25.306Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-119",
+      "title": "设计-应用设计-元服务设计-元服务基本要素-状态机卡片",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/status-widgets-0000002728068241.md",
+      "leaf": "状态机卡片",
+      "section": "元服务设计 / 元服务基本要素",
+      "summary": "状态机卡片主要展示于负一屏状态机，其核心价值在于将任务可视化，稳定预期反馈，降低用户焦虑。相较于实况窗，状态机通知持续更长，流程更为完整。",
+      "outline": [
+        "状态机卡片",
+        "卡片类型",
+        "内容聚焦",
+        "图片质量",
+        "图片信息量",
+        "强调色",
+        "图片内容",
+        "新材质适配"
+      ],
+      "ruleRefs": [
+        "DW-AES-21"
+      ],
+      "sha256": "2b498abded2fffe15506409e52f7b73e479b9c7d9e215484fe5868bd6de58963",
+      "bytes": 10089,
+      "fetchedAt": "2026-11-10T13:16:25.485Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-120",
+      "title": "设计-应用设计-针对多设备设计-电脑-应用接入状态栏",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/statusbar-0000002319710910.md",
+      "leaf": "应用接入状态栏",
+      "section": "针对多设备设计 / 电脑",
+      "summary": "状态栏用于显示设备当前的状态信息，包括时间、WLAN、电量、音量等，也支持用户快捷使用应用功能和设置应用功能，如输入法、截屏等。状态栏默认显示在屏幕的底部区域。",
+      "outline": [
+        "应用接入状态栏",
+        "状态栏",
+        "适用场景",
+        "交互规则",
+        "详情面板",
+        "面板构成",
+        "面板视觉规则",
+        "图标样式"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "682a10f328d3767b2778837454821d049740a5bd629e925cf8afac70c83d65d7",
+      "bytes": 11023,
+      "fetchedAt": "2026-11-10T13:16:25.402Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-121",
+      "title": "设计-应用设计-控件-展示类-子标题",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/subheader-0000001929816012.md",
+      "leaf": "子标题",
+      "section": "控件 / 展示类",
+      "summary": "用来组织界面内容，根据层级将其划成区块，并概括该区块内容。子标题样式及属性配置信息请参考 SubHeader 文档。",
+      "outline": [
+        "子标题",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "7dad961b0e3d2d4b1da742349422555aeee7c6cfc8310d5e053a5b378fcfe92a",
+      "bytes": 9113,
+      "fetchedAt": "2026-11-10T13:16:25.524Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-122",
+      "title": "设计-应用设计-控件-导航类-导航点",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/swiper-0000001956947629.md",
+      "leaf": "导航点",
+      "section": "控件 / 导航类",
+      "summary": "导航点是用于界面设计中的常用导航类控件，通常用于展示多个视图、界面内容之间的切换关系。通过导航点可以直观的告诉用户当前内容的数量，且指示当前内容所处位置。导航点导航的内容都是处于同等重要的位置。开发相关描述请参考 Swiper 文档。",
+      "outline": [
+        "导航点",
+        "如何使用",
+        "视觉规则",
+        "组件类型",
+        "沉浸光感",
+        "多设备差异",
+        "穿戴设备",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "176e9ff2cf99f12f18c9d528949f7df4a735acddbce06d5f02f2b2812bd70586",
+      "bytes": 6546,
+      "fetchedAt": "2026-11-10T13:16:25.547Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-123",
+      "title": "设计-应用设计-系统特性&能力-系统能力",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-capabilities-0000001780261034.md",
+      "leaf": "系统能力",
+      "section": "系统特性&能力",
+      "summary": "系统能力（系统特性&能力，官方原文见链接）",
+      "outline": [
+        "系统能力"
+      ],
+      "ruleRefs": [],
+      "sha256": "78395cb9d2e803661daaa233b59666ba928acdfdc2268ac6a055c84507561ced",
+      "bytes": 793,
+      "fetchedAt": "2026-11-10T13:16:25.509Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-124",
+      "title": "设计-应用设计-系统特性&能力-系统能力-启动页",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-capabilities-launch-page-0000002311335748.md",
+      "leaf": "启动页",
+      "section": "系统特性&能力 / 系统能力",
+      "summary": "内容类应用启动页是用户开启应用时最先看到的界面。其承担传递品牌形象、获取用户必要权限（如存储、位置、相机等）的重任。设计时，需遵循鸿蒙系统规范，适配各设备屏幕特性，确保快速加载，自然融入授权流程，避免打断用户体验，为用户打造流畅且高效的应用启动开端。",
+      "outline": [
+        "启动页",
+        "最佳实践",
+        "启动页资源规格",
+        "结构分类",
+        "多设备适配",
+        "图标类",
+        "上下布局类",
+        "深色模式"
+      ],
+      "ruleRefs": [],
+      "sha256": "8b9b28fd934f8ccb82f41baad4cf50f3b26fccbe0b815474a9f2b03e74461713",
+      "bytes": 10356,
+      "fetchedAt": "2026-11-10T13:16:25.532Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-125",
+      "title": "设计-应用设计-系统特性&能力-系统特性",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-features-0000001826860773.md",
+      "leaf": "系统特性",
+      "section": "系统特性&能力",
+      "summary": "系统特性（系统特性&能力，官方原文见链接）",
+      "outline": [
+        "系统特性"
+      ],
+      "ruleRefs": [],
+      "sha256": "b482a1f0eb1085f1166fa20cb3baea5a0499250cc1482d18e593fb7aa475e332",
+      "bytes": 1094,
+      "fetchedAt": "2026-11-10T13:16:25.621Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-126",
+      "title": "设计-应用设计-系统特性&能力-系统特性-实况窗",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-features-live-view-0000001955186861.md",
+      "leaf": "实况窗",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "实况窗是一种帮助用户聚焦进行中任务、方便快速查看和即时处理的消息提醒。包含卡片态、胶囊态、沉浸态。",
+      "outline": [
+        "实况窗",
+        "提醒方式",
+        "适用场景",
+        "设计原则",
+        "基础交互",
+        "通用卡片模板",
+        "模板结构",
+        "模板类型"
+      ],
+      "ruleRefs": [],
+      "sha256": "d92dd38d5eb2e73666b72229b6790c4b211d8424d125ecba6b7819563e9a1ca9",
+      "bytes": 34234,
+      "fetchedAt": "2026-11-10T13:16:25.834Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-127",
+      "title": "设计-应用设计-系统特性&能力-系统特性-多窗口交互",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-features-multi-window-interaction-0000001795392917.md",
+      "leaf": "多窗口交互",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "系统提供了悬浮窗、分屏、画中画三种多窗口交互，为用户在大屏幕设备上的多任务并行、便捷的临时任务处理提供更佳的使用体验。",
+      "outline": [
+        "多窗口交互",
+        "多窗口类型",
+        "基础要求",
+        "悬浮窗",
+        "悬浮窗比例与适配",
+        "悬浮窗类型",
+        "悬浮窗的应用",
+        "跨窗口拖拽"
+      ],
+      "ruleRefs": [],
+      "sha256": "f7b3fbcb5331a768a2e0078f931a4b165c1a6c1e838fac98766452b1c8acffce",
+      "bytes": 16382,
+      "fetchedAt": "2026-11-10T13:16:25.828Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-128",
+      "title": "设计-应用设计-系统特性&能力-系统特性-通知",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-features-notification-0000001793074217.md",
+      "leaf": "通知",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "为用户提供有价值的通知内容信息。 不要重复发送相同内容的通知打扰用户。 采用规范布局，不允许自定义复杂布局，以保证通知体验的一致性。 不要将通知作为小工具或广告板使用。 不要出于商业目的强制改变属性 (如采用实况窗强制置顶显示)，避免损害用户使用体验。",
+      "outline": [
+        "通知",
+        "通知设计原则",
+        "通知详情",
+        "单条通知",
+        "组合通知",
+        "模板样式",
+        "普通通知",
+        "图片预览通知"
+      ],
+      "ruleRefs": [],
+      "sha256": "651e7125c852612338d503d0a91fbec19c16fb888254b43fde0e7e4849ea39e4",
+      "bytes": 11367,
+      "fetchedAt": "2026-11-10T13:16:25.672Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-129",
+      "title": "设计-应用设计-系统特性&能力-系统特性-服务卡片",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-features-service-widget-0000002087671904.md",
+      "leaf": "服务卡片",
+      "section": "系统特性&能力 / 系统特性",
+      "summary": "服务卡片，简称\"卡片\"，是 HarmonyOS 系统一种呈现信息和交互操作的载体，在应用或元服务中提取出及时、核心、实用的信息和操作，提供给用户简洁、高效的体验。",
+      "outline": [
+        "服务卡片",
+        "概述",
+        "卡片简介",
+        "卡片的添加入口",
+        "体验原则",
+        "卡片的构成",
+        "卡片的尺寸和使用场景",
+        "卡片交互"
+      ],
+      "ruleRefs": [
+        "DW-AES-21"
+      ],
+      "sha256": "420eef0765c3ec84b949e8dae4f806e1bf609995b8a3e1189c90f77723a20780",
+      "bytes": 55591,
+      "fetchedAt": "2026-11-10T13:16:25.861Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-130",
+      "title": "设计-应用设计-通用设计基础-视觉风格-HarmonyOS Symbol",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/system-icons-0000001929854962.md",
+      "leaf": "HarmonyOS Symbol",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "HarmonyOS Symbol 代表了 HarmonyOS 系统图标设计的一次重要演进。它通过简化的图形和直观的语义表达，不仅易于识别，同时融入了更多年轻化的设计理念，使得整体的视觉风格更加年轻和时尚。同时 HarmonyOS Symbol 还具备了字体属性，使其能够与系统字体无缝对接，确保了文本与图标的排版一致性。此外，它能够根据文本的粗细变化进行智能适配，确保了在不同文本粗细下，图标能够灵活适应，保持视觉的连贯性和一致性。",
+      "outline": [
+        "HarmonyOS Symbol",
+        "HarmonyOS Symbol",
+        "字体属性",
+        "颜色渲染",
+        "动效策略",
+        "如何使用",
+        "查询图标",
+        "属性标注"
+      ],
+      "ruleRefs": [
+        "DW-AES-20"
+      ],
+      "sha256": "9bf1c2b4fb4badf2bd1451d3b5d597cd676f6f4c361fd0df93cf0a05edb06900",
+      "bytes": 12642,
+      "fetchedAt": "2026-11-10T13:16:25.789Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-131",
+      "title": "设计-应用设计-控件-展示类-文本",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/text-0000001956975261.md",
+      "leaf": "文本",
+      "section": "控件 / 展示类",
+      "summary": "文本控件用于呈现一段信息，可以任意布局在界面中，并可作为段落文本用于界面功能中。文本基础属性设置参考 Text 文档，富文本规格参考 RichText 文档。",
+      "outline": [
+        "文本",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "5823715a1be185165f585a6c7cdcec2d91c9ff4f44a20d4a9bc78531a8f009e9",
+      "bytes": 6131,
+      "fetchedAt": "2026-11-10T13:16:25.851Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-132",
+      "title": "设计-应用设计-控件-展示类-文本时钟",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/textclock-0000001929656652.md",
+      "leaf": "文本时钟",
+      "section": "控件 / 展示类",
+      "summary": "通过文本形式显示当前日期或时间，支持 12 小时制或 24 小时制的日期或时间显示。相关开发能力可参考 TextClock 文档。",
+      "outline": [
+        "文本时钟",
+        "如何使用",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "a13ec6f83da18eb88f82a0dbd0b47af6dade7d95617fa906da14ad79cf4bee7a",
+      "bytes": 6947,
+      "fetchedAt": "2026-11-10T13:16:25.924Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-133",
+      "title": "设计-应用设计-控件-输入类-文本框",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/textinput-0000001957012557.md",
+      "leaf": "文本框",
+      "section": "控件 / 输入类",
+      "summary": "文本框允许用户输入文本、选择文本。支持输入文本、数字或者混合格式的数据。单行文本输入类组件相关能力请参考 TextInput 文档，多行场景请参考 TextArea 文档。",
+      "outline": [
+        "文本框",
+        "如何使用",
+        "文本框样式",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "c51dd90d71c39b11cd62ecd851608d3eb91e98a707496fbfcc141971d28c9a40",
+      "bytes": 15897,
+      "fetchedAt": "2026-11-10T13:16:26.004Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-134",
+      "title": "设计-应用设计-控件-操作类-文本选择菜单",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/textselection-0000001956842049.md",
+      "leaf": "文本选择菜单",
+      "section": "控件 / 操作类",
+      "summary": "选中的文本以高亮的文字块呈现，通过手柄来调整文本的选择范围。操作菜单置于文本之上。开发相关描述请参考 bindSelectionMenu和 SelectionMenu 文档。",
+      "outline": [
+        "文本选择菜单",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "组件规格",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-14"
+      ],
+      "sha256": "8802d76e523dd9c76ed85bd34db63991630839889efa707a2298bfc282a7248b",
+      "bytes": 6514,
+      "fetchedAt": "2026-11-10T13:16:26.049Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-135",
+      "title": "设计-应用设计-控件-导航类-标题栏",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/titlebar-0000001929628982.md",
+      "leaf": "标题栏",
+      "section": "控件 / 导航类",
+      "summary": "标题栏是布局在界面顶部的导航类控件，用于呈现界面名称和操作入口。开发相关描述请参考 Navigation/Title 文档。",
+      "outline": [
+        "标题栏",
+        "如何使用",
+        "组件构成",
+        "一级页标题",
+        "二级页标题",
+        "视觉规则",
+        "沉浸光感",
+        "模糊材质"
+      ],
+      "ruleRefs": [
+        "DW-AES-16"
+      ],
+      "sha256": "97e45aa4ff527b0e5197efbe2002d3f6c0d2fcfce9cd62726f5876d2411abeed",
+      "bytes": 31510,
+      "fetchedAt": "2026-11-10T13:16:26.178Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-136",
+      "title": "设计-应用设计-控件-展示类-即时反馈",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/toast-0000001929656648.md",
+      "leaf": "即时反馈",
+      "section": "控件 / 展示类",
+      "summary": "用于在屏幕底部或中部显示一个操作的轻量级反馈。开发相关能力请参照 PromptAction 文档中的 showToast 用法。",
+      "outline": [
+        "即时反馈",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "布局规则",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "9ef6cda89c45e27af38c7000dcfe5736ec368de4661430d0f34872be952a3c01",
+      "bytes": 11778,
+      "fetchedAt": "2026-11-10T13:16:26.003Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-137",
+      "title": "设计-应用设计-控件-操作类-状态按钮",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/togglebutton-0000001956842045.md",
+      "leaf": "状态按钮",
+      "section": "控件 / 操作类",
+      "summary": "状态按钮用于从一组选项中进行选择，并可能在界面上实时显示选择后的结果。通常这一组选项都是由状态按钮构成。开发相关描述请参考 Toggle文档。",
+      "outline": [
+        "状态按钮",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "组件规格",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-12"
+      ],
+      "sha256": "90e1ae323bebb01f0af52ae3670dce646314bf81a06ed2cb32008e7edee0e08e",
+      "bytes": 4445,
+      "fetchedAt": "2026-11-10T13:16:26.012Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-138",
+      "title": "设计-应用设计-控件-选择类-开关",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/toggleswitch-0000001956852745.md",
+      "leaf": "开关",
+      "section": "控件 / 选择类",
+      "summary": "开关控件属于 Toggle 类控件中的一个类型样式，是一种用于打开或关闭某个功能和设置状态的控件，通过在 ToggleType 中选择 Switch 样式使用。",
+      "outline": [
+        "开关",
+        "如何使用",
+        "视觉规则",
+        "沉浸光感",
+        "开发文档"
+      ],
+      "ruleRefs": [
+        "DW-AES-18"
+      ],
+      "sha256": "49c47b420f707b6e9e0d7497710fb79e86720c8399ba833830d3b9ee2bd4bef8",
+      "bytes": 6109,
+      "fetchedAt": "2026-11-10T13:16:26.083Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-139",
+      "title": "设计-应用设计-控件-操作类-工具栏",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/toolbar-0000001929683232.md",
+      "leaf": "工具栏",
+      "section": "控件 / 操作类",
+      "summary": "工具栏用于展示针对当前界面的操作选项。开发相关描述请参考 Navigation/ToolBarItem 文档和高级组件 ToolBar 文档。",
+      "outline": [
+        "工具栏",
+        "如何使用",
+        "视觉规则",
+        "视觉反馈",
+        "布局规则",
+        "开发文档"
+      ],
+      "ruleRefs": [],
+      "sha256": "1b4f7b8b604ce67d03f0d4d57821a785f822185f96a2491f3946700a9b634def",
+      "bytes": 6176,
+      "fetchedAt": "2026-11-10T13:16:26.152Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-140",
+      "title": "设计-应用设计-应用设计最佳实践-旅游住宿类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/tourist-accommodation-0000001957241545.md",
+      "leaf": "旅游住宿类",
+      "section": "应用设计最佳实践",
+      "summary": "旅游住宿、订票类场景通常包含火车/飞机订票，订酒店，查询票务信息等核心功能，围绕此核心功能，此类场景旨在让用户拥有流畅沉浸的用户体验，提供更轻便高效的交互体验。",
+      "outline": [
+        "旅游住宿类",
+        "购票",
+        "首页",
+        "时间选择",
+        "车票查询",
+        "信息填写",
+        "提交订单",
+        "订单"
+      ],
+      "ruleRefs": [],
+      "sha256": "36b25609d8d918a6f8340af3b878e89dc8f4e8ba6d475149befd820efefda774",
+      "bytes": 7567,
+      "fetchedAt": "2026-11-10T13:16:26.206Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-141",
+      "title": "设计-应用设计-通用设计基础-动效-转场动效",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/transition-animation-0000001750078488.md",
+      "leaf": "转场动效",
+      "section": "通用设计基础 / 动效",
+      "summary": "衔接页面与页面间或元素与元素间的过渡动画称之为转场动效，帮助用户理解界面以及元素之间的逻辑关系，比如打开应用动效，日程切换动效，在系统占比最高的动效类型60%以上。在HarmonyOS的转场动效设计上，我们推出了一镜到底的高级转场设计手法，可以提升视觉流畅性的同时又能增强动效品质感。",
+      "outline": [
+        "转场动效",
+        "层级关系",
+        "同层级",
+        "上下层级",
+        "跨层级",
+        "运动编排",
+        "场景解构",
+        "一镜到底"
+      ],
+      "ruleRefs": [
+        "DW-AES-11"
+      ],
+      "sha256": "e237757709dfc566d75e1035e7accff46cc7fd06948dc07ec75b16709e8a5559",
+      "bytes": 4443,
+      "fetchedAt": "2026-11-10T13:16:26.149Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-142",
+      "title": "设计-应用设计-应用设计最佳实践-出行导航类",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/travel-and-navigation-0000001957391017.md",
+      "leaf": "出行导航类",
+      "section": "应用设计最佳实践",
+      "summary": "直板机上使用底板的半模态面板。在折叠屏、平板等宽屏设备上，使用侧边的半模态面板而非全屏拉伸的底板面板，减少面板对地图的遮挡。 面板默认高度，依据屏幕尺寸的不同而有所区分：手机和折叠屏设备使用「中」高度的面板高度，减少对地图的遮挡。宽屏端设备因为屏幕空间足够，面板默认以最高高度展示。",
+      "outline": [
+        "出行导航类",
+        "首页",
+        "面板支持多档位高度滑动调节",
+        "创新布局",
+        "地点详情信息",
+        "搜索",
+        "下滑面板地图与面板范式一",
+        "范式二"
+      ],
+      "ruleRefs": [],
+      "sha256": "ab92fb324993106e1a93dabd9325cc918a7c13878e28e1666abaafc396d19685",
+      "bytes": 14657,
+      "fetchedAt": "2026-11-10T13:16:26.238Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-143",
+      "title": "设计-应用设计-针对多设备设计-折叠屏-三折叠",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/trifold-0000002352915021.md",
+      "leaf": "三折叠",
+      "section": "针对多设备设计 / 折叠屏",
+      "summary": "三折叠手机是一种具有特殊形态的终端设备，支持单屏态、双屏态、三屏态等多种形态，适应不同应用场景，打破终端场景边界，实现一机多能。三折叠手机具备更大的屏幕尺寸和更灵活的形态，给用户带来更极致、高效的使用体验。",
+      "outline": [
+        "三折叠",
+        "概览",
+        "基础要求",
+        "横竖屏适配",
+        "交互跟手",
+        "开合接续",
+        "页面不跳转",
+        "焦点不偏移"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "88c6ffb1863cc3e642ca065d095c2a2aac776cef553ae32e1357eba374cd98ae",
+      "bytes": 10691,
+      "fetchedAt": "2026-11-10T13:16:26.348Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-144",
+      "title": "设计-应用设计-通用设计基础-视觉风格-文本排版",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/typography-0000002622688363.md",
+      "leaf": "文本排版",
+      "section": "通用设计基础 / 视觉风格",
+      "summary": "字体排印指的是在操作系统中对文字的布局和呈现方式的定义。在 UI 设计中，字体排印起着关键的作用，包括字体的大小、样式、行间距等，这些因素直接影响用户界面的可读性和整体美观性。通过合适的字体排印，设计师可以确保用户能够轻松阅读和理解应用的内容，提升用户体验。除了确保文本清晰易读外，您选择的字体排印方式还可协助您阐明信息层级结构、传达重要内容并宣传您的品牌。",
+      "outline": [
+        "文本排版",
+        "字体排印",
+        "排版体验要求",
+        "文本应用",
+        "文本排版规范",
+        "标点及符号排版规则",
+        "段落排版规则",
+        "使用自定义字体"
+      ],
+      "ruleRefs": [
+        "DW-AES-02",
+        "DW-AES-14"
+      ],
+      "sha256": "14ff7c9a73cdaf68b0ca5e74d69e2a6a787091165655d37b52ae4e8bb5fa0495",
+      "bytes": 24486,
+      "fetchedAt": "2026-11-10T13:16:26.354Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-145",
+      "title": "设计-应用设计-应用 UX 体验标准-电脑应用 UX 体验标准",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-2in1-0000001777895636.md",
+      "leaf": "电脑应用 UX 体验标准",
+      "section": "应用 UX 体验标准",
+      "summary": "此标准为电脑特有体验标准，除了此标准，应用开发者也需要遵循通用应用体验标准和大屏应用体验标准中电脑适用的部分。",
+      "outline": [
+        "电脑应用 UX 体验标准",
+        "窗口响应式"
+      ],
+      "ruleRefs": [],
+      "sha256": "7ddb1cc9869c45ae1e1c34292e24fe58905973362968c62c87cf41d914853f26",
+      "bytes": 4908,
+      "fetchedAt": "2026-11-10T13:16:26.358Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-146",
+      "title": "设计-应用设计-应用 UX 体验标准-折叠屏应用 UX 体验标准",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-foldable-screen-0000001807866557.md",
+      "leaf": "折叠屏应用 UX 体验标准",
+      "section": "应用 UX 体验标准",
+      "summary": "|----|-----|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------",
+      "outline": [
+        "折叠屏应用 UX 体验标准",
+        "基础体验",
+        "阔折叠体验"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "55d0ad182913e9fb994d8144b4fddfbb8fe58b993e89a11ffbbc03a5f625c764",
+      "bytes": 10093,
+      "fetchedAt": "2026-11-10T13:16:26.342Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-147",
+      "title": "设计-应用设计-应用 UX 体验标准-通用应用 UX 体验标准",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-general-0000001760708152.md",
+      "leaf": "通用应用 UX 体验标准",
+      "section": "应用 UX 体验标准",
+      "summary": "|----|-------|---------------------------------------------------------------------------------------------------------| |标准编号|2.1.1.1|系统返回| |标准描述||所有界面都可以执行系统返回操作。 除一级界面外，所有全屏界面均需要提供返回/关闭/取消按钮。(全屏沉浸式场景、穿戴圆形屏除外)| |测试方法||使用侧边返回手势，验证当前应用界面是否可以执行系统返回操作。检查应用除一级页面外",
+      "outline": [
+        "通用应用 UX 体验标准",
+        "基础体验",
+        "应用导航",
+        "界面布局",
+        "人机交互",
+        "视觉风格",
+        "动效",
+        "系统特性"
+      ],
+      "ruleRefs": [],
+      "sha256": "96207089ce580cd3b0da30f9aeb58b7d9ecddc3fdc310c213cd98917ec3816b6",
+      "bytes": 48642,
+      "fetchedAt": "2026-11-10T13:16:26.593Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-148",
+      "title": "设计-应用设计-应用 UX 体验标准-大屏应用 UX 体验标准",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-large-screen-0000001807707561.md",
+      "leaf": "大屏应用 UX 体验标准",
+      "section": "应用 UX 体验标准",
+      "summary": "|----|-----|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------",
+      "outline": [
+        "大屏应用 UX 体验标准",
+        "功能完整",
+        "布局合理美观",
+        "交互易用",
+        "鼠标、触控板和键盘交互"
+      ],
+      "ruleRefs": [],
+      "sha256": "67858dee470eef33d8da58c7abbc460fcf40acd1042e36bb96d1ab915e1cc8ba",
+      "bytes": 63326,
+      "fetchedAt": "2026-11-10T13:16:26.494Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-149",
+      "title": "设计-应用设计-应用 UX 体验标准-概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001760867048.md",
+      "leaf": "概述",
+      "section": "应用 UX 体验标准",
+      "summary": "本标准从影响用户体验的各个维度定义了相应测试规范，规定了应用需达到的基础体验要求，用于引导应用的设计与开发，以保证应用良好的使用体验。",
+      "outline": [
+        "概述",
+        "范围",
+        "术语和缩略语定义"
+      ],
+      "ruleRefs": [],
+      "sha256": "2648f9d40eecd60880946471f9103dede7a9969e981f1ce4a14232596a5adf9a",
+      "bytes": 1760,
+      "fetchedAt": "2026-11-10T13:16:26.514Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-150",
+      "title": "设计-应用设计-元服务设计-元服务体验场景",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001900218352.md",
+      "leaf": "元服务体验场景",
+      "section": "元服务设计",
+      "summary": "线上：基于用户意图。从精准意图的搜索、用户事件触发的推荐到主动探索等场景。用户可以在设备的负一屏、全局搜索、应用市场、桌面等场景发现元服务。",
+      "outline": [
+        "元服务体验场景",
+        "服务发现",
+        "服务使用",
+        "服务管理",
+        "服务分享"
+      ],
+      "ruleRefs": [],
+      "sha256": "8f771c7bc2ea22094fd5b92eb95754dec7eec09c56fc2057d9733f9986d175df",
+      "bytes": 3136,
+      "fetchedAt": "2026-11-10T13:16:26.573Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-151",
+      "title": "设计-应用设计-元服务设计-设计原则",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001900378248.md",
+      "leaf": "设计原则",
+      "section": "元服务设计",
+      "summary": "设计原则（元服务设计，官方原文见链接）",
+      "outline": [
+        "设计原则"
+      ],
+      "ruleRefs": [],
+      "sha256": "6e2468af753b67dba6ca53f2a95900c48df734bcdb91b7f773cf091f153b9ea4",
+      "bytes": 512,
+      "fetchedAt": "2026-11-10T13:16:26.574Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-152",
+      "title": "设计-应用设计-元服务设计-元服务基本要素-基础信息",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001900384976.md",
+      "leaf": "基础信息",
+      "section": "元服务设计 / 元服务基本要素",
+      "summary": "每个元服务有独立的图标、名称。基础信息将根据场景在元服务市场、元服务面板等界面展示。",
+      "outline": [
+        "基础信息",
+        "名称",
+        "图标",
+        "方形资源图上传要求",
+        "图标资源设计"
+      ],
+      "ruleRefs": [],
+      "sha256": "e0c5b4f881650d9a28ca3574282dceaf107d6fbf85a6774fe027086d3df43c92",
+      "bytes": 5455,
+      "fetchedAt": "2026-11-10T13:16:26.499Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-153",
+      "title": "设计-应用设计-元服务设计-设计原则-通用友好",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001900422910.md",
+      "leaf": "通用友好",
+      "section": "元服务设计 / 设计原则",
+      "summary": "① 通过元服务图标、服务卡片、场景调用等方式打开元服务，无开屏界面。非用户主动操作，应尽量避免出现广告弹框干扰用户。若确有运营需要，建议将广告内容内嵌入页面之中，或使用更加轻量的底部非模态浮窗，以减少对用户任务的打断。",
+      "outline": [
+        "通用友好",
+        "即点即用、秒开清爽",
+        "启动无开屏、无广告，无重复加载",
+        "**一键授权、一键登录、一键退出**",
+        "减少界面信息层级，减少层数嵌套和层级跳转",
+        "高级简约、自然流畅",
+        "**界面布局简洁，重点突出**",
+        "**转场自然流畅，操作响应即时**"
+      ],
+      "ruleRefs": [],
+      "sha256": "64a56acc07bb434ff96e72b042ad06b33025fb35f53a2d97ca84d614a90aa6bb",
+      "bytes": 4241,
+      "fetchedAt": "2026-11-10T13:16:26.714Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-154",
+      "title": "设计-应用设计-元服务设计-设计原则-简洁高级",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001900424082.md",
+      "leaf": "简洁高级",
+      "section": "元服务设计 / 设计原则",
+      "summary": "通过平衡性、层级性两个维度来确保界面具有平衡协调的信息组织性，达到舒适愉悦的视觉观感。",
+      "outline": [
+        "简洁高级",
+        "可视愉悦，界面平衡",
+        "简洁布局，突出重点",
+        "精致细节，体现品质",
+        "界面一致，易学易用",
+        "多彩特征，多元有序"
+      ],
+      "ruleRefs": [],
+      "sha256": "151ad4cbdcd406cd54dd6dafb2a289b03e326c97e60e61c058517274de7c1ad4",
+      "bytes": 5261,
+      "fetchedAt": "2026-11-10T13:16:26.823Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-155",
+      "title": "设计-应用设计-元服务设计-设计原则-安全可靠",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001900584166.md",
+      "leaf": "安全可靠",
+      "section": "元服务设计 / 设计原则",
+      "summary": "感知到的安全是积极体验的驱动力，应提供给用户一个可感知、可控制、易使用的安全体验。",
+      "outline": [
+        "安全可靠",
+        "尊重隐私，可管可控",
+        "安全可信，权威可靠"
+      ],
+      "ruleRefs": [],
+      "sha256": "194712cccb4d1661b252f564e319387363e254cf78cba59f24f6a9f7863aa9d7",
+      "bytes": 3184,
+      "fetchedAt": "2026-11-10T13:16:26.759Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-156",
+      "title": "设计-应用设计-元服务设计-概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001938867005.md",
+      "leaf": "概述",
+      "section": "元服务设计",
+      "summary": "在万物互联时代，人均持有设备量不断攀升，设备和场景的多样性，使服务开发变得更加复杂、服务入口更加丰富。在此趋势下，应用开发者和用户迫切需要一种新的服务提供方式，使应用的开发更简单，服务的获取和使用更便捷。为此，HarmonyOS 提供了基于元服务的便捷服务。",
+      "outline": [
+        "概述"
+      ],
+      "ruleRefs": [],
+      "sha256": "2c85b929c3aae97cd6a25cf79f114fc6b71135c7ab0d920e1ef7c4bd0a2454d3",
+      "bytes": 1526,
+      "fetchedAt": "2026-11-10T13:16:26.715Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-157",
+      "title": "设计-应用设计-元服务设计-元服务基本要素",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001939135629.md",
+      "leaf": "元服务基本要素",
+      "section": "元服务设计",
+      "summary": "元服务基本要素（元服务设计，官方原文见链接）",
+      "outline": [
+        "元服务基本要素"
+      ],
+      "ruleRefs": [],
+      "sha256": "31de12b90c0bd7e41f7de8b4a3d79f146ac7cc99e23942bc2eb7758de36760ea",
+      "bytes": 273,
+      "fetchedAt": "2026-11-10T13:16:26.739Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-158",
+      "title": "设计-应用设计-元服务设计-元服务基本要素-服务卡片",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001939144821.md",
+      "leaf": "服务卡片",
+      "section": "元服务设计 / 元服务基本要素",
+      "summary": "为了给用户提供便捷、智能的服务体验，每个元服务都可选配置服务卡片。卡片作为服务的轻量承载，需要做到易用可见、智能可选和多端可变。",
+      "outline": [
+        "服务卡片"
+      ],
+      "ruleRefs": [
+        "DW-AES-21"
+      ],
+      "sha256": "1dc1c54520b809b2e89a134d9caddd7781e89c37fda1d9193a7878c6e6948a44",
+      "bytes": 471,
+      "fetchedAt": "2026-11-10T13:16:26.732Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-159",
+      "title": "设计-应用设计-元服务设计-设计原则-轻量高效",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-overview-0000001939183197.md",
+      "leaf": "轻量高效",
+      "section": "元服务设计 / 设计原则",
+      "summary": "1）导航应该提供清晰的路径。用户使用的时候，能够知道当前处在界面的什么位置，操作后将会跳转到什么位置。建议开发者直接调用元服务官方提供的导航栏 (AtomicServiceNavigation) 控件。提供以下3种样式：纯文本/图形文本、品牌Logo、品牌Logo+名称文本。",
+      "outline": [
+        "轻量高效",
+        "导航清晰，入口明确",
+        "轻量架构，高效触达",
+        "直觉交互，符合预期",
+        "容错防呆，消除歧义",
+        "友好表达，通俗易懂",
+        "及时反馈，缓解等待"
+      ],
+      "ruleRefs": [],
+      "sha256": "c819760e6b551cf36d427a1c26c7111d7d95008a92948e5df243ac5b13618aa3",
+      "bytes": 8914,
+      "fetchedAt": "2026-11-10T13:16:26.939Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-160",
+      "title": "设计-应用设计-应用 UX 体验标准-智慧屏应用 UX 体验标准",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-vision-0000002360813381.md",
+      "leaf": "智慧屏应用 UX 体验标准",
+      "section": "应用 UX 体验标准",
+      "summary": "|----|---|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------",
+      "outline": [
+        "智慧屏应用 UX 体验标准"
+      ],
+      "ruleRefs": [],
+      "sha256": "62bbc57bcbce408b36ee2cc4d44f3093568370931201c6901a3682fb1442630f",
+      "bytes": 4935,
+      "fetchedAt": "2026-11-10T13:16:26.989Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-161",
+      "title": "设计-应用设计-应用 UX 体验标准-智能穿戴应用 UX 体验标准",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-guidelines-wearable-0000002503475023.md",
+      "leaf": "智能穿戴应用 UX 体验标准",
+      "section": "应用 UX 体验标准",
+      "summary": "|----|-----|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------",
+      "outline": [
+        "智能穿戴应用 UX 体验标准"
+      ],
+      "ruleRefs": [],
+      "sha256": "02a36cc8b43bbdd8c11ff81e26253d023007bb3cc521042e8c8270fd165d831a",
+      "bytes": 7601,
+      "fetchedAt": "2026-11-10T13:16:26.884Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-162",
+      "title": "设计-应用设计-应用 UX 体验标准-元服务 UX 体验标准",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/ux-standard-overview-0000002019655177.md",
+      "leaf": "元服务 UX 体验标准",
+      "section": "应用 UX 体验标准",
+      "summary": "元服务和 APP 是 HarmonyOS 生态的\"一体两面\"，相比较 APP，元服务即开即用、纯净轻量、高效触达特征尤为明显。元服务在体验管控方面强调\"一进一出\"丝滑流畅无拦截、\"一上一下\"导航清晰无遮挡，在自动化检测维度上包含通用应用、大屏应用、折叠屏应用、电脑应用 UX 体验标准，全量指标如下：",
+      "outline": [
+        "元服务 UX 体验标准",
+        "概述（全量检测范围）",
+        "特征体验"
+      ],
+      "ruleRefs": [],
+      "sha256": "5dae0ba1a5adb19ec36e43813ae4a5eb04a5ebe1a8f90239fa63c9796d77aae7",
+      "bytes": 55996,
+      "fetchedAt": "2026-11-10T13:16:27.109Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-163",
+      "title": "设计-应用设计-针对多设备设计-智慧屏",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/vision-0000002321377950.md",
+      "leaf": "智慧屏",
+      "section": "针对多设备设计",
+      "summary": "智慧屏作为家居场景下的核心设备，采用了自然简单，符合直觉的设计原则，让全家人轻松简单的使用智慧屏。努力为家庭用户带来更加智慧、沉浸、无缝的娱乐体验。",
+      "outline": [
+        "智慧屏",
+        "设计原则",
+        "设备特性",
+        "应用和服务设计",
+        "保证基础体验",
+        "设计应用和服务体验",
+        "支持系统特性",
+        "应用架构"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "ad0d960849534b9e62182fb434769149625db53beab3d4230d0e3b9436b253cd",
+      "bytes": 8822,
+      "fetchedAt": "2026-11-10T13:16:26.907Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-164",
+      "title": "设计-应用设计-通用设计基础-视觉风格",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/visual_design-0000001823497081.md",
+      "leaf": "视觉风格",
+      "section": "通用设计基础",
+      "summary": "视觉风格（通用设计基础，官方原文见链接）",
+      "outline": [
+        "视觉风格"
+      ],
+      "ruleRefs": [],
+      "sha256": "870f61319198e20ff17f8fac893fd847d217bc3f0f31c3b12b7dca52ecd07e4e",
+      "bytes": 459,
+      "fetchedAt": "2026-11-10T13:16:26.972Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-165",
+      "title": "设计-应用设计-针对多设备设计-智能穿戴",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/wearable-0000002164711032.md",
+      "leaf": "智能穿戴",
+      "section": "针对多设备设计",
+      "summary": "智能穿戴（针对多设备设计，官方原文见链接）",
+      "outline": [
+        "智能穿戴"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "d53ffe48854245555ee864155c83b6f1bdf1dde11f92987c77d6d6965ab7e1bb",
+      "bytes": 502,
+      "fetchedAt": "2026-11-10T13:16:27.101Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-166",
+      "title": "设计-应用设计-针对多设备设计-智能穿戴-概述",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/wearable-overview-0000002197410498.md",
+      "leaf": "概述",
+      "section": "针对多设备设计 / 智能穿戴",
+      "summary": "智能穿戴已经成为继手机之后，用户生活中极为重要的贴身辅助设备，是我们的生活助手，健康管家，亦是运动教练。",
+      "outline": [
+        "概述",
+        "应用设计",
+        "保证基础体验",
+        "设计应用体验",
+        "支持系统特性",
+        "系统特性",
+        "符合HarmonyOS统一设计规范"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "6b851803d4e71b80679131d7afaaa7430489ef6adfda23b2300fe3d779c5bb47",
+      "bytes": 6059,
+      "fetchedAt": "2026-11-10T13:16:27.130Z",
+      "contentStored": false
+    },
+    {
+      "id": "HW-UX-167",
+      "title": "设计-应用设计-针对多设备设计-电脑-窗口框架",
+      "url": "https://developer.huawei.com/consumer/cn/doc/doccenter-ux-design/window-0000002321868010.md",
+      "leaf": "窗口框架",
+      "section": "针对多设备设计 / 电脑",
+      "summary": "窗口是系统中各个应用的载体，用户通过窗口对应用内容进行查看和交互。在电脑上，窗口可作为一个单独对象进行查看和操作，通常支持打开、关闭、调整尺寸，支持最小化、最大化和分屏显示。",
+      "outline": [
+        "窗口框架",
+        "窗口构成",
+        "容器层",
+        "内容区",
+        "交互规则",
+        "窗口最大化、最小化和关闭",
+        "窗口回弹规格",
+        "窗口分屏准入原则"
+      ],
+      "ruleRefs": [
+        "DW-AES-07"
+      ],
+      "sha256": "9321008dd91f081c3809b9b53056b7426c92468c8e3cbb3ba0cde450a41b9c82",
+      "bytes": 15023,
+      "fetchedAt": "2026-11-10T13:16:27.127Z",
+      "contentStored": false
+    }
+  ]
+}
