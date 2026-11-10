@@ -4,6 +4,24 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.5 — 2026-11-11
+
+Section-level design-guide indexing (local only; not pushed).
+
+### Added
+
+- `docs/design-guide/index.json` now includes `sections[]` for every document:
+  heading path, level, short summary, `HW-UX-*`, `ruleRefs`, `mappingStatus`,
+  heading-fragment anchor and `contentStored: false`.
+- 1,164 subsections across 167 documents, without storing bodies/images/assets.
+- `HW-UX-031` (`convenient-life`) covers all 25 subsections and maps every one
+  to at least one `DW-AES-*` / `DW-A11Y-*` rule.
+- Parent sections with no prose inherit descendant rules; sections with no
+  honest mapping remain `unbound` rather than inventing evidence.
+- `tests/design-knowledge.test.mjs` validates section shape, target coverage,
+  rule closure and no-body fields.
+- `docs/0.9.5-plan.md`.
+
 ## 0.9.4 — 2026-11-10
 
 Design-knowledge ingestion (local only; not pushed).

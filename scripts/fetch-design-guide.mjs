@@ -74,7 +74,26 @@ const OUTLINE = [
   ['热区', ['DW-A11Y-02']],
   ['焦点', ['DW-A11Y-03', 'DW-A11Y-12']],
   ['键盘', ['DW-A11Y-12']],
-  ['可访问', ['DW-A11Y-04']]
+  ['可访问', ['DW-A11Y-04']],
+  ['宽屏', ['DW-AES-07']],
+  ['自适应', ['DW-AES-07']],
+  ['分栏', ['DW-AES-07']],
+  ['宫格', ['DW-AES-07']],
+  ['响应式', ['DW-AES-07']],
+  ['折叠屏', ['DW-AES-07']],
+  ['图文', ['DW-AES-06']],
+  ['图片', ['DW-AES-06']],
+  ['列表', ['DW-AES-13']],
+  ['卡片', ['DW-AES-21']],
+  ['弹窗', ['DW-AES-15']],
+  ['悬停', ['DW-AES-11']],
+  ['视频', ['DW-AES-11']],
+  ['直播', ['DW-AES-11']],
+  ['推荐', ['DW-AES-21']],
+  ['实况', ['DW-AES-21']],
+  ['海报', ['DW-AES-06']],
+  ['主页', ['DW-AES-05']],
+  ['布局', ['DW-AES-05']]
 ];
 
 function ruleRefs(title) {
@@ -83,6 +102,77 @@ function ruleRefs(title) {
     if (title.toLowerCase().includes(keyword.toLowerCase())) for (const id of ids) refs.add(id);
   }
   return [...refs];
+}
+
+function sectionAnchor(url, title) {
+  const page = url.replace(/\.md$/, '');
+  return {
+    anchor: `#${encodeURIComponent(title)}`,
+    anchorUrl: `${page}#${encodeURIComponent(title)}`,
+    anchorKind: 'heading-fragment'
+  };
+}
+
+/**
+ * Build per-heading sections without storing their bodies.
+ * H1 is the document root; sections are H2/H3/... entries.
+ */
+function buildSections(markdown, entry) {
+  const headings = [...markdown.matchAll(/^(#{1,6})\s+(.+?)\s*$/gm)];
+  const sections = [];
+  let rootTitle = entry.leaf;
+  let stack = [];
+  for (let index = 0; index < headings.length; index += 1) {
+    const match = headings[index];
+    const level = match[1].length;
+    const title = match[2].trim();
+    if (level === 1) {
+      rootTitle = title;
+      stack = [{ level, title }];
+      continue;
+    }
+    while (stack.length > 0 && stack[stack.length - 1].level >= level) stack.pop();
+    stack.push({ level, title });
+    const start = (match.index ?? 0) + match[0].length;
+    const end = index + 1 < headings.length ? (headings[index + 1].index ?? markdown.length) : markdown.length;
+    const body = markdown.slice(start, end);
+    const digest = summarize(body);
+    const path = stack.map((item) => item.title);
+    const directRules = ruleRefs(`${entry.title} ${path.join(' ')} ${digest.summary}`);
+    const anchor = sectionAnchor(entry.url, title);
+    sections.push({
+      id: `${entry.id}-S${String(sections.length + 1).padStart(2, '0')}`,
+      hwUxId: entry.id,
+      level,
+      title,
+      headingPath: path,
+      summary: digest.summary || `${title}（${rootTitle}，官方原文见链接）`,
+      ruleRefs: directRules,
+      mappingStatus: directRules.length > 0 ? 'direct' : 'unbound',
+      anchor: anchor.anchor,
+      anchorUrl: anchor.anchorUrl,
+      anchorKind: anchor.anchorKind,
+      contentStored: false
+    });
+  }
+  // A parent section without its own prose inherits the union of its child
+  // sections' rules. Do not invent a rule for leaves with no match.
+  for (const parent of sections) {
+    if (parent.ruleRefs.length > 0) continue;
+    const prefix = parent.headingPath.join('\u0000');
+    const inherited = new Set();
+    for (const child of sections) {
+      if (child === parent) continue;
+      if (child.headingPath.length <= parent.headingPath.length) continue;
+      if (child.headingPath.slice(0, parent.headingPath.length).join('\u0000') !== prefix) continue;
+      for (const rule of child.ruleRefs) inherited.add(rule);
+    }
+    if (inherited.size > 0) {
+      parent.ruleRefs = [...inherited];
+      parent.mappingStatus = 'descendant';
+    }
+  }
+  return sections;
 }
 
 function sectionOf(title) {
@@ -181,6 +271,8 @@ async function run() {
           section,
           summary: digest.summary || `${entry.leaf}（${section || '设计文档'}，官方原文见链接）`,
           outline: digest.outline,
+          sections: buildSections(body, entry),
+          ruleRefs: ruleRefs(entry.title),
           ruleRefs: ruleRefs(entry.title),
           sha256: hash,
           bytes: Buffer.byteLength(body, 'utf8'),
@@ -194,6 +286,7 @@ async function run() {
           section: sectionOf(entry.title),
           summary: '',
           outline: [],
+          sections: [],
           ruleRefs: ruleRefs(entry.title),
           sha256: null,
           bytes: null,
@@ -215,6 +308,7 @@ async function run() {
     fetchedAt: new Date().toISOString(),
     license: 'Huawei official documentation terms; citation/summary only; no redistribution',
     count: result.length,
+    sectionCount: result.reduce((total, entry) => total + (entry.sections?.length ?? 0), 0),
     stored: 'citation-and-summary-only; no document body, images or asset files',
     entries: result
   };

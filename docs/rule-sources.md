@@ -26,6 +26,11 @@ citation: {
 `docs/design-guide/index.json` 保存标题、官方 URL、Markdown sha256、字节数、
 抓取日期、短摘要、大纲和 `DW-*` 规则映射；**不保存正文、图片或可下载资产**。
 
+0.9.5 起，每篇还有 `sections[]`：1,164 个章节，逐节保存标题路径、短摘要、
+官方标题锚点、`HW-UX-*`、`ruleRefs` 和 `mappingStatus`。`convenient-life`
+（`HW-UX-031`）的 25 个小节已全部覆盖并断言；没有诚实规则命中的技术章节保留
+`unbound`，不硬凑审美规则。正文/图片仍未存储。
+
 检索：
 
 ```text

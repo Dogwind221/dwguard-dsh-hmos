@@ -25,10 +25,48 @@ test('design-guide index is citation/summary only', () => {
     assert.ok(entry.fetchedAt.length >= 20);
     assert.ok(entry.summary.length > 0);
     assert.equal(entry.contentStored, false);
+    assert.ok(Array.isArray(entry.sections));
+    for (const section of entry.sections) {
+      assert.match(section.id, new RegExp(`^${entry.id}-S\\d{2,3}$`));
+      assert.equal(section.hwUxId, entry.id);
+      assert.ok(section.level >= 2);
+      assert.equal(section.headingPath.at(-1), section.title);
+      assert.ok(section.summary.length > 0);
+      assert.match(section.anchor, /^#/);
+      assert.ok(section.anchorUrl.startsWith(entry.url.replace(/\.md$/, '') + '#'));
+      assert.equal(section.anchorKind, 'heading-fragment');
+      assert.equal(section.contentStored, false);
+      assert.ok(['direct', 'descendant', 'unbound'].includes(section.mappingStatus));
+      for (const rule of section.ruleRefs) assert.ok(ruleIds.has(rule), `${section.id} has unknown rule ${rule}`);
+      for (const forbidden of ['content', 'body', 'markdown', 'images', 'assets']) {
+        assert.equal(Object.hasOwn(section, forbidden), false, `${section.id} must not store ${forbidden}`);
+      }
+    }
     for (const forbidden of ['content', 'body', 'markdown', 'images', 'assets']) {
       assert.equal(Object.hasOwn(entry, forbidden), false, `${entry.id} must not store ${forbidden}`);
     }
   }
+});
+
+test('convenient-life has all 25 subsection headings and rule mappings', () => {
+  const target = guide.entries.find((entry) => entry.url.includes('convenient-life-0000001957252465'));
+  assert.ok(target, 'target document missing');
+  assert.equal(target.id, 'HW-UX-031');
+  assert.equal(target.sections.length, 25);
+  const titles = target.sections.map((section) => section.title);
+  for (const expected of [
+    '首页的自适应布局', '美食页面', '搜索列表', '店铺页', '详情页', '选规格',
+    '电影', '选电影', '电影简介', '选影院', '实况窗', '推荐', '短视频',
+    '视频详情看评论', '查看更多辅助信息', '视频悬停', '直播间', '笔记详情',
+    '图文笔记', '图文浏览效果', '个人主页', '关注动态',
+    '范式一：单列卡片变分栏+宫格/瀑布流布局',
+    '范式二：单列卡片变宫格/瀑布流布局',
+    '范式三：单列卡片变宽'
+  ]) {
+    assert.ok(titles.includes(expected), `missing subsection: ${expected}`);
+  }
+  assert.equal(new Set(titles).size, 25);
+  assert.ok(target.sections.every((section) => section.ruleRefs.length > 0), 'target sections must all map to a rule');
 });
 
 test('design-resource cards are link-only and declare license/scope', () => {
