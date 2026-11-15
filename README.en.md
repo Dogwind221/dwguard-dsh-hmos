@@ -164,7 +164,7 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.6).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.7).
 
 > **0.9.6 adds a non-breaking evidence contract**: criteria may declare
 > `requiredEvidence`; checks may add typed `evidenceRefs` over `evidenceFiles`;
@@ -210,9 +210,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.6`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.6` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.6` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.7`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.7` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.7` |
 
 Omit the version to follow the latest release.
 
@@ -221,7 +221,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.6`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.7`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -230,7 +230,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.9.6   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.9.7   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -244,7 +244,7 @@ dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
 
 Verify: `dsh --profile web --dump-config` should show `# == dwguard-dsh-hmos`.
 
-Every **new** session then gets 16 tools, 4 skills and a policy prompt. Sessions
+Every **new** session then gets 17 tools, 4 skills and a policy prompt. Sessions
 opened before the install keep their old tool table — open a new one.
 
 ## The `DshHoms` entry
@@ -286,6 +286,7 @@ self-report never becomes a `pass`.
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
+| `dwguard_code` | Zero-click executor: starts `deveco run` on the frozen Goal brief, streams JSON events to `artifacts/code-<n>/`, and tracks the background job (`run / status / stop / list`). It does not replace the audit gate. |
 | `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; device actions use per-device leases (token/expiry/heartbeat) and background jobs hold theirs for their whole lifetime |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
@@ -417,6 +418,12 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     stallMinutes: 30
     executor: auto         # auto = IDE-first | ide | cli
     devecocliPath: ''      # empty = auto-detect (PATH / npm global)
+devecoCodePath: ''     # DevEco Code CLI (deveco); empty = auto-detect
+codeProjectDir: ''     # project root for deveco run; empty = workspace
+codeModel: ''          # optional provider/model
+codeAgent: ''          # optional agent
+codeAuto: true         # pass --auto to deveco run
+codeTimeoutMinutes: 45 # hard timeout per run
     hostMemoryGb: 0        # 0 = auto-detect; >0 = override (CI/containers)
     deviceMode: auto       # auto (by host memory) | single | matrix
     matrixMinMemoryGb: 32  # < 32GB forces single-device; >= 32GB allows the matrix

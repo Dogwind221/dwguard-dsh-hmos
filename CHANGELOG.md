@@ -4,6 +4,26 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.7 — 2026-11-15
+
+### Added
+
+- `dwguard_code` tool: launch the frozen Goal brief through the DevEco Code
+  CLI (`deveco run --format json`), stream events into
+  `artifacts/code-<n>/events.jsonl`, and track a background job
+  (`run / status / stop / list`).
+- Config: `devecoCodePath`, `codeProjectDir`, `codeModel`, `codeAgent`,
+  `codeAuto`, `codeTimeoutMinutes`.
+- Zero-click loop: DSH can dispatch, start the CLI executor, then audit the
+  same artifacts without copy-pasting the brief.
+- Tests: `tests/code.test.mjs` for argv construction and binary resolution.
+
+### Compatibility
+
+- Backward compatible; the tool is additive and the audit gate is unchanged.
+- `deveco run --auto` is enabled by default for the zero-click path; set
+  `codeAuto: false` to require interactive approval.
+
 ## 0.9.6 — 2026-11-11
 
 Non-breaking evidence contract (local only; not pushed).
