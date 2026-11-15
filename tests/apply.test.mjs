@@ -46,7 +46,7 @@ test('the plugin declares its identity and injection', () => {
   assert.deepEqual(inject, ['tools']);
 });
 
-test('apply registers sixteen tools, four skills and one policy section', () => {
+test('apply registers seventeen tools, four skills and one policy section', () => {
   const { ctx, registered, skills, sections, disposers } = fakeContext();
   apply(ctx, {});
 
@@ -55,6 +55,7 @@ test('apply registers sixteen tools, four skills and one policy section', () => 
     'dwguard_audit',
     'dwguard_audit_dimension',
     'dwguard_calibration',
+    'dwguard_code',
     'dwguard_confirm',
     'dwguard_design',
     'dwguard_deveco',
