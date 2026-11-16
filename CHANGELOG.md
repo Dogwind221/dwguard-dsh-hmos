@@ -4,6 +4,42 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.0 — 2026-11-16
+
+First public baseline for other developers.
+
+### Added
+
+- Coverage baseline: 86.92% line / 72.48% branch / 86.56% functions.
+- Scan benchmark baseline: 40 deterministic files, p50 18.07ms, p95 19.51ms.
+- Concurrency stress suite: 64 state updates, 64 index reservations, 24 queue claims.
+- Clean-install checklist and temporary-profile boot evidence.
+- `docs/1.0.0-plan.md`, `docs/coverage-and-benchmark.md`,
+  `docs/clean-install-checklist.md`.
+
+### Fixed
+
+- Queue enqueue/claim/complete/fail now serialise through a file lock; the stress
+  test previously observed one task instead of 24.
+
+### Verification
+
+- `npm test`: 191/191.
+- `npm run coverage`: 86.92% line.
+- `node scripts/bench-scan.mjs`: p95 19.51ms.
+- Clean temporary profile: install + `CLEAN-INSTALL-1.0.0`, exit 0.
+- Quickstart: clean project, build ok.
+- Publish gate: `release gate ok`.
+
+### Boundaries
+
+- Single-user/self-use scale; no production operations, monitoring, backup, SLO
+  or on-call.
+- No physical HarmonyOS device: `bench --device --require-physical` is blocked.
+- CLIP live endpoints and marketplace catalog refresh are not guaranteed.
+- Design guides remain citation/summary-only; no official bodies/images/assets.
+- No Go runtime; Go test/vet/race metrics do not apply to this TypeScript plugin.
+
 ## 0.9.9 — 2026-11-16
 
 P0 release candidate: known limitations + verified 0.9.8 review fixes.

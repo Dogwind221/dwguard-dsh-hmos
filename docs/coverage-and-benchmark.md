@@ -47,10 +47,11 @@ production load test.
 Verified on a temporary headless profile:
 
 ```text
-profile: dwguard-clean-0919
-install: dwguard-dsh-hmos 0.9.9 (local tarball)
+profile: dwguard-clean-100
+install: dwguard-dsh-hmos 1.0.0 (local tarball)
 dump-config: # == dwguard-dsh-hmos / id: dwguard-hmos
-headless: CLEAN-INSTALL-0.9.9 (exit 0)
+headless: CLEAN-INSTALL-1.0.0 (exit 0)
+quickstart: quickstart_exit=0, build ok
 ```
 
 Temp profile removed after the test. See [clean-install-checklist.md](clean-install-checklist.md).

@@ -164,14 +164,19 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.9).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.0).
 
-> **0.9.9 P0 release candidate**: folds the known-limitations docs and the three
-> 0.9.8 review fixes (per-family evidence coverage, checker file existence,
-> invalid requiredEvidence rejection) and a queue read-modify-write race found
-> by the concurrency stress test. Build/typecheck clean; 191/191 tests; coverage
-> 86.92% line / 72.48% branch; scan p95 19.51ms; clean-profile install returned
-> `CLEAN-INSTALL-0.9.9`. This is a release candidate, not the 1.0.0 public baseline.
+> **1.0.0 is the first public baseline**: self-use scale for other developers.
+> 191/191 tests, 86.92% line coverage, scan p95 19.51ms, queue-lock fix, and a
+> clean temporary-profile install are recorded. **Not production-grade**: no
+> SLA/monitoring/backup/on-call/multi-tenancy; physical-device coverage remains
+> explicitly `blocked`. See [CHANGELOG.md](CHANGELOG.md) and
+> [docs/known-limitations.md](docs/known-limitations.md). Baseline notes:
+> [docs/1.0.0-baseline.md](docs/1.0.0-baseline.md).
+>
+> **0.9.9 P0 release candidate**: folded known limitations and three 0.9.8
+> evidence-layer fixes, plus a queue read-modify-write race found by the
+> concurrency stress test. 191/191 tests; not separately published.
 >
 > **0.9.7 documents known limitations**: CLIP live/offline behavior, single-user
 > scale, no production operations, physical-device blocked state, marketplace
@@ -227,9 +232,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.9`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.9` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.9` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.0`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.0` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.0` |
 
 Omit the version to follow the latest release.
 
@@ -238,7 +243,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.9`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.0`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -247,7 +252,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.9.9   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.0   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
