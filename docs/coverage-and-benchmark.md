@@ -51,6 +51,7 @@ profile: dwguard-clean-100
 install: dwguard-dsh-hmos 1.0.0 (local tarball)
 dump-config: # == dwguard-dsh-hmos / id: dwguard-hmos
 headless: CLEAN-INSTALL-1.0.0 (exit 0)
+npm install: dwguard-dsh-hmos@1.0.0 → NPM-INSTALL-1.0.0 (exit 0)
 quickstart: quickstart_exit=0, build ok
 ```
 

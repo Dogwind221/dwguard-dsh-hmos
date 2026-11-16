@@ -30,6 +30,8 @@ First public baseline for other developers.
 - Clean temporary profile: install + `CLEAN-INSTALL-1.0.0`, exit 0.
 - Quickstart: clean project, build ok.
 - Publish gate: `release gate ok`.
+- Released: tag `v1.0.0`, npm latest 1.0.0; CI 43865003901; publish 43865234622.
+- npm-installed temporary profile: install 1.0.0 + boot `NPM-INSTALL-1.0.0`.
 
 ### Boundaries
 
