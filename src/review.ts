@@ -101,7 +101,11 @@ export interface Gate {
 export interface EvidenceCoverage {
   readonly required: number;
   readonly satisfied: number;
-  readonly missing: readonly { readonly criterionId: string; readonly kind: EvidenceKind }[];
+  readonly missing: readonly {
+    readonly criterionId: string;
+    readonly kind: EvidenceKind;
+    readonly family?: ScreenFamily;
+  }[];
 }
 
 export interface Coverage {
@@ -612,10 +616,11 @@ export function gateDelivery(
   const evidenceCoverage = summarizeEvidenceCoverage(pack, checks);
   for (const gap of evidenceCoverage.missing) {
     const criterion = known.get(gap.criterionId);
+    const family = gap.family === undefined ? '' : `（${SCREEN_FAMILY_LABELS[gap.family]}）`;
     if (criterion?.weight === 'must') {
-      errors.push(`\`${gap.criterionId}\` 缺少必需的 \`${gap.kind}\` 证据；不能以其它证据类型替代。`);
+      errors.push(`\`${gap.criterionId}\`${family} 缺少必需的 \`${gap.kind}\` 证据；不能以其它证据类型替代。`);
     } else {
-      warnings.push(`\`${gap.criterionId}\` 缺少声明的 \`${gap.kind}\` 证据（should）。`);
+      warnings.push(`\`${gap.criterionId}\`${family} 缺少声明的 \`${gap.kind}\` 证据（should）。`);
     }
   }
   if (missing.length > 0) {
@@ -779,19 +784,28 @@ export function gateDelivery(
 export function summarizeEvidenceCoverage(pack: TaskPack, checks: readonly Check[]): EvidenceCoverage {
   let required = 0;
   let satisfied = 0;
-  const missing: Array<{ criterionId: string; kind: EvidenceKind }> = [];
+  const missing: Array<{ criterionId: string; kind: EvidenceKind; family?: ScreenFamily }> = [];
   for (const criterion of pack.criteria) {
     const kinds = criterion.requiredEvidence ?? [];
     if (kinds.length === 0) continue;
-    const supplied = new Set(
-      checks
-        .filter((check) => check.criterionId === criterion.id)
-        .flatMap((check) => (check.evidenceRefs ?? []).map((ref) => ref.kind))
-    );
-    for (const kind of kinds) {
-      required += 1;
-      if (supplied.has(kind)) satisfied += 1;
-      else missing.push({ criterionId: criterion.id, kind });
+    const own = checks.filter((check) => check.criterionId === criterion.id);
+    // In matrix mode each check is a separate family verdict. Do not let one
+    // family's typed evidence satisfy another family's requirement.
+    const groups = own.length === 0 ? [undefined] : own;
+    for (const check of groups) {
+      const supplied = new Set((check?.evidenceRefs ?? []).map((ref) => ref.kind));
+      for (const kind of kinds) {
+        required += 1;
+        if (supplied.has(kind)) {
+          satisfied += 1;
+        } else {
+          missing.push({
+            criterionId: criterion.id,
+            kind,
+            ...(check?.family === undefined ? {} : { family: check.family })
+          });
+        }
+      }
     }
   }
   return { required, satisfied, missing };

@@ -4,6 +4,55 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 0.9.9 — 2026-11-16
+
+P0 release candidate: known limitations + verified 0.9.8 review fixes.
+
+### Added
+
+- `docs/known-limitations.md` and README links (CLIP live/offline,
+  single-user scale, no production operations, physical-device blocked,
+  marketplace delay, citation-only design guides).
+- AI review record for the 0.9.6 evidence layer.
+
+### Fixed
+
+- Matrix families no longer share typed-evidence coverage; `missing` carries
+  the optional `family` and gate messages identify it.
+- `dwguard checker` now stats every `evidenceRefs` path and reports missing or
+  non-regular files instead of trusting the audit JSON alone.
+- Invalid `requiredEvidence` values are preserved through `parseTaskPack` so
+  `validateTaskPack` rejects them instead of silently dropping the requirement.
+- Queue enqueue/claim/complete/fail now share a file lock; 24 concurrent claims
+  no longer overwrite each other with a single leased task.
+
+### Verification
+
+- Build and typecheck clean.
+- `npm test`: 191/191.
+- Coverage: 86.92% line / 72.48% branch / 86.56% funcs.
+- Scan benchmark: 40 files, p50 18.07ms, p95 19.51ms.
+- Clean temporary profile: install + `CLEAN-INSTALL-0.9.9`, exit 0.
+- Publish gate: `release gate ok` with 202 files.
+- This is a release candidate, not the 1.0.0 public baseline.
+
+## 0.9.7 — 2026-11-16
+
+Known-limitations documentation (local only; not pushed/published).
+
+### Added
+
+- `docs/known-limitations.md`: CLIP live/offline behavior, single-user scale,
+  no production operations, physical-device blocked state, marketplace catalog
+  delay, and citation-only design-guide storage.
+- README links to the limitations list.
+- The list uses 0.9.2 as the behavior baseline; package version is 0.9.7.
+
+### Compatibility
+
+- No runtime code or schema change.
+- 186/186 tests remain the last verified suite; no publish.
+
 ## 0.9.6 — 2026-11-11
 
 Non-breaking evidence contract (local only; not pushed).

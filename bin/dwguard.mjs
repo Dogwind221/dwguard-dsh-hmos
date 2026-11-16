@@ -377,6 +377,14 @@ export async function checker(workspace, options = {}) {
             message: `evidenceRefs 路径 ${ref.path} 未列入 evidenceFiles，不会进入证据包`
           });
         }
+        const info = await stat(join(paths.shared, ref.path)).catch(() => null);
+        if (info === null || !info.isFile()) {
+          report.notes.push({
+            severity: 'warn',
+            criterionId: criterion.id,
+            message: `evidenceRefs 文件不存在或不是普通文件：${ref.path}`
+          });
+        }
       }
     }
   }

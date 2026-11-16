@@ -164,8 +164,20 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.6).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 0.9.9).
 
+> **0.9.9 P0 release candidate**: folds the known-limitations docs and the three
+> 0.9.8 review fixes (per-family evidence coverage, checker file existence,
+> invalid requiredEvidence rejection) and a queue read-modify-write race found
+> by the concurrency stress test. Build/typecheck clean; 191/191 tests; coverage
+> 86.92% line / 72.48% branch; scan p95 19.51ms; clean-profile install returned
+> `CLEAN-INSTALL-0.9.9`. This is a release candidate, not the 1.0.0 public baseline.
+>
+> **0.9.7 documents known limitations**: CLIP live/offline behavior, single-user
+> scale, no production operations, physical-device blocked state, marketplace
+> catalog delay, and citation-only design guides. Baseline: 0.9.2; local only,
+> not published.
+>
 > **0.9.6 adds a non-breaking evidence contract**: criteria may declare
 > `requiredEvidence`; checks may add typed `evidenceRefs` over `evidenceFiles`;
 > a pass missing a declared type is downgraded to `unverified`; optional
@@ -201,6 +213,11 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 > `review`, DevEco `bridge`, physical-device/fault benchmarks and a 10-minute
 > quickstart. See [docs/0.9.0-plan.md](docs/0.9.0-plan.md) and
 > [docs/quickstart-10min.md](docs/quickstart-10min.md).
+>
+> **Known limitations**: CLIP live vs offline fallback, single-user scale, no
+> production operations, physical-device blocked state, marketplace catalog
+> delay, and citation-only design guides. See
+> [docs/known-limitations.md](docs/known-limitations.md) (baseline: 0.9.2).
 
 ### Install from npm
 
@@ -210,9 +227,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.6`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.6` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.6` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@0.9.9`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@0.9.9` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@0.9.9` |
 
 Omit the version to follow the latest release.
 
@@ -221,7 +238,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.6`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@0.9.9`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -230,7 +247,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@0.9.6   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@0.9.9   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -486,7 +503,7 @@ triplefold). In matrix mode every `dwguard_audit` check must carry `device` +
 npm install       # typescript, @types/node, @deepseek-ai/dsh-tools, @deepseek-ai/schemastery
 npm run typecheck
 npm run build
-npm test          # 186 tests (scripts/preflight.mjs checks the host test deps first)
+npm test          # 191 tests (scripts/preflight.mjs checks the host test deps first)
 node scripts/release.mjs --bump=patch --dry-run
 ```
 

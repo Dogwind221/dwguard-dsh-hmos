@@ -681,8 +681,12 @@ export function parseTaskPack(raw: string | null): TaskPack | null {
       ...(assertion === undefined ? {} : { assertion }),
       ...(Array.isArray(entry['requiredEvidence'])
         ? {
+            // Keep unknown strings here so validateTaskPack can report
+            // E_CRITERION_EVIDENCE_KIND instead of silently dropping them.
             requiredEvidence: (entry['requiredEvidence'] as unknown[])
-              .filter((item2): item2 is EvidenceKind => typeof item2 === 'string' && (EVIDENCE_KINDS as readonly string[]).includes(item2))
+              .filter((item2): item2 is string => typeof item2 === 'string')
+              .map((item2) => item2.trim())
+              .filter((item2) => item2.length > 0) as EvidenceKind[]
           }
         : {})
     });

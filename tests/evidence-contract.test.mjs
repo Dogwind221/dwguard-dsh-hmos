@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { applyRequiredEvidenceVerdicts, gateDelivery, normalizeChecks, summarizeCoverage } from '../lib/review.js';
-import { buildTaskPack } from '../lib/spec.js';
+import { buildTaskPack, parseTaskPack, validateTaskPack } from '../lib/spec.js';
 
 const basePack = {
   schemaVersion: 1,
@@ -103,6 +103,57 @@ test('before/after only applies when the criterion declares it', () => {
   const legacy = applyRequiredEvidenceVerdicts(legacyPack, normalizeChecks([passCheck('A-01')]));
   assert.equal(legacy[0].result, 'pass');
   assert.equal(summarizeCoverage(legacyPack, legacy).evidence, undefined);
+});
+
+test('matrix families do not share typed evidence coverage', () => {
+  const checks = [
+    passCheck('A-01', {
+      family: 'phone',
+      evidenceFiles: ['artifacts/phone.png'],
+      evidenceRefs: [{ path: 'artifacts/phone.png', kind: 'screenshot_before' }, { path: 'artifacts/phone.png', kind: 'screenshot_after' }]
+    }),
+    passCheck('A-01', {
+      family: 'foldable',
+      evidenceFiles: ['artifacts/foldable.png'],
+      evidenceRefs: [{ path: 'artifacts/foldable.png', kind: 'screenshot_after' }]
+    })
+  ];
+  const coverage = summarizeCoverage(basePack, normalizeChecks(checks));
+  assert.equal(coverage.evidence.required, 4);
+  assert.equal(coverage.evidence.satisfied, 3);
+  assert.deepEqual(coverage.evidence.missing, [
+    { criterionId: 'A-01', kind: 'screenshot_before', family: 'foldable' }
+  ]);
+});
+
+test('invalid requiredEvidence survives parse so validation can reject it', () => {
+  const pack = buildTaskPack(
+    {
+      title: 'p',
+      requirement: 'r',
+      spec: 's',
+      criteria: [{ id: 'A-01', dimension: 'aesthetic', statement: '视觉改动有前后截图', verify: '截图' }]
+    },
+    { iteration: 1, specVersion: 1, createdAt: 'x', updatedAt: 'x' }
+  );
+  const raw = JSON.stringify({
+    ...pack,
+    criteria: [{ ...pack.criteria[0], requiredEvidence: ['screenshot_bogus'] }]
+  });
+  const parsed = parseTaskPack(raw);
+  assert.ok(parsed);
+  assert.deepEqual(parsed.criteria[0].requiredEvidence, ['screenshot_bogus']);
+  const validation = validateTaskPack(parsed, {
+    sharedDir: '.shared',
+    promptSection: true,
+    installSkills: true,
+    minCriteriaPerDimension: 1,
+    requireRebuttalOnBlocker: true,
+    requirePrereviewBeforeDispatch: true,
+    devecoBriefPath: '',
+    knowledgeMaxEntriesPerTopic: 200
+  });
+  assert.ok(validation.errors.some((issue) => issue.code === 'E_CRITERION_EVIDENCE_KIND'));
 });
 
 test('a typed ref must point at a file also listed in evidenceFiles', () => {

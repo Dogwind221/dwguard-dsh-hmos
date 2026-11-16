@@ -68,6 +68,7 @@ export interface EvidenceCoverage {
     readonly missing: readonly {
         readonly criterionId: string;
         readonly kind: EvidenceKind;
+        readonly family?: ScreenFamily;
     }[];
 }
 export interface Coverage {

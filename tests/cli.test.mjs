@@ -119,6 +119,7 @@ test('checker is read-only and reports requiredEvidence gaps', async () => {
   assert.equal(report.coverage.required, 2);
   assert.equal(report.coverage.satisfied, 1);
   assert.ok(report.coverage.missing.some((gap) => gap.kind === 'screenshot_before'));
+  assert.ok(report.notes.some((note) => note.message.includes('文件不存在')), JSON.stringify(report.notes));
   const after = await readFile(join(cwd, '.shared', 'artifacts', 'audit-1.json'), 'utf8');
   assert.equal(after, before, 'checker must not rewrite audit artifacts');
 });
