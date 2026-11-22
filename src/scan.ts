@@ -64,7 +64,8 @@ const FAKE_PACKAGE = /from\s+['"]@ohos\/(dayjs|uuid|lodash|moment|rxjs|react|vue
 const LAZY_LIST = /(List|Grid|WaterFlow)\s*\(/;
 const TIMER_SET = /setInterval\s*\(/;
 const TIMER_CLEAR = /clearInterval\s*\(/;
-const BUTTON_OR_CLICK = /(Button\s*\(|\.onClick\s*\()/;
+// `\b` keeps identifiers such as `bottomButton()` from being read as a `Button(`.
+const BUTTON_OR_CLICK = /(\bButton\s*\(|\.onClick\s*\()/;
 const A11Y_TEXT = /(accessibilityText\s*\(|accessibilityDescription\s*\(|accessibilityGroup\s*\()/;
 
 const RULES = {
@@ -177,6 +178,34 @@ async function collectFiles(root: string, sinceMs?: number): Promise<string[]> {
 }
 
 /**
+ * Bracket ranges of list-like containers (`List` / `Grid` / `WaterFlow`).
+ *
+ * The rule used to be file-level: a single `List(` anywhere flagged every
+ * `ForEach(` in the file, so a 4-item tab bar inside `Row()` was reported as a
+ * long-list problem (found on WindwindLure, 2026-11-22). Only a `ForEach` that
+ * actually sits inside a container is a long-list candidate.
+ */
+function listContainerRanges(lines: string[]): Array<{ start: number; end: number }> {
+  const open: Array<{ depth: number; start: number }> = [];
+  const ranges: Array<{ start: number; end: number }> = [];
+  let depth = 0;
+  for (let index = 0; index < lines.length; index += 1) {
+    const raw = lines[index] ?? '';
+    const line = isComment(raw) ? '' : raw;
+    const opens = (line.match(/\{/g) ?? []).length;
+    const closes = (line.match(/\}/g) ?? []).length;
+    if (LAZY_LIST.test(line) && opens > 0) open.push({ depth, start: index });
+    depth += opens - closes;
+    while (open.length > 0 && depth <= (open[open.length - 1]?.depth ?? 0)) {
+      const block = open.pop();
+      if (block !== undefined) ranges.push({ start: block.start, end: index });
+    }
+  }
+  for (const block of open) ranges.push({ start: block.start, end: lines.length - 1 });
+  return ranges;
+}
+
+/**
  * Scan one workspace for ArkTS/ArkUI pitfalls.
  * @param root - absolute directory to scan.
  * @param includeWarnings - include `warn` hits (default true).
@@ -210,11 +239,16 @@ export async function scanWorkspace(
     for (const match of text.matchAll(STATE_DECLARATION)) {
       const name = match[1];
       if (name === undefined) continue;
+      // `(?<![=!<>])=(?!=)` keeps comparisons out of the rule: `this.post.imageColors.length === 0`
+      // is a read, not a nested assignment (false positive found on WindwindLure, 2026-11-22).
       const nested = new RegExp(
-        `this\\.${name}\\.([A-Za-z_$][\\w$]*)\\.([A-Za-z_$][\\w$]*)\\s*=`,
+        `this\\.${name}\\.([A-Za-z_$][\\w$]*)\\.([A-Za-z_$][\\w$]*)\\s*(?<![=!<>])=(?!=)`,
         'g'
       );
-      const arrayItem = new RegExp(`this\\.${name}\\[[^\\]]+\\]\\.([A-Za-z_$][\\w$]*)\\s*=`, 'g');
+      const arrayItem = new RegExp(
+        `this\\.${name}\\[[^\\]]+\\]\\.([A-Za-z_$][\\w$]*)\\s*(?<![=!<>])=(?!=)`,
+        'g'
+      );
       for (let index = 0; index < lines.length; index += 1) {
         const line = lines[index] ?? '';
         if (isComment(line)) continue;
@@ -240,9 +274,17 @@ export async function scanWorkspace(
       const line = lines.findIndex((candidate) => V2_DECORATORS.test(candidate));
       hits.push(hit('ARKTS-V1V2-MIX', rel, line >= 0 ? line + 1 : 1, lines[line >= 0 ? line : 0] ?? ''));
     }
-    if (LAZY_LIST.test(text) && /ForEach\s*\(/.test(text) && !/LazyForEach\s*\(/.test(text)) {
-      const line = lines.findIndex((candidate) => /ForEach\s*\(/.test(candidate));
-      hits.push(hit('PERF-LIST-FOREACH', rel, line >= 0 ? line + 1 : 1, lines[line >= 0 ? line : 0] ?? ''));
+    if (!/LazyForEach\s*\(/.test(text)) {
+      const ranges = listContainerRanges(lines);
+      const forEachLine = lines.findIndex(
+        (candidate, index) =>
+          !isComment(candidate) &&
+          /ForEach\s*\(/.test(candidate) &&
+          ranges.some((range) => index >= range.start && index <= range.end)
+      );
+      if (forEachLine >= 0) {
+        hits.push(hit('PERF-LIST-FOREACH', rel, forEachLine + 1, lines[forEachLine] ?? ''));
+      }
     }
     if (TIMER_SET.test(text) && !TIMER_CLEAR.test(text)) {
       const line = lines.findIndex((candidate) => TIMER_SET.test(candidate));

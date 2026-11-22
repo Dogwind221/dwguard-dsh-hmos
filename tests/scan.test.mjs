@@ -136,3 +136,83 @@ test('scan leaves clean code alone and can hide warnings', async () => {
   assert.equal(incremental.files, 0);
   assert.equal(incremental.hits.length, 0);
 });
+
+// Shapes lifted from WindwindLure (a real third-party HarmonyOS app, 2026-11-22).
+// The scanner used to report all three of them as defects: a `===` comparison,
+// a `@Builder bottomButton()`, and a 4-item tab-bar `ForEach` in a `Row` that
+// shared a file with an unrelated `List(`.
+const realWorld = `@Component
+struct Page {
+  @State post: Post = new Post()
+
+  private currentColor(): string {
+    if (this.post === null || this.post.imageColors.length === 0) {
+      return '#fff'
+    }
+    if (this.post.catchId !== '' && this.post.images.length >= 1) {
+      return '#000'
+    }
+    return '#111'
+  }
+
+  @Builder
+  bottomButton() {
+    Text('done')
+  }
+
+  build() {
+    Column() {
+      Row({ space: 8 }) {
+        ForEach(this.categoryLabels, (label: string) => {
+          Text(label)
+        })
+      }
+      List({ space: 10 }) {
+        Text('static row')
+      }
+    }
+  }
+}
+`;
+
+test('scan ignores real-world false positives (comparisons, builder names, header loops)', async () => {
+  const root = await workspace();
+  await mkdir(join(root, 'entry', 'src', 'main', 'ets'), { recursive: true });
+  await writeFile(join(root, 'entry', 'src', 'main', 'ets', 'Page.ets'), realWorld);
+
+  const report = await scanWorkspace(root);
+  assert.deepEqual(
+    report.hits.map((hit) => `${hit.ruleId}@${hit.line}`),
+    [],
+    `real-world code must stay clean, got ${JSON.stringify(report.hits, null, 2)}`
+  );
+});
+
+test('PERF-LIST-FOREACH points at the loop inside the container, not a header loop', async () => {
+  const root = await workspace();
+  await mkdir(join(root, 'entry', 'src', 'main', 'ets'), { recursive: true });
+  const page = `@Component
+struct Feed {
+  @State rows: string[] = []
+  @State tabs: string[] = []
+
+  build() {
+    Column() {
+      Row() {
+        ForEach(this.tabs, (tab: string) => { Text(tab) })
+      }
+      List() {
+        ForEach(this.rows, (row: string) => { Text(row) })
+      }
+    }
+  }
+}
+`;
+  await writeFile(join(root, 'entry', 'src', 'main', 'ets', 'Feed.ets'), page);
+
+  const report = await scanWorkspace(root);
+  const hits = report.hits.filter((hit) => hit.ruleId === 'PERF-LIST-FOREACH');
+  assert.equal(hits.length, 1, `expected one list hit, got ${hits.length}`);
+  assert.match(hits[0].excerpt, /this\.rows/, 'must point at the List loop');
+  assert.equal(hits[0].line, page.split('\n').indexOf('        ForEach(this.rows, (row: string) => { Text(row) })') + 1);
+});

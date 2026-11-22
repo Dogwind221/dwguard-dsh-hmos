@@ -6,22 +6,39 @@ All notable changes to this plugin are recorded here. The format follows
 
 ## 1.0.6 — 2026-11-22
 
-发布包瘦身：`docs/` 不再随 npm 包发布。
+发布包瘦身：`docs/` 不再随 npm 包发布；扫描规则在真实第三方工程上修掉三处误报。
 
 ### Changed
 
 - `package.json` 的 `files` 白名单移除 `docs/`：55 个文件 / 1.86MB（其中
   `docs/design-guide/index.json` 单独 1.2MB）不再进入 tarball，解包体积
-  3490KB → 1630KB、下载体积 1143KB → 461KB，文件数 233 → 178。文档仍保留在仓库里，GitHub 上照常可读。
+  3490KB → 1633KB、下载体积 1143KB → 462KB，文件数 233 → 179。文档仍保留在仓库里，GitHub 上照常可读。
 - 明确 `design:guide` / `design:foundations` / `design:search` 是**仓库内开发命令**
   （它们依赖 `docs/` 下的设计索引），安装后的包不再附带这些索引，因此这三个命令
   只能在仓库检出中运行。
+- 新增 `scripts/scan-path.mjs`：`dwguard_scan` 只接受工作区内路径，这个脚本可以直接
+  扫任意目录（试跑第三方工程时用）。
+
+### Fixed
+
+三个误报是在真实第三方工程上跑出来的，每个都补了回归用例（`tests/scan.test.mjs`）：
+
+- `STATE-NESTED-01` 把比较当赋值：`this.post.imageColors.length === 0` 这类只读比较被
+  报成「嵌套属性被赋值，UI 不会刷新」（WindwindLure 3/3 误报）。赋值号两侧现在排除
+  `= ! < >`，`+=` 等复合赋值仍然会报。
+- `A11Y-TEXT-001` 把 `@Builder bottomButton()` 当成 `Button(`（TournamentDetailPage:110）。
+  正则加了 `\b`。
+- `PERF-LIST-FOREACH` 改成按花括号区间判断 `ForEach` 是否真的在 `List` / `Grid` /
+  `WaterFlow` 内；此前文件里只要出现过 `List(`，全部 `ForEach` 都会被报
+  （GearPage 指到了 Row 里的四标签 Tab）。
 
 ### Verification
 
-- `npm test`：235/235。
-- `npm pack --dry-run`：178 files / 1630KB（改前 233 files / 3490KB）。
+- `npm test`：237/237（新增 2 个真实工程形态的回归用例）。
+- `npm pack --dry-run`：179 files / 1633KB（改前 233 files / 3490KB）。
 - `npm run verify:publish`：发布闸门通过（`lib/`、`knowledge/`、`preset/` 均在包内）。
+- 外部样本复核见 `docs/1.0.6-external-scan.md`：WindwindLure 33 → 29 条、
+  previewProject 0 条、previewProjectTemplate 1 条，误报率 3/34。
 
 ## 1.0.5 — 2026-11-22
 
