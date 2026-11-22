@@ -4,6 +4,43 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.1 — 2026-11-22
+
+零点击执行：`dwguard_code` 把冻结的 Goal 简报直接交给 DevEco Code CLI 后台执行。
+
+### Added
+
+- `dwguard_code`（第 17 个工具）：`run` 读取 `tasks/goal-brief.md`，在工程目录后台启动
+  `deveco run --dir <dir> --format json [--auto] [--model …] [--agent …] <prompt>`，
+  JSON 事件流写入 `artifacts/code-<n>/events.jsonl`，job 状态写入
+  `artifacts/code-<n>/meta.json`；`status` / `stop` / `list` 管理 job；
+  单工程目录同一时间只允许一个 job；默认超时 45 分钟，超时或 stop 会终止进程树。
+- 配置：`devecoCodePath`、`codeProjectDir`、`codeModel`、`codeAgent`、
+  `codeAuto`（默认 **false**，显式开启才给 `deveco run` 传 `--auto`）、
+  `codeTimeoutMinutes`（1–240）。
+- 测试：`tests/code.test.mjs`（参数拼装、二进制解析、run/status/stop/list、
+  单目录并发限制、超时、失败退出码）。
+- 文档：`docs/1.0.1-code-cli.md`；README 工具表与配置块同步更新。
+
+### Credits
+
+- 该功能的提案与设计来自 [@chenchen-008](https://github.com/chenchen-008) 的
+  [#1](https://github.com/Dogwind221/dwguard-dsh-hmos/pull/1)。1.0.1 为独立实现，
+  未直接合并该 PR；`codeAuto` 默认关闭、测试覆盖与状态持久化由本项目补齐。
+
+### Docs
+
+- `docs/design-tradeoffs.md`：记录十项设计取舍。
+
+### Verification
+
+- `npm test`：201/201（新增 10 个 `dwguard_code` 用例）。
+- 独立审计仍是唯一验收来源：`dwguard_code` 只产出执行证据，自述不转 `pass`。
+
+### Compatibility
+
+- 向后兼容：新增工具与配置均为 additive，旧任务包/旧审计行为不变。
+
 ## 1.0.0 — 2026-11-16
 
 First public baseline for other developers.

@@ -164,7 +164,7 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.0).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.1).
 
 > **1.0.0 is the first public baseline**: self-use scale for other developers.
 > 191/191 tests, 86.92% line coverage, scan p95 19.51ms, queue-lock fix, and a
@@ -232,9 +232,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.0`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.0` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.0` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.1`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.1` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.1` |
 
 Omit the version to follow the latest release.
 
@@ -243,7 +243,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.0`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.1`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -252,7 +252,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@1.0.0   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.1   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -266,7 +266,7 @@ dsh plugin --profile web add https://github.com/Dogwind221/dwguard-dsh-hmos
 
 Verify: `dsh --profile web --dump-config` should show `# == dwguard-dsh-hmos`.
 
-Every **new** session then gets 16 tools, 4 skills and a policy prompt. Sessions
+Every **new** session then gets 17 tools, 4 skills and a policy prompt. Sessions
 opened before the install keep their old tool table — open a new one.
 
 ## The `DshHoms` entry
@@ -300,6 +300,12 @@ manage them). A watchdog flags a dispatch with no ack/delivery after
 Screenshots and the UI tree are still captured by DSH — the executor's
 self-report never becomes a `pass`.
 
+1.0.1 adds the zero-click path: **`dwguard_code`** runs `deveco run` in the
+background on the frozen brief (JSON events in `artifacts/code-<n>/events.jsonl`,
+job state in `meta.json`), managed with `status` / `stop` / `list`. `--auto` is
+off by default, one job runs per project directory, and the executor still only
+produces evidence — acceptance stays with `dwguard_audit`.
+
 ## Tools
 
 | Tool | Purpose |
@@ -307,6 +313,7 @@ self-report never becomes a `pass`.
 | `dwguard_spec` | Write / validate / read the task pack; criteria may carry a machine-checkable `assertion` (matcher + expected); scaffolds `.shared/` |
 | `dwguard_prereview` | Record the adversarial pre-review (rebuttal required on blockers) |
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
+| `dwguard_code` | Zero-click executor: `run` starts `deveco run --dir <project> --format json` in the background on the frozen Goal brief, streams JSON events to `artifacts/code-<n>/events.jsonl` and job state to `meta.json`; `status` / `stop` / `list` manage the job. `--auto` is off by default; one job per project directory; default timeout `codeTimeoutMinutes` (45). It produces evidence only and never replaces `dwguard_audit` |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
 | `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; device actions use per-device leases (token/expiry/heartbeat) and background jobs hold theirs for their whole lifetime |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
@@ -439,6 +446,12 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     stallMinutes: 30
     executor: auto         # auto = IDE-first | ide | cli
     devecocliPath: ''      # empty = auto-detect (PATH / npm global)
+    devecoCodePath: ''     # `deveco` (DevEco Code CLI); empty = PATH / npm global
+    codeProjectDir: ''     # DevEco Code project root; empty = session workspace
+    codeModel: ''          # optional provider/model
+    codeAgent: ''          # optional deveco agent name
+    codeAuto: false        # true = pass --auto to `deveco run`
+    codeTimeoutMinutes: 45 # per-run timeout (1–240 minutes)
     hostMemoryGb: 0        # 0 = auto-detect; >0 = override (CI/containers)
     deviceMode: auto       # auto (by host memory) | single | matrix
     matrixMinMemoryGb: 32  # < 32GB forces single-device; >= 32GB allows the matrix

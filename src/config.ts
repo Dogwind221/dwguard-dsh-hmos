@@ -40,6 +40,18 @@ export const Config = z.object({
   executor: z.string().default('auto'),
   /** `devecocli` binary; empty means `devecocli` on PATH. */
   devecocliPath: z.string().default(''),
+  /** `deveco` binary (DevEco Code CLI); empty means resolve from PATH / npm global. */
+  devecoCodePath: z.string().default(''),
+  /** Project root for DevEco Code CLI; empty means the session workspace. */
+  codeProjectDir: z.string().default(''),
+  /** Optional model (`provider/model`) for `deveco run`. */
+  codeModel: z.string().default(''),
+  /** Optional agent name for `deveco run`. */
+  codeAgent: z.string().default(''),
+  /** Pass `--auto` to `deveco run`; false (default) keeps interactive approval. */
+  codeAuto: z.boolean().default(false),
+  /** Hard timeout for one DevEco Code run, in minutes (1–240). */
+  codeTimeoutMinutes: z.number().default(45),
   /** Host memory in GB; 0 means auto-detect (`os.totalmem()`), >0 overrides (CI/containers). */
   hostMemoryGb: z.number().default(0),
   /** Device mode: `auto` (by host memory) / `single` / `matrix`. */
@@ -135,6 +147,17 @@ export interface Options {
   readonly executor: 'auto' | 'ide' | 'cli';
   /** `devecocli` binary; empty means resolve from PATH. */
   readonly devecocliPath: string;
+  /** `deveco` binary (DevEco Code CLI); empty means resolve from PATH / npm global. */
+  readonly devecoCodePath: string;
+  /** Project root for DevEco Code CLI; empty means the session workspace. */
+  readonly codeProjectDir: string;
+  /** Optional model (`provider/model`) and agent for `deveco run`. */
+  readonly codeModel: string;
+  readonly codeAgent: string;
+  /** Pass `--auto` to `deveco run`; false keeps interactive approval. */
+  readonly codeAuto: boolean;
+  /** Hard timeout for one DevEco Code run, in minutes. */
+  readonly codeTimeoutMinutes: number;
   /** Effective device policy (host memory, mode, matrix scope, pool, lock timeout). */
   readonly device: DeviceConfig;
   /** Design RAG (0.6.2) settings. */
@@ -200,6 +223,12 @@ const DEFAULTS: Options = {
   stallMinutes: 30,
   executor: 'auto',
   devecocliPath: '',
+  devecoCodePath: '',
+  codeProjectDir: '',
+  codeModel: '',
+  codeAgent: '',
+  codeAuto: false,
+  codeTimeoutMinutes: 45,
   device: resolveDevicePolicy({}),
   designTopK: 5,
   designMaxChunks: 2000,
@@ -273,6 +302,17 @@ export function resolveOptions(raw: unknown): Options {
     stallMinutes: positiveInt(input['stallMinutes'], DEFAULTS.stallMinutes, 1),
     executor: input['executor'] === 'ide' || input['executor'] === 'cli' ? input['executor'] : 'auto',
     devecocliPath: typeof input['devecocliPath'] === 'string' ? input['devecocliPath'].trim() : DEFAULTS.devecocliPath,
+    devecoCodePath:
+      typeof input['devecoCodePath'] === 'string' ? input['devecoCodePath'].trim() : DEFAULTS.devecoCodePath,
+    codeProjectDir:
+      typeof input['codeProjectDir'] === 'string' ? input['codeProjectDir'].trim() : DEFAULTS.codeProjectDir,
+    codeModel: typeof input['codeModel'] === 'string' ? input['codeModel'].trim() : DEFAULTS.codeModel,
+    codeAgent: typeof input['codeAgent'] === 'string' ? input['codeAgent'].trim() : DEFAULTS.codeAgent,
+    codeAuto: bool(input['codeAuto'], DEFAULTS.codeAuto),
+    codeTimeoutMinutes: Math.min(
+      240,
+      positiveInt(input['codeTimeoutMinutes'], DEFAULTS.codeTimeoutMinutes, 1)
+    ),
     device: resolveDevicePolicy({
       hostMemoryGb: input['hostMemoryGb'],
       deviceMode: input['deviceMode'],

@@ -29,6 +29,17 @@ export interface Options {
     readonly executor: 'auto' | 'ide' | 'cli';
     /** `devecocli` binary; empty means resolve from PATH. */
     readonly devecocliPath: string;
+    /** `deveco` binary (DevEco Code CLI); empty means resolve from PATH / npm global. */
+    readonly devecoCodePath: string;
+    /** Project root for DevEco Code CLI; empty means the session workspace. */
+    readonly codeProjectDir: string;
+    /** Optional model (`provider/model`) and agent for `deveco run`. */
+    readonly codeModel: string;
+    readonly codeAgent: string;
+    /** Pass `--auto` to `deveco run`; false keeps interactive approval. */
+    readonly codeAuto: boolean;
+    /** Hard timeout for one DevEco Code run, in minutes. */
+    readonly codeTimeoutMinutes: number;
     /** Effective device policy (host memory, mode, matrix scope, pool, lock timeout). */
     readonly device: DeviceConfig;
     /** Design RAG (0.6.2) settings. */
