@@ -164,7 +164,7 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.1).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.2).
 
 > **1.0.0 is the first public baseline**: self-use scale for other developers.
 > 191/191 tests, 86.92% line coverage, scan p95 19.51ms, queue-lock fix, and a
@@ -232,9 +232,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.1`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.1` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.1` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.2`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.2` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.2` |
 
 Omit the version to follow the latest release.
 
@@ -243,7 +243,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.1`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.2`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -252,7 +252,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@1.0.1   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.2   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -315,7 +315,7 @@ produces evidence — acceptance stays with `dwguard_audit`.
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_code` | Zero-click executor: `run` starts `deveco run --dir <project> --format json` in the background on the frozen Goal brief, streams JSON events to `artifacts/code-<n>/events.jsonl` and job state to `meta.json`; `status` / `stop` / `list` manage the job. `--auto` is off by default; one job per project directory; default timeout `codeTimeoutMinutes` (45). It produces evidence only and never replaces `dwguard_audit` |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
-| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; device actions use per-device leases (token/expiry/heartbeat) and background jobs hold theirs for their whole lifetime |
+| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop` + 1.0.2 workbench actions `emulator / app / file / uiassert / trace / project / api / compat`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; `project`/`api` are read-only, `uiassert` is a deterministic UI assertion, `trace` captures raw hitrace data; device actions use per-device leases (token/expiry/heartbeat) and background jobs hold theirs for their whole lifetime |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
@@ -327,6 +327,12 @@ produces evidence — acceptance stays with `dwguard_audit`.
 | `dwguard_confirm` | Record the user decision (`accept` / `new_round`) |
 | `dwguard_knowledge` | `sediment` durable lessons; `sops` / `sop` search the 14 bundled SOPs; `engineering` searches 32 engineering facts |
 | `dwguard_status` | Derive the phase, unread deliveries, un-acked dispatches, next action; shows host memory, device mode, matrix gaps and the device lock |
+
+**1.0.2 workbench actions** live in `dwguard_deveco` (the tool count stays 17):
+`emulator` / `app` / `file` / `uiassert` / `trace` / `project` / `api` / `compat`.
+Device actions default to the configured device pool; `project` / `api` execute
+nothing (read-only); `uiassert` writes a deterministic `uiassert.json` that can
+be cited as audit evidence. See [docs/1.0.2-deveco-actions.md](docs/1.0.2-deveco-actions.md).
 
 `dwguard_aesthetic` closes the aesthetic loop: a preference is proposed from
 confirmed user wording or project resource files, the user picks between
@@ -446,6 +452,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     stallMinutes: 30
     executor: auto         # auto = IDE-first | ide | cli
     devecocliPath: ''      # empty = auto-detect (PATH / npm global)
+    harmonySdkPath: ''     # SDK root for api/compat; empty = auto-detect (DEVECO_SDK_HOME etc.)
     devecoCodePath: ''     # `deveco` (DevEco Code CLI); empty = PATH / npm global
     codeProjectDir: ''     # DevEco Code project root; empty = session workspace
     codeModel: ''          # optional provider/model

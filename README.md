@@ -82,7 +82,7 @@ flowchart TD
 
 要求：DSH `>=0.2.1-rc.0 <0.3.0`（已在 0.2.1-rc.5 与 0.2.2-rc.1 上启动验证）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 1.0.1）。
+npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 1.0.2）。
 
 > **1.0.0 第一个公开基线**：面向其他开发者的自用级版本。191/191 测试、coverage 86.92% line、scan p95 19.51ms、并发队列锁修复、临时 profile clean install 已取证。**非生产级**：无 SLA/监控/备份/on-call/多租户，物理设备未覆盖时明确 `blocked`。发布说明见 [CHANGELOG.md](CHANGELOG.md)，基线说明见 [docs/1.0.0-baseline.md](docs/1.0.0-baseline.md)，边界见 [docs/known-limitations.md](docs/known-limitations.md)。
 >
@@ -110,9 +110,9 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 
 | 入口 | 命令 / 操作 |
 | --- | --- |
-| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@1.0.1`） |
-| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.1` |
-| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.1` |
+| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@1.0.2`） |
+| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.2` |
+| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.2` |
 
 安装器会从 npm registry 解析版本；想跟最新版就省略版本号。下文分别说明桌面版与 CLI profile 的细节。
 
@@ -126,7 +126,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 ### 桌面版：应用内安装
 
 1. 左侧栏打开 **插件** → 右上 **添加插件**；
-2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@1.0.1`）→ 安装、选配置层、确认；
+2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@1.0.2`）→ 安装、选配置层、确认；
 3. 装完按提示重启应用（托盘里也要退出）。
 
 同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
@@ -138,7 +138,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 dsh plugin --profile web add dwguard-dsh-hmos
 
 # 固定版本
-dsh plugin --profile web add dwguard-dsh-hmos@1.0.1
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.2
 
 # 机器上没有 dsh 命令时，用 npm 上的 CLI 包
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
@@ -281,7 +281,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_prereview` | 派发前预审 | 记录对抗审查发现 | 阻断项必须有 `rebuttal`；未关闭的阻断项不许派发；零发现必须写审阅范围 |
 | `dwguard_dispatch` | 派发 | 生成 `tasks/goal-brief.md` 并写 `outbox-dsh.md`；`executor: cli` 时另写 `tasks/cli-brief.md` | 任务包合法 + 最近一次预审通过（可配置关闭） |
 | `dwguard_code` | 零点击执行 | 用 `deveco run` 在后台把冻结的 Goal 简报交给 DevEco Code CLI：`action=run` 启动、`status/stop/list` 管理 job；JSON 事件落 `artifacts/code-<n>/events.jsonl`，job 状态落 `artifacts/code-<n>/meta.json`；单工程目录同时只跑一个 job | 只启动已冻结任务包；不替代 `dwguard_audit`；`--auto` 默认关闭（显式开启才自动批准）；默认超时 `codeTimeoutMinutes`（45 分钟） |
-| `dwguard_deveco` | 执行期 / 取证 | 调 DevEco CLI 取证：`env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop`；`pipeline` 顺序跑 sign→build→run→screenshot→layout，逐步落 `pipeline.json`，失败即停、支持 `resume` 与自动 fallback；命令、退出码与输出落到 `artifacts/deveco-<n>/`；截图落 `artifacts/devshots/`，布局树落 `layout.json`；设备动作使用每设备 lease（token/过期/心跳），后台任务全生命周期持锁 | 只跑固定子命令；超时/找不到 `devecocli` 明确失败；`ui` 参数按白名单校验；pipeline 只是执行证据，不替代 audit |
+| `dwguard_deveco` | 执行期 / 取证 | 调 DevEco CLI 取证：`env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop` + 1.0.2 工作台动作 `emulator / app / file / uiassert / trace / project / api / compat`；`pipeline` 顺序跑 sign→build→run→screenshot→layout，逐步落 `pipeline.json`，失败即停、支持 `resume` 与自动 fallback；命令、退出码与输出落到 `artifacts/deveco-<n>/`；截图落 `artifacts/devshots/`，布局树落 `layout.json`；设备动作使用每设备 lease（token/过期/心跳），后台任务全生命周期持锁 | 只跑固定子命令；超时/找不到 `devecocli` 明确失败；`ui` 参数按白名单校验；pipeline 只是执行证据，不替代 audit；project/api 只读、uiassert 是确定性断言、trace 只抓原始 trace |
 | `dwguard_scan` | 取证前 | 独立 ArkTS/ArkUI 静态扫描（只读）：嵌套属性赋值、`any`、`@ohos.*`、V1/V2 混用、伪包、ForEach、定时器、无障碍文本 | 每条命中带规则 ID 与 `file:line`；写 `artifacts/scan-<n>.json`；must 级要进审计 findings |
 | `dwguard_shadow` | 执行期 | 影子审查：**增量扫描**（只看上次之后改过的文件），自动尝试调用宿主的 `harmony_ui_tree`（失败则需手动传 `uiTree`），写 `artifacts/shadow-<n>.json`；**只把新增**的 must 级风险写 `shadow-risk` 出站 | 只在 dispatched / rework 阶段可跑；`status` 超过 `shadowIntervalMinutes` 会提醒；同一问题不会重复刷屏 |
 | `dwguard_rules` | 全程 | 查规则目录（`list` / `get`，支持别名）与本地官方语料（`search`，返回 file:line + 出处 URL） | 语料目录由 `docsDir` / `DWG_DOCS_DIR` 指定；`get` 未知 ID 直接报错 |
@@ -296,6 +296,8 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `dwguard_status` | 全程 | 从产物反推阶段、未读交付、下一步；显示主机内存、单机/矩阵模式、屏幕族缺口与当前设备锁 | 不改状态，只读 + 可选前移游标 |
 
 每个工具都返回同一个信封：`{ ok, summary, detail, files, next }`。`detail` 是可直接展示的 Markdown；`next` 是唯一的下一步建议。
+
+**1.0.2 工作台动作**（`dwguard_deveco`，工具数仍是 17）：`emulator` / `app` / `file` / `uiassert` / `trace` / `project` / `api` / `compat`。设备侧动作默认取设备池；`project` / `api` 只读、不执行命令；`uiassert` 的确定性断言结果写 `uiassert.json`，可直接作为 audit 的结构化证据。详见 [docs/1.0.2-deveco-actions.md](docs/1.0.2-deveco-actions.md)。
 
 规则来源与"官方文档还没学什么"分开记录：[docs/rule-sources.md](docs/rule-sources.md)（已引用出处）与 [docs/learning-backlog.md](docs/learning-backlog.md)（未覆盖清单 + 0.4 优先顺序）。0.4.0 范围与验收见 [docs/0.4.0-plan.md](docs/0.4.0-plan.md)。
 
@@ -537,6 +539,7 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
     stallMinutes: 30                      # 派发后多久无回执/交付算卡住
     executor: auto                        # auto（IDE 优先）| ide | cli
     devecocliPath: ''                     # devecocli 路径；空 = 自动探测（PATH / npm 全局）
+    harmonySdkPath: ''                    # SDK 根目录（api/compat 用）；空 = 自动探测（DEVECO_SDK_HOME 等）
     devecoCodePath: ''                    # deveco（DevEco Code CLI）路径；空 = 自动探测（PATH / npm 全局）
     codeProjectDir: ''                    # DevEco Code 工程根目录；空 = 当前工作区
     codeModel: ''                         # 可选 provider/model
@@ -641,7 +644,7 @@ npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.2-rc.1 @
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v1.0.1 && git push origin v1.0.1`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v1.0.2 && git push origin v1.0.2`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 

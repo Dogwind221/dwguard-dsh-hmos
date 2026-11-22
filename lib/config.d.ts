@@ -29,6 +29,8 @@ export interface Options {
     readonly executor: 'auto' | 'ide' | 'cli';
     /** `devecocli` binary; empty means resolve from PATH. */
     readonly devecocliPath: string;
+    /** HarmonyOS SDK root; empty means auto-detect. */
+    readonly harmonySdkPath: string;
     /** `deveco` binary (DevEco Code CLI); empty means resolve from PATH / npm global. */
     readonly devecoCodePath: string;
     /** Project root for DevEco Code CLI; empty means the session workspace. */

@@ -40,6 +40,8 @@ export const Config = z.object({
   executor: z.string().default('auto'),
   /** `devecocli` binary; empty means `devecocli` on PATH. */
   devecocliPath: z.string().default(''),
+  /** HarmonyOS SDK root for `api` lookups; empty means auto-detect (DEVECO_SDK_HOME etc.). */
+  harmonySdkPath: z.string().default(''),
   /** `deveco` binary (DevEco Code CLI); empty means resolve from PATH / npm global. */
   devecoCodePath: z.string().default(''),
   /** Project root for DevEco Code CLI; empty means the session workspace. */
@@ -147,6 +149,8 @@ export interface Options {
   readonly executor: 'auto' | 'ide' | 'cli';
   /** `devecocli` binary; empty means resolve from PATH. */
   readonly devecocliPath: string;
+  /** HarmonyOS SDK root; empty means auto-detect. */
+  readonly harmonySdkPath: string;
   /** `deveco` binary (DevEco Code CLI); empty means resolve from PATH / npm global. */
   readonly devecoCodePath: string;
   /** Project root for DevEco Code CLI; empty means the session workspace. */
@@ -223,6 +227,7 @@ const DEFAULTS: Options = {
   stallMinutes: 30,
   executor: 'auto',
   devecocliPath: '',
+  harmonySdkPath: '',
   devecoCodePath: '',
   codeProjectDir: '',
   codeModel: '',
@@ -302,6 +307,8 @@ export function resolveOptions(raw: unknown): Options {
     stallMinutes: positiveInt(input['stallMinutes'], DEFAULTS.stallMinutes, 1),
     executor: input['executor'] === 'ide' || input['executor'] === 'cli' ? input['executor'] : 'auto',
     devecocliPath: typeof input['devecocliPath'] === 'string' ? input['devecocliPath'].trim() : DEFAULTS.devecocliPath,
+    harmonySdkPath:
+      typeof input['harmonySdkPath'] === 'string' ? input['harmonySdkPath'].trim() : DEFAULTS.harmonySdkPath,
     devecoCodePath:
       typeof input['devecoCodePath'] === 'string' ? input['devecoCodePath'].trim() : DEFAULTS.devecoCodePath,
     codeProjectDir:

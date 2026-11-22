@@ -4,6 +4,50 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.2 — 2026-11-22
+
+`dwguard_deveco` 扩展到 25 个 action（工具数仍是 17）：补上设备/工程/SDK 侧的工作台动作。
+
+### Added
+
+- `emulator`：模拟器 `list / start / stop / create / delete / rotate / volume /
+  fold / battery / geolocation / scene / sensor / power / shake`，`start` 可用
+  `background: true` 后台启动。
+- `app`：应用生命周期 `list / foreground / info / start / install / uninstall /
+  stop / clearcache / cleardata`。
+- `file`：`send / recv / exist / delete`，本地侧必须落在工作区内。
+- `uiassert`：确定性 UI 断言 `present / absent / count`（基于 `ui find` /
+  `ui wait`），写 `uiassert.json`，通过时可作 observation 证据。
+- `trace`：`hdc shell hitrace` 抓原始 trace 到 `trace.txt`；只抓取，不做
+  fps/jank 判定。
+- `project`：只读解析 `build-profile.json5` / `AppScope/app.json5` /
+  `module.json5` / `oh-package.json5` 与磁盘 HAP 产物。
+- `api`：只读查询本机 SDK `.d.ts`（模块解析 + `@since` / `@deprecated` /
+  `@syscap` + 声明片段），`op=versions / list`。
+- `compat`：`devecocli check compat` 源→目标 SDK 兼容性检查，缺省从工程
+  `build-profile.json5` 推断版本。
+- 配置：`harmonySdkPath`（空 = 自动探测 `DEVECO_SDK_HOME` / `HOS_SDK_HOME` /
+  DevEco Studio 默认目录）。
+- 测试：`tests/deveco-actions.test.mjs`（10 个用例）。
+- 文档：`docs/1.0.2-deveco-actions.md`。
+
+### Verification
+
+- `npm test`：212/212。
+- 本机真机链实测（真实 SDK 26.0.0.105 + devecocli 1.3.10）：
+  `project` 解析真实 DevEco 工程夹具通过；`api versions` 返回 SDK API 26；
+  `api lookup @ohos.promptAction` 返回 20 个标签；`compat op=versions` 返回
+  HarmonyOS 版本清单；`emulator op=list` 返回 4 个本机实例。
+- Mate X7 模拟器（127.0.0.1:5555，HarmonyOS 6.1.1(24)）实测：`app list` 返回
+  62 个应用；`file send`/`recv` 内容一致；`uiassert`（`type=Text`）通过并产生
+  observation；`emulator fold`/`battery` 生效；`trace` 合法分类通过，而非法分类
+  （`gfx`）即使 hdc 退出码为 0 也被识别为失败并列出可用分类。
+
+### Compatibility
+
+- 工具数仍是 17；新增 action 均为 additive，旧 action 行为不变。
+- `uiassert` 通过不替代 `dwguard_audit`；`trace` 只是原始素材。
+
 ## 1.0.1 — 2026-11-22
 
 零点击执行：`dwguard_code` 把冻结的 Goal 简报直接交给 DevEco Code CLI 后台执行。
