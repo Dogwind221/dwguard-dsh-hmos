@@ -1,0 +1,52 @@
+name: Bug report / 问题报告
+description: dwguard 报错、闸门行为不符合预期、扫描规则误报或漏报
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        谢谢报告。**请尽量附上产物文件**（`artifacts/scan-*.json`、`artifacts/audit-*/`、`tasks/spec.json`），
+        这样你的场景能直接变成一条回归用例，而不是只被口头修掉。
+        误报/漏报请给出最小 `.ets` 片段（10 行以内最佳）。
+  - type: input
+    id: plugin-version
+    attributes:
+      label: dwguard-dsh-hmos 版本
+      placeholder: 1.0.6
+    validations:
+      required: true
+  - type: input
+    id: dsh-version
+    attributes:
+      label: DSH 版本 / 运行方式
+      placeholder: 0.2.2-rc.1 · 桌面版 / CLI profile
+    validations:
+      required: false
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际发生了什么
+      description: 报错原文、闸门拒绝的理由、规则命中的 file:line。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 你期望的行为
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: 最小复现
+      description: 命令 + 最小样本。扫描类问题请贴出触发规则的代码片段。
+      render: shell
+    validations:
+      required: false
+  - type: textarea
+    id: artifacts
+    attributes:
+      label: 产物 / 证据
+      description: 粘贴 JSON 片段，或说明文件在仓库里的相对路径（注意别贴密钥、设备序列号）。
+    validations:
+      required: false

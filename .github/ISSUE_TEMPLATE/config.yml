@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 使用问题 / 快速上手
+    url: https://github.com/Dogwind221/dwguard-dsh-hmos/blob/main/docs/quickstart-10min.md
+    about: 10 分钟走完整轮：任务包 → 预审 → 派发 → 四维审计。先看这里再提问。
+  - name: 已知限制
+    url: https://github.com/Dogwind221/dwguard-dsh-hmos/blob/main/docs/known-limitations.md
+    about: 扫描规则的误报面、设备/模拟器要求、不支持的场景都写在这里。
