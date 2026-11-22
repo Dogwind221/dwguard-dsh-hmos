@@ -104,7 +104,7 @@ flowchart TD
 
 要求：DSH `>=0.2.1-rc.0 <0.3.0`（已在 0.2.1-rc.5 与 0.2.2-rc.1 上启动验证）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 1.0.5）。
+npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 1.0.6）。
 
 > **1.0.0 第一个公开基线**：面向其他开发者的自用级版本。191/191 测试、coverage 86.92% line、scan p95 19.51ms、并发队列锁修复、临时 profile clean install 已取证。**非生产级**：无 SLA/监控/备份/on-call/多租户，物理设备未覆盖时明确 `blocked`。发布说明见 [CHANGELOG.md](CHANGELOG.md)，基线说明见 [docs/1.0.0-baseline.md](docs/1.0.0-baseline.md)，边界见 [docs/known-limitations.md](docs/known-limitations.md)。
 >
@@ -132,9 +132,9 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 
 | 入口 | 命令 / 操作 |
 | --- | --- |
-| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@1.0.5`） |
-| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.5` |
-| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.5` |
+| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@1.0.6`） |
+| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.6` |
+| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.6` |
 
 安装器会从 npm registry 解析版本；想跟最新版就省略版本号。下文分别说明桌面版与 CLI profile 的细节。
 
@@ -148,7 +148,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 ### 桌面版：应用内安装
 
 1. 左侧栏打开 **插件** → 右上 **添加插件**；
-2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@1.0.5`）→ 安装、选配置层、确认；
+2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@1.0.6`）→ 安装、选配置层、确认；
 3. 装完按提示重启应用（托盘里也要退出）。
 
 同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
@@ -160,7 +160,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 dsh plugin --profile web add dwguard-dsh-hmos
 
 # 固定版本
-dsh plugin --profile web add dwguard-dsh-hmos@1.0.5
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.6
 
 # 机器上没有 dsh 命令时，用 npm 上的 CLI 包
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
@@ -672,7 +672,7 @@ npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.2-rc.1 @
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v1.0.5 && git push origin v1.0.5`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v1.0.6 && git push origin v1.0.6`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 

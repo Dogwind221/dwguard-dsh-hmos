@@ -4,6 +4,25 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.6 — 2026-11-22
+
+发布包瘦身：`docs/` 不再随 npm 包发布。
+
+### Changed
+
+- `package.json` 的 `files` 白名单移除 `docs/`：55 个文件 / 1.86MB（其中
+  `docs/design-guide/index.json` 单独 1.2MB）不再进入 tarball，解包体积
+  3490KB → 1630KB、下载体积 1143KB → 461KB，文件数 233 → 178。文档仍保留在仓库里，GitHub 上照常可读。
+- 明确 `design:guide` / `design:foundations` / `design:search` 是**仓库内开发命令**
+  （它们依赖 `docs/` 下的设计索引），安装后的包不再附带这些索引，因此这三个命令
+  只能在仓库检出中运行。
+
+### Verification
+
+- `npm test`：235/235。
+- `npm pack --dry-run`：178 files / 1630KB（改前 233 files / 3490KB）。
+- `npm run verify:publish`：发布闸门通过（`lib/`、`knowledge/`、`preset/` 均在包内）。
+
 ## 1.0.5 — 2026-11-22
 
 验收六件套：截图回归、性能采样、场景回放、运行时无障碍、包/权限审计、稳定性门禁。
