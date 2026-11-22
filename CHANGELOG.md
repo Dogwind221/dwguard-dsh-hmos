@@ -4,6 +4,47 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.5 — 2026-11-22
+
+验收六件套：截图回归、性能采样、场景回放、运行时无障碍、包/权限审计、稳定性门禁。
+
+### Added
+
+- `dwguard_aesthetic compare` 截图回归：可选 `screenshot`，与基线截图做 pHash +
+  变化像素比例 + 4×4 区域 + `diff-*.png`；与数值基线一起判定（`imageDiff` 写入
+  `compare-latest.json`，验收报告渲染截图差异小节）。
+- `dwguard_deveco perf`：`startup`（aa start 墙钟采样）/ `memory`
+  （hidumper Total Pss）/ `frame`（RenderService fpsCount → fps 或 Hz），输出
+  `perf.json`（samples / mean / min / max / p95）。
+- `dwguard_deveco scenario`：JSON 步骤 `click / text / swipe / sleep / screenshot /
+  assert` 顺序回放，每步写 `step-<i>.json`，汇总 `scenario-run.json`；支持
+  `continueOnFailure` 与 `stability`（场景后自动收集 crash/hilog）。
+- `a11y op=runtime`：布局树 + 截图，检查最小触控尺寸与文本区域对比度估算，
+  写 `a11y-runtime.json`。
+- `project op=audit`：声明 vs 引用权限差异、隐私字段（reason/usedScene）、HAP
+  体积预算、`META-INF` 签名结构检查，写 `project-audit.json`。
+- `stability`：`log --crash` + `log --tail` 窗口，产出 `stability.json`（crash /
+  freeze / errorCount / passed）。
+- 文档：`docs/1.0.5-quality.md`；测试新增 `imageDiff` / `a11yRuntime` /
+  `packageAudit` / `perf` / `scenario` / `stability` 用例。
+- `dwguard_deveco` 动作数 26 → 29（新增 `perf` / `scenario` / `stability`）。
+
+### Verification
+
+- `npm test`：235/235。
+- Mate X7 模拟器（HarmonyOS 6.1.1）实测：
+  - `a11y op=runtime`：58 个节点，触控/对比度风险各 0；
+  - `scenario` 3 步（sleep + assert + screenshot）通过，且 `stability: true`
+    未发现崩溃；
+  - `stability` 独立运行：未发现崩溃（hilog 错误 44 条，仅统计）；
+  - `perf op=memory`（`com.ohos.sceneboard`）486425KB；`perf op=frame` 60Hz
+    （fpsCount 的刷新率计数，不冒充 app 帧率）。
+
+### Compatibility
+
+- 工具数仍是 17；新增 action 与参数均为 additive；旧 action 行为不变。
+- 截图 diff 仅在 compare 显式传 `screenshot` 时生效；不传则仍是纯数值对比。
+
 ## 1.0.4 — 2026-11-22
 
 工作台补全与性能切片：trace 统计、`device=all` 扩展、`db`、模拟器状态注入、hilog follow。

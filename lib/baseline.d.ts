@@ -8,6 +8,7 @@
  *
  * @module dwguard-dsh-hmos/baseline
  */
+import type { ImageDiffResult } from './imageDiff.js';
 import type { SharedPaths } from './paths.js';
 /** One measured layout value. */
 export type BaselineMetricValue = {
@@ -63,6 +64,9 @@ export interface BaselineCompareResult {
     readonly addedNodes: number;
     readonly boundsSha256: string;
     readonly baselineBoundsSha256: string;
+    /** Screenshot diff when the compare call supplied a current screenshot (1.0.5). */
+    readonly imageDiff?: ImageDiffResult;
+    readonly imageDiffFile?: string;
 }
 /** Directory holding one task-pack version's baselines. */
 export declare function baselineDir(paths: SharedPaths, specVersion: number): string;

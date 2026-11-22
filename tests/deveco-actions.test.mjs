@@ -658,3 +658,90 @@ test('hilog follow runs as a background job and keeps filters', async () => {
   assert.ok(starts[0].args.includes('Fail'));
   assert.match(result.summary, /后台/);
 });
+
+test('perf startup samples aa start and writes perf.json', async () => {
+  const cwd = await workspace();
+  let calls = 0;
+  const run = async (command, args) => {
+    calls += 1;
+    return { code: 0, stdout: 'started', stderr: '', durationMs: 5 };
+  };
+  const tool = createDevecoTool(resolveOptions({ hdcPath: 'hdc-test' }), undefined, run);
+  const result = await tool.execute(
+    { action: 'perf', op: 'startup', bundle: 'com.demo.app', ability: 'EntryAbility', samples: 2, warmup: 1, device: 'S1' },
+    exec(cwd)
+  );
+  assert.equal(result.ok, true, readFailure(result));
+  assert.equal(calls, 3);
+  const stored = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'perf.json'), 'utf8'));
+  assert.equal(stored.op, 'startup');
+  assert.equal(stored.samples.length, 2);
+  assert.match(result.summary, /p95/);
+});
+
+test('perf memory parses hidumper Pss and frame parses fps', async () => {
+  const cwd = await workspace();
+  const runner = async (command, args) => {
+    if (args.includes('pidof')) return { code: 0, stdout: '1234\n', stderr: '', durationMs: 1 };
+    if (args.includes('--mem')) return { code: 0, stdout: 'Total Pss: 12345 kB\n', stderr: '', durationMs: 1 };
+    return { code: 0, stdout: 'fps: 59.8 jank: 2\n', stderr: '', durationMs: 1 };
+  };
+  const tool = createDevecoTool(resolveOptions({ hdcPath: 'hdc-test' }), undefined, runner);
+  const memory = await tool.execute({ action: 'perf', op: 'memory', bundle: 'com.demo.app', device: 'S1' }, exec(cwd));
+  assert.equal(memory.ok, true, readFailure(memory));
+  const memJson = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'perf.json'), 'utf8'));
+  assert.deepEqual(memJson.samples, [12345]);
+  assert.equal(memJson.unit, 'KB');
+
+  const frame = await tool.execute({ action: 'perf', op: 'frame', device: 'S1' }, exec(cwd));
+  assert.equal(frame.ok, true, readFailure(frame));
+  const frameJson = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-2', 'perf.json'), 'utf8'));
+  assert.deepEqual(frameJson.samples, [59.8]);
+  assert.equal(frameJson.unit, 'fps');
+});
+
+test('scenario executes steps with per-step evidence', async () => {
+  const cwd = await workspace();
+  const runner = async (command, args) => {
+    if (args[0] === 'ui' && args[1] === 'find') {
+      return { code: 0, stdout: JSON.stringify([{ type: 'Button', text: '登录', bounds: [0, 0, 100, 60] }]), stderr: '', durationMs: 2 };
+    }
+    return { code: 0, stdout: 'ok', stderr: '', durationMs: 2 };
+  };
+  const tool = createDevecoTool(resolveOptions({}), undefined, runner);
+  const scenario = [
+    { op: 'click', x: 10, y: 20 },
+    { op: 'sleep', ms: 5 },
+    { op: 'assert', selector: 'text=登录', expect: 'present' },
+    { op: 'screenshot', name: 'after-login' }
+  ];
+  const result = await tool.execute({ action: 'scenario', scenario: JSON.stringify(scenario), device: 'S1' }, exec(cwd));
+  assert.equal(result.ok, true, readFailure(result));
+  const stored = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'scenario-run.json'), 'utf8'));
+  assert.equal(stored.total, 4);
+  assert.equal(stored.passedCount, 4);
+  assert.equal(stored.steps[2].op, 'assert');
+  assert.match(result.summary, /4\/4/);
+});
+
+test('stability fails when a crash is present', async () => {
+  const cwd = await workspace();
+  const runner = async (command, args) => {
+    if (args[0] === 'log' && args[1] === '--crash') {
+      return {
+        code: 0,
+        stdout: 'Fault thread info:\npid: 4321\nReason: Signal:SIGSEGV\n#00 pc 0000001 /system/lib64/libace.z.so',
+        stderr: '',
+        durationMs: 2
+      };
+    }
+    return { code: 0, stdout: '11-22 10:00:00.000  1  1 E A/com.demo: boom', stderr: '', durationMs: 2 };
+  };
+  const tool = createDevecoTool(resolveOptions({}), undefined, runner);
+  const result = await tool.execute({ action: 'stability', device: 'S1' }, exec(cwd));
+  assert.equal(result.ok, false);
+  assert.match(result.summary, /崩溃/);
+  const stored = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'stability.json'), 'utf8'));
+  assert.equal(stored.crashes.length, 1);
+  assert.equal(stored.passed, false);
+});

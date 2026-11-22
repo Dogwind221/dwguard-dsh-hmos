@@ -12,6 +12,8 @@
 import { createHash } from 'node:crypto';
 import { basename, join } from 'node:path';
 
+import type { ImageDiffResult } from './imageDiff.js';
+
 import { displayPath } from './paths.js';
 import type { SharedPaths } from './paths.js';
 import { copyFileTo, ensureDir, listDir, readTextOrNull, sha256File, writeTextAtomic } from './util/fs.js';
@@ -71,6 +73,9 @@ export interface BaselineCompareResult {
   readonly addedNodes: number;
   readonly boundsSha256: string;
   readonly baselineBoundsSha256: string;
+  /** Screenshot diff when the compare call supplied a current screenshot (1.0.5). */
+  readonly imageDiff?: ImageDiffResult;
+  readonly imageDiffFile?: string;
 }
 
 const METRIC_FIELDS = [
@@ -525,6 +530,37 @@ export function renderCompareMarkdown(
     )
   );
   if (failed.length > 0) lines.push('', `未通过 ${failed.length} 项；其余节点数：缺失 ${result.missingNodes.length}，新增 ${result.addedNodes}。`);
+  if (result.imageDiff !== undefined) {
+    const image = result.imageDiff;
+    lines.push(
+      '',
+      `${headingLevel === '##' ? '###' : `${headingLevel}#`} 截图差异`,
+      '',
+      `> 尺寸 ${String(image.width)}×${String(image.height)} · pHash 距离 ${String(image.phashDistance)} · 变化像素 ${(
+        image.changedRatio * 100
+      ).toFixed(2)}% · 平均亮度差 ${String(image.meanAbsDiff)} · ${image.pass ? '**通过**' : '**未通过**'}`,
+      '',
+      image.dimensionMismatch
+        ? '基线与当前截图尺寸不一致，未计算像素差异。'
+        : `阈值：像素差 > ${String(image.pixelThreshold)} 记为变化；容差 ${(image.passRatio * 100).toFixed(2)}%。`
+    );
+    if (image.regions.length > 0) {
+      lines.push(
+        '',
+        table(
+          ['区域 x', '区域 y', '宽', '高', '变化比例'],
+          image.regions.map((region) => [
+            String(region.x),
+            String(region.y),
+            String(region.width),
+            String(region.height),
+            `${(region.changedRatio * 100).toFixed(2)}%`
+          ])
+        )
+      );
+    }
+    if (result.imageDiffFile !== undefined) lines.push('', `差异图：\`${result.imageDiffFile}\``);
+  }
   return lines.join('\n');
 }
 

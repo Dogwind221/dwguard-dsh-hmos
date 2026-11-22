@@ -8,11 +8,11 @@
  * @module dwguard-dsh-hmos/tools/aesthetic
  */
 
-import { join } from 'node:path';
+import { readFile, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
-import { resolve } from 'node:path';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
@@ -47,6 +47,7 @@ import { isAestheticId } from '../aesthetic.js';
 import {
   baselineDir,
   baselineDisplayPath,
+  baselineFileStem,
   compareMetrics,
   extractMetrics,
   findBaselineEntry,
@@ -59,11 +60,12 @@ import {
   writeCompareResult
 } from '../baseline.js';
 import { resolveSharedPath } from '../evidence.js';
+import { diffImages } from '../imageDiff.js';
 import { displayPath } from '../paths.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import { ensureShared } from '../scaffold.js';
 import { readLatestJson } from '../state.js';
-import { fileExists, sha256File } from '../util/fs.js';
+import { ensureDir, fileExists, sha256File } from '../util/fs.js';
 import { nowIso, table } from '../util/md.js';
 import {
   ArgError,
@@ -434,7 +436,7 @@ async function runCompare(deps: Deps): Promise<ToolResult> {
   const currentRead = await readBoundsJson(currentFile);
   if ('error' in currentRead) return fail(currentRead.error);
 
-  const result = compareMetrics(extractMetrics(baselineRead.value), extractMetrics(currentRead.value), {
+  let result = compareMetrics(extractMetrics(baselineRead.value), extractMetrics(currentRead.value), {
     at: now,
     specVersion: pack.specVersion,
     page,
@@ -442,22 +444,75 @@ async function runCompare(deps: Deps): Promise<ToolResult> {
     boundsSha256: await sha256File(currentFile),
     baselineBoundsSha256: baseline.boundsSha256
   });
+  const screenshotRel = optionalString(args, 'screenshot', TOOL, 300);
+  let imageDiffFile: string | undefined;
+  if (screenshotRel !== undefined) {
+    if (baseline.screenshotFile === undefined) {
+      return fail(`基线 ${page}/${state} 没有截图，无法做截图回归。`, {
+        next: '先用 `baseline save` 带 screenshot 重建基线，再执行 compare。'
+      });
+    }
+    let currentShot: string;
+    try {
+      currentShot = resolveSharedPath(paths, screenshotRel);
+    } catch (error) {
+      return fail(`当前截图路径非法：${(error as Error).message}`);
+    }
+    const baselineShot = join(baselineDir(paths, pack.specVersion), baseline.screenshotFile);
+    const pixelThreshold =
+      typeof args['pixelThreshold'] === 'number' && Number.isFinite(args['pixelThreshold'])
+        ? Math.max(1, Math.min(255, args['pixelThreshold']))
+        : undefined;
+    const passRatio =
+      typeof args['passRatio'] === 'number' && Number.isFinite(args['passRatio'])
+        ? Math.max(0, Math.min(1, args['passRatio']))
+        : undefined;
+    let diff;
+    try {
+      diff = diffImages(await readFile(baselineShot), await readFile(currentShot), {
+        ...(pixelThreshold === undefined ? {} : { pixelThreshold }),
+        ...(passRatio === undefined ? {} : { passRatio })
+      });
+    } catch (error) {
+      return fail(`截图 diff 失败：${(error as Error).message}`, {
+        next: '确认基线与当前截图都是非交错 8-bit PNG；必要时重新截图。'
+      });
+    }
+    const target = join(dirname(paths.aestheticCompare), `diff-${baselineFileStem(page, state)}.png`);
+    await ensureDir(dirname(target));
+    if (diff.diffPng !== null) await writeFile(target, diff.diffPng);
+    imageDiffFile = displayPath(paths, target);
+    result = {
+      ...result,
+      pass: result.pass && diff.result.pass,
+      imageDiff: diff.result,
+      ...(imageDiffFile === undefined ? {} : { imageDiffFile })
+    };
+  }
   await writeCompareResult(paths, result);
   const failed = result.rows.filter((row) => row.verdict === 'fail');
+  const imageFailed = result.imageDiff !== undefined && !result.imageDiff.pass;
   const detail = renderCompareMarkdown(result);
+  const files = [
+    displayPath(paths, paths.aestheticCompare),
+    ...(imageDiffFile === undefined ? [] : [imageDiffFile])
+  ];
   if (result.pass) {
-    return ok(`审美基线一致：${page}/${state}（${result.rows.length} 项测量全部在容差内）。`, {
+    return ok(`审美基线一致：${page}/${state}（${result.rows.length} 项测量全部在容差内${result.imageDiff === undefined ? '' : '；截图回归通过'}）。`, {
       detail,
-      files: [displayPath(paths, paths.aestheticCompare)],
+      files,
       next: '把 compare 结果（或实测值）作为审美判据的 `actual`；验收报告会自动带上基线差异。'
     });
   }
-  return fail(`审美基线出现 ${failed.length} 项差异：${page}/${state}。`, {
-    detail,
-    files: [displayPath(paths, paths.aestheticCompare)],
-    next:
-      '确认差异是回归还是用户要求的新设计：回归就修代码；新设计需重跑审计并用 `baseline save` 重建基线。'
-  });
+  return fail(
+    `审美基线出现 ${failed.length} 项差异${imageFailed ? '，截图回归也未通过' : ''}：${page}/${state}。`,
+    {
+      detail,
+      files,
+      next:
+        '确认差异是回归还是用户要求的新设计：回归就修代码；新设计需重跑审计并用 `baseline save` 重建基线。'
+    }
+  );
 }
 
 async function runLearn(deps: Deps): Promise<ToolResult> {
@@ -695,7 +750,7 @@ export function createAestheticTool(options: Options, ctx?: PluginContext): Tool
   return defineTool<unknown, ToolResult>({
     name: TOOL,
     description:
-      'Aesthetic learning v1 (0.6.1) + cross-project templates (0.6.4): `profile` (list/get/write/remove), `baseline` (save/list visual baselines), `compare` (numeric layout diff against the baseline), `learn` (propose preferences from confirmed user wording or project resources) and `template` (list/get/export/import a global aesthetic profile). ' +
+      'Aesthetic learning v1 (0.6.1) + cross-project templates (0.6.4) + screenshot regression (1.0.5): `profile` (list/get/write/remove), `baseline` (save/list visual baselines), `compare` (numeric layout diff + optional screenshot pixel/pHash diff), `learn` (propose preferences from confirmed user wording or project resources) and `template` (list/get/export/import a global aesthetic profile). ' +
       '`learn` never writes unless `apply: true` and `confirmed: true`; a conflict needs `choice`. `baseline save` is refused without a passing audit + user confirmation; `template import` needs `confirmed: true`. ' +
       '审美判断有档案、有基线、可解释可撤销；不用模型猜没说过的话。',
     parameters: {
@@ -738,7 +793,12 @@ export function createAestheticTool(options: Options, ctx?: PluginContext): Tool
         type: 'string',
         description: '布局树 JSON，相对 `.shared/` 的路径；baseline save 存基线、compare 用当前值。'
       },
-      screenshot: { type: 'string', description: '截图，相对 `.shared/` 的路径（可选，baseline save 用，供人工复核）。' },
+      screenshot: {
+        type: 'string',
+        description: '截图，相对 `.shared/` 的路径；baseline save 存基线、compare 时与基线截图做像素/感知 diff（可选）。'
+      },
+      pixelThreshold: { type: 'number', description: '截图 diff：单像素亮度差阈值（默认 12，1–255）。' },
+      passRatio: { type: 'number', description: '截图 diff：允许的变化像素比例（默认 0.005，0–1）。' },
       sources: {
         type: 'array',
         items: {
