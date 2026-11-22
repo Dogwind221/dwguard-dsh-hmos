@@ -493,3 +493,168 @@ test('api op=scan reports deprecated SDK API call sites', async () => {
   assert.equal(scan.findings[0].line, 4);
 });
 
+
+const TRACE_SAMPLE = [
+  '# tracer: nop',
+  '# entries-in-buffer/entries-written: 4/4',
+  '           <...>-1527    (-------) [003] ....   676.523053: tracing_mark_write: B|1527|H:Native async work queueWithQos|I39',
+  '           <...>-1527    (-------) [003] ....   676.523134: tracing_mark_write: E|1527|I39',
+  '           <...>-1691    (-------) [002] ....   676.530000: tracing_mark_write: B|1691|H:SomeWork|I62',
+  '           <...>-1691    (-------) [002] ....   676.530500: tracing_mark_write: E|1691|I62'
+].join('\n');
+
+test('trace summarizes paired slices (top functions / slowest / span)', async () => {
+  const cwd = await workspace();
+  const run = runnerReturning({ code: 0, stdout: TRACE_SAMPLE, stderr: '', durationMs: 30 });
+  const tool = createDevecoTool(resolveOptions({ hdcPath: 'hdc-test' }), undefined, run.runner);
+  const result = await tool.execute({ action: 'trace', duration: 2, device: 'S1' }, exec(cwd));
+  assert.equal(result.ok, true, readFailure(result));
+  const summary = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'trace-summary.json'), 'utf8'));
+  assert.equal(summary.events, 4);
+  assert.equal(summary.beginEvents, 2);
+  assert.equal(summary.endEvents, 2);
+  assert.equal(summary.functions, 2);
+  assert.equal(summary.topFunctions.length, 2);
+  assert.ok(summary.topFunctions.some((entry) => /Native async work/.test(entry.name)));
+  assert.ok(summary.slowest.length === 2);
+  assert.ok(summary.spanMs > 0);
+  assert.match(result.summary, /事件/);
+});
+
+test('trace device=all writes per-device traces and a matrix', async () => {
+  const cwd = await workspace();
+  const run = runnerReturning({ code: 0, stdout: TRACE_SAMPLE, stderr: '', durationMs: 20 });
+  const options = resolveOptions({
+    hdcPath: 'hdc-test',
+    devicePool: [
+      { sn: 'S1', family: 'phone' },
+      { sn: 'S2', family: 'tablet' }
+    ]
+  });
+  const tool = createDevecoTool(options, undefined, run.runner);
+  const result = await tool.execute({ action: 'trace', duration: 2, device: 'all' }, exec(cwd));
+  assert.equal(result.ok, true, readFailure(result));
+  assert.equal(run.calls.length, 2);
+  assert.ok(run.calls[0].args.includes('S1'));
+  assert.ok(run.calls[1].args.includes('S2'));
+  const matrix = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'trace-matrix.json'), 'utf8'));
+  assert.equal(matrix.rows.length, 2);
+  assert.match(result.summary, /2 台/);
+});
+
+test('app device=all runs read-only queries on every pooled device', async () => {
+  const cwd = await workspace();
+  const run = runnerReturning({ code: 0, stdout: '[{"bundleName":"com.demo.app"}]', stderr: '', durationMs: 5 });
+  const options = resolveOptions({
+    devicePool: [
+      { sn: 'S1', family: 'phone' },
+      { sn: 'S2', family: 'tablet' }
+    ]
+  });
+  const tool = createDevecoTool(options, undefined, run.runner);
+  const result = await tool.execute({ action: 'app', op: 'list', device: 'all' }, exec(cwd));
+  assert.equal(result.ok, true, readFailure(result));
+  assert.equal(run.calls.length, 2);
+  assert.deepEqual(run.calls[0].args, ['device', 'app', 'list', '--format', 'json', '--device', 'S1']);
+  assert.deepEqual(run.calls[1].args, ['device', 'app', 'list', '--format', 'json', '--device', 'S2']);
+  const matrix = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'app-matrix.json'), 'utf8'));
+  assert.equal(matrix.passed, true);
+  assert.equal(matrix.rows.length, 2);
+});
+
+test('db runs a read-only sqlite query and rejects writes', async () => {
+  const cwd = await workspace();
+  const run = runnerReturning({ code: 0, stdout: 'id|name\n1|demo', stderr: '', durationMs: 5 });
+  const tool = createDevecoTool(resolveOptions({}), undefined, run.runner);
+  const result = await tool.execute(
+    { action: 'db', db: '/data/app/el2/100/database/demo.db', sql: 'SELECT id, name FROM user', device: 'S1' },
+    exec(cwd)
+  );
+  assert.equal(result.ok, true, readFailure(result));
+  assert.deepEqual(run.calls[0].args, [
+    'device',
+    'sqlite3',
+    '/data/app/el2/100/database/demo.db',
+    'SELECT id, name FROM user',
+    '--device',
+    'S1'
+  ]);
+  const stored = JSON.parse(await readFile(join(cwd, '.shared', 'artifacts', 'deveco-1', 'db-query.json'), 'utf8'));
+  assert.equal(stored.sql, 'SELECT id, name FROM user');
+  assert.equal(stored.outputLines, 2);
+
+  const bad = await tool.execute(
+    { action: 'db', db: '/data/app/demo.db', sql: 'DELETE FROM user', device: 'S1' },
+    exec(cwd)
+  );
+  assert.equal(bad.ok, false);
+  assert.match(bad.summary, /只读/);
+});
+
+test('emulator state injection maps to structured flags', async () => {
+  const cwd = await workspace();
+  const run = runnerReturning({ code: 0, stdout: 'ok', stderr: '', durationMs: 1 });
+  const tool = createDevecoTool(resolveOptions({}), undefined, run.runner);
+
+  await tool.execute({ action: 'emulator', op: 'fold', emulator: 'S1', foldState: 'half-open' }, exec(cwd));
+  assert.deepEqual(run.calls[0].args, ['emulator', 'fold', '--target', 'S1', 'half-open']);
+
+  await tool.execute(
+    { action: 'emulator', op: 'battery', emulator: 'S1', batteryLevel: 80, batteryStatus: 'charging' },
+    exec(cwd)
+  );
+  assert.deepEqual(run.calls[1].args, ['emulator', 'battery', '--target', 'S1', '--level', '80', '--status', 'charging']);
+
+  await tool.execute(
+    { action: 'emulator', op: 'geolocation', emulator: 'S1', latitude: 31.2, longitude: 121.5 },
+    exec(cwd)
+  );
+  assert.deepEqual(run.calls[2].args, [
+    'emulator',
+    'geolocation',
+    '--target',
+    'S1',
+    '--latitude',
+    '31.2',
+    '--longitude',
+    '121.5'
+  ]);
+
+  await tool.execute(
+    { action: 'emulator', op: 'sensor', emulator: 'S1', sensor: 'steps=42,light-intensity=500' },
+    exec(cwd)
+  );
+  assert.deepEqual(run.calls[3].args, [
+    'emulator',
+    'sensor',
+    '--target',
+    'S1',
+    '--steps',
+    '42',
+    '--light-intensity',
+    '500'
+  ]);
+});
+
+test('hilog follow runs as a background job and keeps filters', async () => {
+  const cwd = await workspace();
+  const starts = [];
+  const background = {
+    start: async (command, args, _cwd, _logFile) => {
+      starts.push({ command, args: [...args] });
+      return 4242;
+    },
+    alive: () => true
+  };
+  const tool = createDevecoTool(resolveOptions({}), undefined, async () => ({ code: 0, stdout: '', stderr: '', durationMs: 1 }), background);
+  const result = await tool.execute(
+    { action: 'log', op: 'hilog', follow: true, keyword: 'Fail', device: 'S1' },
+    exec(cwd)
+  );
+  assert.equal(result.ok, true, readFailure(result));
+  assert.equal(starts.length, 1);
+  assert.ok(starts[0].args.includes('--follow'));
+  assert.ok(starts[0].args.includes('--keyword'));
+  assert.ok(starts[0].args.includes('Fail'));
+  assert.match(result.summary, /后台/);
+});

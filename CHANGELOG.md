@@ -4,6 +4,41 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.4 — 2026-11-22
+
+工作台补全与性能切片：trace 统计、`device=all` 扩展、`db`、模拟器状态注入、hilog follow。
+
+### Added
+
+- `trace` 切片统计：解析 hitrace 的 B/E 标记，按 pid 栈配对计算时长，输出
+  `trace-summary.json`（事件数 / 函数数 / 总时长 / 最长切片 / 跨度 / topFunctions /
+  slowest / topPids；数字归一化后跨运行稳定）。
+- `trace device=all`：逐台抓取，写 `trace-<i>-<sn>.txt` + 每台 summary +
+  `trace-matrix.json`；每台通过时生成 observation。
+- `app device=all`：对 `list / foreground / info` 逐台查询，写
+  `app-<i>-<sn>.json` + `app-matrix.json`；写操作仍要求逐台指定设备。
+- **新增 `db` action**：`devecocli device sqlite3 <db> <sql>`，只允许
+  `SELECT` / `WITH` / `EXPLAIN` 单条语句，写 `db-query.json`。
+- `emulator` 结构化状态注入：`foldState` / `batteryLevel` / `batteryStatus` /
+  `latitude` / `longitude` / `sensor`（key=value 白名单），映射到 devecocli 参数。
+- `log op=hilog` 新增 `follow`（自动后台任务）与 `keyword` 过滤；`regex` / `pid`
+  仍在插件侧过滤。
+- 文档：`docs/1.0.4-workbench.md`；测试新增 6 个用例。
+
+### Verification
+
+- `npm test`：225/225。
+- Mate X7 模拟器实测：`trace` 2s → 185 行 / 170 事件 / 36 函数 / 1965ms 跨度，
+  切片统计正确；`emulator fold half-open`、`battery --level 80 --status charging`
+  生效；`log op=hilog follow` 后台启动成功（job + `output.log`）。
+- `db` 设备侧 live 受模拟器 SELinux 限制（shell 域无法打开 SQLite 文件），
+  单测覆盖命令与只读校验；文档给出 `file recv` 到主机分析的兜底路径。
+
+### Compatibility
+
+- 工具数仍是 17；`dwguard_deveco` 动作数 25 → 26（新增 `db`）。
+- 旧 action / 旧参数行为不变；`trace.txt` 仍保留，summary 为新增文件。
+
 ## 1.0.3 — 2026-11-22
 
 取证闭环：把崩溃、日志、UI 指纹、废弃 API 变成结构化证据，并让审计自动复核 UI 断言。

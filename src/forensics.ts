@@ -192,7 +192,7 @@ function reportsFromJson(value: unknown): CrashReport[] {
 
 /** Parse crash output (devecocli JSON or a faultlog / hilog excerpt). */
 export function parseCrashLog(raw: string): CrashReport[] {
-  const trimmed = raw.trim();
+  const trimmed = raw.replace(/\r\n?/g, '\n').trim();
   if (trimmed.length === 0 || trimmed.length > 8 * 1024 * 1024) return [];
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
@@ -263,9 +263,10 @@ export function parseHilog(
   options: { regex?: string; pid?: number; maxLines?: number } = {}
 ): HilogSummary {
   const maxLines = Math.max(1, Math.min(options.maxLines ?? 5000, 20000));
-  const lines = raw.split('\n');
+  const normalized = raw.replace(/\r\n?/g, '\n');
+  const lines = normalized.split('\n');
   let entries: HilogEntry[] = [];
-  const trimmed = raw.trim();
+  const trimmed = normalized.trim();
   if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
     try {
       entries = entriesFromJson(JSON.parse(trimmed) as unknown);
