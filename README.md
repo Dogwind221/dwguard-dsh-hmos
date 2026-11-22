@@ -24,6 +24,28 @@
 
 ---
 
+## 1.0.2 能力面与同类关系
+
+**17 个工具 / 25 个 action**：编排审计（`dwguard_spec` / `prereview` / `dispatch` / `audit` / `calibration` / `confirm` / `knowledge` / `status` / `harness`）+ 设计参考（`dwguard_design` / `aesthetic`）+ 执行取证（`dwguard_deveco` 的 25 个 action：`env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop` + **`emulator / app / file / uiassert / trace / project / api / compat`**）+ 零点击执行（`dwguard_code`）+ 扫描（`dwguard_scan` / `dwguard_rules` / `dwguard_shadow`）。
+
+和别的鸿蒙 DSH 插件不是替代关系，而是分层：
+
+| 层 | 插件 | 它擅长 | 与本插件的关系 |
+| --- | --- | --- | --- |
+| **验收 / 审计** | **dwguard-dsh-hmos**（本插件） | 四维判据 + 独立取证 + 返工 + 校准账本；设计参考闭环；零点击执行；工程/SDK/UI 取证动作 | — |
+| 设备 / 知识 | [dsh-hdc-bridge](https://github.com/1na-ko/dsh-hdc-bridge) | 25 个 hdc/工具链工具、设备面板、离线官方知识（Tier-1） | 互补：设备/知识可与 `dwguard_deveco` 的取证组合 |
+| 调试 / Inspector | [dsh-deveco](https://github.com/MoonlitDropOfBlood/dsh-deveco) | HiLog 检查器、ArkUI Inspector（截图点选 + 组件树 + 盒模型）、运行时调试 | 互补：调试体验交给它，验收交给本插件 |
+| 工具面工作台 | [dsh-hmos-sidebar](https://github.com/YrracOwl/dsh-hmos-sidebar) | 41 个 `dcli__*` 工具、Windows 工作台 | 可选：需要大量零散设备动作时 |
+| 单工具多动作 | [dsh-harmonyos-agent](https://github.com/mobius-2046/dsh-harmonyos-agent) | 17 个动作（构建/装机/日志/UI/文件/DB/trace）、plan/goal/build 预设 | 可选：偏“直接执行”的场景 |
+| 技能库 | [harmony-next.skills](https://github.com/linhay/harmony-next.skills) | 4207 条 API 文档、44 个 skill | 输入：可配合 `dwguard_rules` / `api` 使用 |
+| 多 Agent 协议 | [dsh-collab](https://github.com/shizhonggang/dsh-collab) | 通用多 Agent 共享工作区协议 | 同类思路；本插件多了验收闸门与四维判据 |
+
+> 数据快照 2026-11-22（GitHub / npm），仅作选型参考；同类插件更新较快。
+> 推荐组合：**dwguard-dsh-hmos（验收/审计）+ dsh-hdc-bridge（设备/知识）+ dsh-deveco（Inspector）**。
+> 同类生态里，做「四维验收门禁 + 独立外部审计」的目前只有本插件；1.0.2 的 `uiassert` / `trace` / `project` / `api` / `compat` 让验收取证不必再手工截图对比。
+
+---
+
 ## 架构
 
 ```mermaid

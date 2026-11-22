@@ -33,6 +33,35 @@ This plugin makes the hand-off explicit:
   accepted paradigm pack only after a passed audit + user confirmation, and
   learns from pack feedback/benchmarks.
 
+## Capability surface (1.0.2) and neighbours
+
+**17 tools / 25 actions**: orchestration + audit (`dwguard_spec` / `prereview` /
+`dispatch` / `audit` / `calibration` / `confirm` / `knowledge` / `status` /
+`harness`), design reference (`dwguard_design` / `aesthetic`), execution evidence
+via `dwguard_deveco` (25 actions: `env / build / sign / run / log / lint /
+device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach /
+jobs / stop` + **`emulator / app / file / uiassert / trace / project / api /
+compat`**), zero-click executor (`dwguard_code`) and scan tools
+(`dwguard_scan` / `dwguard_rules` / `dwguard_shadow`).
+
+These plugins are layers, not substitutes:
+
+| Layer | Plugin | It is good at | Relation |
+| --- | --- | --- | --- |
+| **Acceptance / audit** | **dwguard-dsh-hmos** (this plugin) | Four-dimension criteria + independent evidence + rework + calibration ledger; design-pack loop; zero-click executor; project/SDK/UI evidence actions | — |
+| Device / knowledge | [dsh-hdc-bridge](https://github.com/1na-ko/dsh-hdc-bridge) | 25 hdc/toolchain tools, device panel, offline official knowledge (Tier-1) | Complementary: pair its device/knowledge with `dwguard_deveco` evidence |
+| Debugging / Inspector | [dsh-deveco](https://github.com/MoonlitDropOfBlood/dsh-deveco) | HiLog inspector, ArkUI Inspector (screenshot pick + tree + box model), runtime debugging | Complementary: debugging there, acceptance here |
+| Tool workbench | [dsh-hmos-sidebar](https://github.com/YrracOwl/dsh-hmos-sidebar) | 41 `dcli__*` tools, Windows workbench | Optional: when you need many ad-hoc device actions |
+| Single multi-action tool | [dsh-harmonyos-agent](https://github.com/mobius-2046/dsh-harmonyos-agent) | 17 actions (build/install/log/UI/file/DB/trace), plan/goal/build presets | Optional: for a "just execute" workflow |
+| Skill library | [harmony-next.skills](https://github.com/linhay/harmony-next.skills) | 4207 API docs, 44 skills | Input: can feed `dwguard_rules` / `api` |
+| Multi-agent protocol | [dsh-collab](https://github.com/shizhonggang/dsh-collab) | Generic multi-agent shared-workspace protocol | Adjacent idea; this plugin adds the acceptance gate and four-dimension criteria |
+
+> Snapshot 2026-11-22 (GitHub / npm), for orientation only; peers move fast.
+> Recommended combo: **dwguard-dsh-hmos (acceptance) + dsh-hdc-bridge (device/knowledge) + dsh-deveco (Inspector)**.
+> Among the peers, only this plugin implements a four-dimension acceptance gate +
+> independent external audit; the 1.0.2 `uiassert` / `trace` / `project` / `api` /
+> `compat` actions remove most manual screenshot comparisons.
+
 ## Design reference loop
 
 ```text
