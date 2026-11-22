@@ -10,9 +10,11 @@
 
 import { defineTool } from '@deepseek-ai/dsh-tools';
 import type { ToolDefinition, ToolRunContext } from '@deepseek-ai/dsh-tools';
+import { resolve } from 'node:path';
 
 import type { Options } from '../config.js';
 import type { PluginContext } from '../context.js';
+import type { SharedPaths } from '../paths.js';
 import type { AestheticProfile } from '../aesthetic.js';
 import { AREA_LABELS, findProfileEntry, readProfile, valueLabel } from '../aesthetic.js';
 import { readCompareResults } from '../baseline.js';
@@ -28,6 +30,7 @@ import { EvidenceError, missingEvidence, writeEvidenceBundle } from '../evidence
 import { DIMENSIONS, DIMENSION_LABELS, EVIDENCE_KINDS, SCREEN_FAMILIES } from '../model.js';
 import type { Check, EvidenceRef, TaskPack } from '../model.js';
 import { displayPath } from '../paths.js';
+import { readTextOrNull } from '../util/fs.js';
 import { clearAuditProgress } from '../progress.js';
 import { fail, ok, presentCall, renderResult, RESULT_SCHEMA, type ToolResult } from '../result.js';
 import type {
@@ -118,8 +121,27 @@ function parseChecks(raw: Record<string, unknown>): CheckInput[] {
   });
 }
 
-function parseFindings(raw: Record<string, unknown>): FindingInput[] {
-  if (raw['findings'] === undefined || raw['findings'] === null) return [];
+/** Validate a uiassert evidence file; null means "the assertion passed". */
+async function validateUiAssertEvidence(_paths: SharedPaths, file: string): Promise<string | null> {
+  const raw = await readTextOrNull(file);
+  if (raw === null) return '文件不存在或不可读';
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    if (Array.isArray(value['results'])) {
+      const rows = value['results'].filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null);
+      const failed = rows.filter((row) => row['passed'] !== true);
+      if (failed.length > 0) return `matrix 中有 ${String(failed.length)} 台未通过`;
+      if (value['passed'] !== true) return 'matrix 的 passed 不为 true';
+      return null;
+    }
+    if (value['passed'] === true) return null;
+    return 'passed 不为 true（断言未通过）';
+  } catch {
+    return '不是合法 JSON';
+  }
+}
+
+function parseFindings(raw: Record<string, unknown>): FindingInput[] {  if (raw['findings'] === undefined || raw['findings'] === null) return [];
   const rows = arrayOfRecords(raw, 'findings', TOOL, 48);
   return rows.map((item, index) => {
     const label = `${TOOL}.findings[${index}]`;
@@ -502,6 +524,19 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
               `\`${check.criterionId}\` 的 observationRef 属于 spec v${observation.specVersion}，不是当前 v${pack.specVersion}。`
             );
           }
+          if (observation.action === 'uiassert') {
+            const uiFile = observation.files
+              .map((file) => file.path)
+              .find((file) => /(?:^|\/)uiassert(?:-matrix|-\d+-[^/]+)?\.json$/.test(file));
+            if (uiFile === undefined) {
+              observationErrors.push(`\`${check.criterionId}\` 的 uiassert observation 没有 uiassert.json。`);
+            } else {
+              const uiError = await validateUiAssertEvidence(paths, uiFile);
+              if (uiError !== null) {
+                observationErrors.push(`\`${check.criterionId}\` 的 uiassert 断言：${uiError}。`);
+              }
+            }
+          }
         }
         if (observationErrors.length > 0) {
           return fail('Observation 校验失败。', {
@@ -514,6 +549,20 @@ export function createAuditTool(options: Options, ctx?: PluginContext): ToolDefi
           return fail(`证据文件不存在：${missing.join('、')}。本次审计未记录。`, {
             detail: missing.map((file) => `- \`${file}\``).join('\n'),
             next: '先把证据取到 `.shared/` 下，再重新调用 `dwguard_audit`。'
+          });
+        }
+        const uiAssertErrors: string[] = [];
+        for (const check of checks) {
+          for (const file of check.evidenceFiles ?? []) {
+            if (!/(?:^|\/)uiassert(?:-matrix|-\d+-[^/]+)?\.json$/.test(file)) continue;
+            const uiError = await validateUiAssertEvidence(paths, resolve(paths.shared, file));
+            if (uiError !== null) uiAssertErrors.push(`\`${check.criterionId}\` 的 \`${file}\`：${uiError}`);
+          }
+        }
+        if (uiAssertErrors.length > 0) {
+          return fail('uiassert 证据校验失败。', {
+            detail: uiAssertErrors.map((error) => `- ${error}`).join('\n'),
+            next: '重新运行失败的 uiassert；只有 passed=true 的 uiassert.json 才能作为通过证据。'
           });
         }
         await writeEvidenceBundle(paths, id, pack.specVersion, checks, now);

@@ -22,6 +22,9 @@ import type { PluginContext } from '../context.js';
 import { acquireDeviceLock, defaultDevice, releaseDeviceLock, renewDeviceLease } from '../device.js';
 import { findProjectRoot, readProjectInfo, resolveInside } from '../harmonyProject.js';
 import { findSdkLayout, listSdkModules, lookupSdkApi } from '../harmonySdk.js';
+import { scanDeprecatedApi } from '../apiScan.js';
+import { fingerprintLayout } from '../uiFingerprint.js';
+import { parseCrashLog, parseHilog } from '../forensics.js';
 import { rotateActiveLog } from '../util/fs.js';
 import { recordObservation } from '../observation.js';
 import { validateImageFile } from '../media.js';
@@ -453,7 +456,7 @@ export function createDevecoTool(
     description:
       'Run DevEco CLI (`devecocli`) + HarmonyOS workbench evidence commands. ' +
       'Base: env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop. ' +
-      'Workbench: emulator (list/start/stop/create/delete/rotate/volume/fold/battery/geolocation/scene/sensor/power/shake), app (list/foreground/info/start/install/uninstall/stop/clearcache/cleardata), file (send/recv/exist/delete), uiassert (selector present/absent/count), trace (hdc hitrace capture), project (read build-profile/app/module/oh-package + HAP artifacts), api (local SDK .d.ts lookup with @since/@deprecated), compat (check compat source→target). ' +
+      'Workbench: emulator (list/start/stop/create/delete/rotate/volume/fold/battery/geolocation/scene/sensor/power/shake), app (list/foreground/info/start/install/uninstall/stop/clearcache/cleardata), file (send/recv/exist/delete), uiassert (selector present/absent/count/fingerprint, device=all 逐台出表), trace (hdc hitrace capture), project (read build-profile/app/module/oh-package + HAP artifacts), api (lookup/versions/list + scan deprecated API usage), compat (check compat source→target), log (op=crash parses jscrash/cppcrash/appfreeze top frames; op=hilog folds errors and filters by regex/pid). ' +
       '`pipeline` = sign → build → run → screenshot → layout with per-step evidence, stop-on-failure, optional resume; `uiassert` is a deterministic UI assertion (not vision); `project` / `api` are read-only and execute nothing; `trace` runs `hdc shell hitrace`. ' +
       'Writes command + exit code + output under `artifacts/deveco-<n>/`; DSH cites this as evidence, never as executor self-verification. ' +
       '`a11y` = 布局树快照 + accessibilityId + 工作区静态无障碍扫描；长命令加 `background: true` 立即返回 job id；`attach` 复用已有日志；`screenshot` / `layout` / `verify` 走真实设备取证。',
@@ -473,12 +476,15 @@ export function createDevecoTool(
       resume: { type: 'boolean', description: 'pipeline：跳过上一次 pipeline 已成功的步骤（默认 false）。' },
       job: { type: 'string', description: 'stop：job id（即 deveco-<n> 的 n，或 pid）。' },
       plan: { type: 'string', description: 'verify：自然语言测试步骤与预期结果。' },
-      op: { type: 'string', description: 'emulator/app/file/api/compat 的子动作；不传时用各自默认值。' },
+      op: { type: 'string', description: 'emulator/app/file/api/compat/log 的子动作；不传时用各自默认值。' },
       emulator: { type: 'string', description: 'emulator：实例名或序列号（start/stop/create/delete 可逗号分隔多个）。' },
       direction: { type: 'string', description: 'emulator rotate/volume 的方向参数。' },
       selector: { type: 'string', description: 'uiassert：控件选择器（如 text=登录 / id=submit / text*=Log）。' },
-      expect: { type: 'string', enum: ['present', 'absent', 'count'], description: 'uiassert 的期望（默认 present）。' },
+      expect: { type: 'string', enum: ['present', 'absent', 'count', 'fingerprint'], description: 'uiassert 的期望（默认 present）。' },
       count: { type: 'number', description: 'uiassert：expect=count 时的期望匹配数。' },
+      fingerprint: { type: 'string', description: 'uiassert：expect=fingerprint 时的期望布局指纹；不传则只采集。' },
+      regex: { type: 'string', description: 'log op=hilog：消息正则过滤（可选）。' },
+      pid: { type: 'number', description: 'log op=hilog：按进程 pid 过滤（可选）。' },
       timeoutMs: { type: 'number', description: 'uiassert：等待超时毫秒（100–120000，默认 3000）。' },
       window: { type: 'string', description: 'uiassert：目标窗口 id（可选）。' },
       src: { type: 'string', description: 'file send 的本地路径 / file recv 与 exist/delete 的设备路径。' },
@@ -511,8 +517,11 @@ export function createDevecoTool(
       const emulatorName = optionalString(args, 'emulator', TOOL, 120);
       const direction = optionalString(args, 'direction', TOOL, 40);
       const selector = optionalString(args, 'selector', TOOL, 400);
-      const expect = optionalEnum(args, 'expect', ['present', 'absent', 'count'] as const, TOOL) ?? 'present';
+      const expect = optionalEnum(args, 'expect', ['present', 'absent', 'count', 'fingerprint'] as const, TOOL) ?? 'present';
       const expectCount = optionalInt(args, 'count', -1, TOOL, 0, 100000);
+      const fingerprintArg = optionalString(args, 'fingerprint', TOOL, 120);
+      const regexArg = optionalString(args, 'regex', TOOL, 300);
+      const pidArg = optionalInt(args, 'pid', -1, TOOL, 0, 1000000);
       const timeoutMs = optionalInt(args, 'timeoutMs', 3000, TOOL, 100, 120000);
       const windowId = optionalString(args, 'window', TOOL, 80);
       const srcArg = optionalString(args, 'src', TOOL, 500);
@@ -1021,8 +1030,8 @@ export function createDevecoTool(
       // Read-only SDK API lookup (`api`): never downloads, never executes.
       if (action === 'api') {
         const apiOp = opArg ?? 'lookup';
-        if (apiOp !== 'lookup' && apiOp !== 'versions' && apiOp !== 'list') {
-          return fail(`api 的 op 只能是 lookup / versions / list（收到 ${apiOp}）。`);
+        if (apiOp !== 'lookup' && apiOp !== 'versions' && apiOp !== 'list' && apiOp !== 'scan') {
+          return fail(`api 的 op 只能是 lookup / versions / list / scan（收到 ${apiOp}）。`);
         }
         const layout = findSdkLayout(options.harmonySdkPath);
         if (layout === null) {
@@ -1080,6 +1089,56 @@ export function createDevecoTool(
             next: '用 action=api op=lookup module=@ohos.xxx 查具体声明与 @since/@deprecated。'
           });
         }
+        if (apiOp === 'scan') {
+          const requested = projectPath ?? '.';
+          const start = resolveInside(paths.workspace, requested);
+          if (start === null) return fail('api scan 的 path 必须在工作区内。');
+          if (!existsSync(start)) return fail(`目录不存在：${requested}`);
+          const root = findProjectRoot(start);
+          if (root === null) {
+            return fail('api scan 找不到工程根（build-profile.json5），请把 path 指向 DevEco 工程目录。');
+          }
+          const scan = scanDeprecatedApi(root, layout);
+          const nowScan = nowIso();
+          const { dir } = await writeDevecoRecord(paths, 'api', `local sdk scan ${safeDisplay(paths, root)}`, nowScan, {
+            code: 0,
+            stdout: JSON.stringify(scan),
+            stderr: '',
+            durationMs: 0
+          });
+          await writeTextAtomic(`${dir}/api-scan.json`, `${JSON.stringify(scan, null, 2)}\n`);
+          const top = scan.findings.slice(0, 20);
+          const detail = [
+            `工程：\`${safeDisplay(paths, root)}\``,
+            `扫描文件：${String(scan.filesScanned)} · 导入 SDK 模块：${String(scan.imports.length)} · 废弃符号：${String(scan.deprecatedSymbols)}`,
+            `命中：${String(scan.findings.length)} 处`,
+            ...(scan.imports.length === 0 ? [] : ['', `导入模块：${scan.imports.slice(0, 12).join(', ')}${scan.imports.length > 12 ? ' …' : ''}`]),
+            ...(top.length === 0
+              ? ['', '未发现对 @deprecated API 的引用。']
+              : [
+                  '',
+                  '| 文件:行 | 符号 | 模块 | 废弃说明 |',
+                  '| --- | --- | --- | --- |',
+                  ...top.map(
+                    (finding) =>
+                      `| \`${finding.file}:${String(finding.line)}\` | \`${finding.symbol}\` | \`${finding.module}\` | ${finding.deprecated.replace(/\|/g, '\\|')} |`
+                  )
+                ]),
+            ...(scan.findings.length > top.length ? ['', `仅显示前 ${String(top.length)} 条，完整结果见 api-scan.json。`] : [])
+          ].join('\n');
+          const scanSummary =
+            scan.findings.length === 0
+              ? 'api scan：未发现废弃 API 引用'
+              : `api scan：${String(scan.findings.length)} 处废弃 API 引用（${String(new Set(scan.findings.map((finding) => finding.file)).size)} 个文件）`;
+          return ok(scanSummary, {
+            detail,
+            files: [safeDisplay(paths, `${dir}/api-scan.json`), safeDisplay(paths, `${dir}/result.json`)],
+            next:
+              scan.findings.length === 0
+                ? '把 api-scan.json 作为兼容性判据的证据；零命中也要保留扫描范围。'
+                : '把 api-scan.json 写进兼容性判据的 evidenceFiles；是否阻断由任务包的兼容性判据决定。'
+          });
+        }
         if (module === undefined) return fail('api lookup 需要 module（如 @ohos.promptAction 或 @kit.ArkUI）。');
         const lookup = lookupSdkApi(layout, module, apiName);
         if (lookup === null) {
@@ -1116,78 +1175,187 @@ export function createDevecoTool(
 
       // Deterministic UI assertion (`uiassert`): evidence, not a vision model guess.
       if (action === 'uiassert') {
-        if (selector === undefined) return fail('uiassert 需要 selector（如 text=登录 / id=submit / text*=Log）。');
+        if (expect !== 'fingerprint' && selector === undefined) {
+          return fail('uiassert 需要 selector（如 text=登录 / id=submit / text*=Log）；指纹断言用 expect=fingerprint。');
+        }
         if (expect === 'count' && expectCount < 0) return fail('expect=count 需要 count（期望匹配数）。');
+        if (expect === 'fingerprint' && fingerprintArg !== undefined && !/^fp-[0-9a-f]{8,}$/i.test(fingerprintArg)) {
+          return fail('fingerprint 必须是 fp- 开头的布局指纹（先用 expect=fingerprint 不传 fingerprint 采集）。');
+        }
         const binary = resolveBinary(options.devecocliPath);
-        const commandArgs: string[] = [];
-        if (expect === 'absent') {
-          commandArgs.push('ui', 'wait', selector, String(timeoutMs), '--disappear');
-          if (windowId !== undefined) commandArgs.push('--window', windowId);
-        } else {
-          commandArgs.push('ui', 'find', selector, '--format', 'json', '--timeout', String(timeoutMs));
-          if (expect === 'count') commandArgs.push('--all');
-          if (windowId !== undefined) commandArgs.push('--window', windowId);
-        }
-        if (device !== undefined) commandArgs.push('--device', device);
-        let lockHolder: string | null = null;
-        let lockToken: string | null = null;
-        if (device !== undefined) {
-          const lock = await acquireDeviceLock(paths, device, `${TOOL}:uiassert:${Date.now()}`, policy.lockTimeoutMs, {
-            staleAfterMs: policy.lockTimeoutMs,
-            leaseTtlMs: Math.max(policy.lockTimeoutMs, 120_000)
+        const multi = device === 'all';
+        if (multi && policy.pool.length === 0) {
+          return fail('device=all 需要配置设备池 `device.pool`，否则没有可逐台执行的设备。', {
+            next: '在 cordis.patch.yml 的 device.pool 里填设备序列号，或传具体 device。'
           });
-          if (!lock.ok) return fail(lock.reason, { next: '等占用设备的取证结束再执行 UI 断言。' });
-          lockHolder = device;
-          lockToken = lock.token;
         }
+        const targets = multi
+          ? policy.pool.map((entry) => ({ sn: entry.sn, family: entry.family }))
+          : [{ sn: device, family: undefined as string | undefined }];
+        interface UiRunResult {
+          readonly device?: string;
+          readonly family?: string;
+          readonly command: string[];
+          readonly exitCode: number;
+          readonly stdout: string;
+          readonly stderr: string;
+          readonly durationMs: number;
+          readonly matches: number | null;
+          readonly fingerprint?: string;
+          readonly nodes?: number;
+          readonly passed: boolean;
+          readonly actual: string;
+          readonly error?: string;
+        }
+        const runOne = async (target: { sn?: string; family?: string }): Promise<UiRunResult> => {
+          const sn = target.sn;
+          const commandArgs: string[] = [];
+          if (expect === 'fingerprint') {
+            commandArgs.push('ui', 'layout', '--format', 'json', '--mode', 'full');
+            if (windowId !== undefined) commandArgs.push('--window', windowId);
+          } else if (expect === 'absent') {
+            commandArgs.push('ui', 'wait', selector ?? '', String(timeoutMs), '--disappear');
+            if (windowId !== undefined) commandArgs.push('--window', windowId);
+          } else {
+            commandArgs.push('ui', 'find', selector ?? '', '--format', 'json', '--timeout', String(timeoutMs));
+            if (expect === 'count') commandArgs.push('--all');
+            if (windowId !== undefined) commandArgs.push('--window', windowId);
+          }
+          if (sn !== undefined) commandArgs.push('--device', sn);
+          let lockHolder: string | null = null;
+          let lockToken: string | null = null;
+          if (sn !== undefined) {
+            const lock = await acquireDeviceLock(paths, sn, `${TOOL}:uiassert:${Date.now()}`, policy.lockTimeoutMs, {
+              staleAfterMs: policy.lockTimeoutMs,
+              leaseTtlMs: Math.max(policy.lockTimeoutMs, 120_000)
+            });
+            if (!lock.ok) {
+              return {
+                device: sn,
+                ...(target.family === undefined ? {} : { family: target.family }),
+                command: commandArgs,
+                exitCode: 1,
+                stdout: '',
+                stderr: lock.reason,
+                durationMs: 0,
+                matches: null,
+                passed: false,
+                actual: `设备锁失败：${lock.reason}`,
+                error: lock.reason
+              };
+            }
+            lockHolder = sn;
+            lockToken = lock.token;
+          }
+          let result: DevecoRun | null = null;
+          let error: string | undefined;
+          try {
+            result = await runner(binary, commandArgs, paths.workspace);
+          } catch (caught) {
+            error = caught instanceof Error ? caught.message : String(caught);
+          } finally {
+            if (lockHolder !== null && lockToken !== null) await releaseDeviceLock(paths, lockHolder, lockToken);
+          }
+          const parsed = jsonValue(result?.stdout ?? '');
+          let matches: number | null = null;
+          let fingerprint: string | undefined;
+          let nodes: number | undefined;
+          if (expect === 'fingerprint') {
+            if (parsed !== null) {
+              const computed = fingerprintLayout(parsed);
+              fingerprint = computed.fingerprint;
+              nodes = computed.nodes;
+            }
+          } else {
+            matches = countMatches(parsed);
+          }
+          let passed = false;
+          let actual = '';
+          if (error !== undefined) {
+            actual = `执行失败：${error}`;
+          } else if (expect === 'fingerprint') {
+            if (fingerprint === undefined) {
+              actual = '无法从 ui layout 输出解析布局 JSON';
+            } else if (fingerprintArg === undefined) {
+              passed = true;
+              actual = `采集 ${fingerprint}（${String(nodes ?? 0)} 节点）`;
+            } else {
+              passed = fingerprint === fingerprintArg;
+              actual = `${fingerprint}（期望 ${fingerprintArg}）`;
+            }
+          } else if (expect === 'present') {
+            passed = result !== null && result.code === 0 && (matches === null || matches > 0);
+            actual = `exit ${String(result?.code ?? 1)} · matches ${matches === null ? '（未解析）' : String(matches)}`;
+          } else if (expect === 'absent') {
+            passed = result !== null && result.code === 0;
+            actual = `exit ${String(result?.code ?? 1)}（0 = 已消失）`;
+          } else {
+            passed = matches === expectCount;
+            actual = `matches ${matches === null ? '（未解析）' : String(matches)}（期望 ${String(expectCount)}）`;
+          }
+          return {
+            ...(sn === undefined ? {} : { device: sn }),
+            ...(target.family === undefined ? {} : { family: target.family }),
+            command: commandArgs,
+            exitCode: result?.code ?? 1,
+            stdout: result?.stdout ?? '',
+            stderr: result?.stderr ?? '',
+            durationMs: result?.durationMs ?? 0,
+            matches,
+            ...(fingerprint === undefined ? {} : { fingerprint }),
+            ...(nodes === undefined ? {} : { nodes }),
+            passed,
+            actual,
+            ...(error === undefined ? {} : { error })
+          };
+        };
+
+        const results: UiRunResult[] = [];
+        for (const target of targets) {
+          try {
+            results.push(await runOne(target));
+          } catch (caught) {
+            results.push({
+              ...(target.sn === undefined ? {} : { device: target.sn }),
+              ...(target.family === undefined ? {} : { family: target.family }),
+              command: [],
+              exitCode: 1,
+              stdout: '',
+              stderr: '',
+              durationMs: 0,
+              matches: null,
+              passed: false,
+              actual: `执行失败：${caught instanceof Error ? caught.message : String(caught)}`
+            });
+          }
+        }
+        const passedCount = results.filter((result) => result.passed).length;
+        const allPassed = results.length > 0 && passedCount === results.length;
+        const totalMs = results.reduce((sum, result) => sum + result.durationMs, 0);
+        const aggregateStdout = results
+          .map((result) => `[${result.device ?? 'default'}] exit=${String(result.exitCode)}\n${result.stdout}`)
+          .join('\n---\n');
         const now = nowIso();
-        let result: DevecoRun;
-        try {
-          result = await runner(binary, commandArgs, paths.workspace);
-        } catch (error) {
-          return fail(`uiassert 执行失败：${error instanceof Error ? error.message : String(error)}`, {
-            next: '确认 devecocli 可用、设备在线；或用 action=device 查看设备。'
-          });
-        } finally {
-          if (lockHolder !== null && lockToken !== null) await releaseDeviceLock(paths, lockHolder, lockToken);
-        }
-        const parsed = jsonValue(result.stdout);
-        const matches = countMatches(parsed);
-        const passed =
-          expect === 'present'
-            ? result.code === 0 && (matches === null || matches > 0)
-            : expect === 'absent'
-              ? result.code === 0
-              : matches === expectCount;
-        const actual =
-          expect === 'absent'
-            ? `exit ${String(result.code)}（0 = 已消失）`
-            : `exit ${String(result.code)} · matches ${matches === null ? '（未解析）' : String(matches)}`;
-        const { dir } = await writeDevecoRecord(paths, 'uiassert', commandArgs.join(' '), now, result, {
-          selector,
-          expect,
-          ...(expect === 'count' ? { expectedCount: expectCount } : {}),
-          actualMatches: matches,
-          passed
-        });
-        await writeTextAtomic(
-          `${dir}/uiassert.json`,
-          `${JSON.stringify(
-            {
-              schemaVersion: 1,
-              capturedAt: now,
-              selector,
-              expect,
-              ...(expect === 'count' ? { expectedCount: expectCount } : {}),
-              actualMatches: matches,
-              passed,
-              exitCode: result.code,
-              device
-            },
-            null,
-            2
-          )}\n`
+        const { dir } = await writeDevecoRecord(
+          paths,
+          'uiassert',
+          results.map((result) => result.command.join(' ')).join(' | '),
+          now,
+          {
+            code: allPassed ? 0 : 1,
+            stdout: aggregateStdout,
+            stderr: results.map((result) => result.stderr).filter((line) => line.length > 0).join('\n'),
+            durationMs: totalMs
+          },
+          {
+            mode: multi ? 'all' : 'single',
+            expect,
+            ...(expect === 'count' ? { expectedCount: expectCount } : {}),
+            ...(fingerprintArg === undefined ? {} : { expectedFingerprint: fingerprintArg }),
+            passed: allPassed
+          }
         );
+
         let specVersion: number | undefined;
         const specRaw = await readTextOrNull(paths.specJson);
         if (specRaw !== null) {
@@ -1198,42 +1366,127 @@ export function createDevecoTool(
             /* no spec version */
           }
         }
-        let observationRef: string | undefined;
-        if (passed && device !== undefined) {
-          observationRef = await recordObservation(
-            paths,
-            {
-              action: 'uiassert',
-              device,
-              ...(specVersion === undefined ? {} : { specVersion }),
-              files: [`${dir}/uiassert.json`, `${dir}/output.log`]
-            },
-            now
-          );
+
+        const fileSafe = (value: string): string => value.replace(/[^A-Za-z0-9._-]+/g, '_');
+        const observationRefs: Array<{ device?: string; ref: string }> = [];
+        const matrixFiles: string[] = [];
+        for (let index = 0; index < results.length; index += 1) {
+          const result = results[index];
+          if (result === undefined) continue;
+          const record = {
+            schemaVersion: 1,
+            capturedAt: now,
+            mode: multi ? 'all' : 'single',
+            selector: selector ?? null,
+            expect,
+            ...(expect === 'count' ? { expectedCount: expectCount } : {}),
+            ...(fingerprintArg === undefined ? {} : { expectedFingerprint: fingerprintArg }),
+            ...(result.device === undefined ? {} : { device: result.device }),
+            ...(result.family === undefined ? {} : { family: result.family }),
+            actualMatches: result.matches,
+            ...(result.fingerprint === undefined ? {} : { fingerprint: result.fingerprint }),
+            ...(result.nodes === undefined ? {} : { nodes: result.nodes }),
+            passed: result.passed,
+            exitCode: result.exitCode,
+            actual: result.actual,
+            command: result.command
+          };
+          const fileName = multi ? `uiassert-${String(index)}-${fileSafe(result.device ?? 'default')}.json` : 'uiassert.json';
+          await writeTextAtomic(`${dir}/${fileName}`, `${JSON.stringify(record, null, 2)}\n`);
+          matrixFiles.push(safeDisplay(paths, `${dir}/${fileName}`));
+          if (multi) {
+            await writeTextAtomic(`${dir}/output-${String(index)}.log`, `${result.stdout}${result.stderr.length > 0 ? `\n[stderr]\n${result.stderr}` : ''}`);
+          }
+          if (result.passed && result.device !== undefined) {
+            const observationFiles = multi
+              ? [`${dir}/${fileName}`, `${dir}/output-${String(index)}.log`]
+              : [`${dir}/uiassert.json`, `${dir}/output.log`];
+            const ref = await recordObservation(
+              paths,
+              {
+                action: 'uiassert',
+                device: result.device,
+                ...(specVersion === undefined ? {} : { specVersion }),
+                files: observationFiles
+              },
+              now
+            );
+            observationRefs.push({ device: result.device, ref });
+          }
         }
-        const detail = [
-          `选择器：\`${selector}\``,
-          `期望：${expect}${expect === 'count' ? ` = ${String(expectCount)}` : ''}`,
-          `实际：${actual}`,
-          `命令：\`${commandArgs.join(' ')}\``,
+        if (multi) {
+          await writeTextAtomic(
+            `${dir}/uiassert-matrix.json`,
+            `${JSON.stringify(
+              {
+                schemaVersion: 1,
+                capturedAt: now,
+                expect,
+                ...(expect === 'count' ? { expectedCount: expectCount } : {}),
+                ...(fingerprintArg === undefined ? {} : { expectedFingerprint: fingerprintArg }),
+                passed: allPassed,
+                passedCount,
+                total: results.length,
+                results: results.map((result) => ({
+                  ...(result.device === undefined ? {} : { device: result.device }),
+                  ...(result.family === undefined ? {} : { family: result.family }),
+                  passed: result.passed,
+                  actual: result.actual,
+                  ...(result.matches === null ? {} : { matches: result.matches }),
+                  ...(result.fingerprint === undefined ? {} : { fingerprint: result.fingerprint })
+                }))
+              },
+              null,
+              2
+            )}\n`
+          );
+          matrixFiles.push(safeDisplay(paths, `${dir}/uiassert-matrix.json`));
+        }
+
+        const detailLines = [
+          ...(selector === undefined ? [] : [`选择器：\`${selector}\``]),
+          `期望：${expect}${expect === 'count' ? ` = ${String(expectCount)}` : ''}${
+            fingerprintArg === undefined ? '' : `（fingerprint ${fingerprintArg}）`
+          }`,
+          ...(multi
+            ? [
+                '| 设备 | 结果 | 实际 |',
+                '| --- | --- | --- |',
+                ...results.map(
+                  (result) => `| ${result.device ?? 'default'} | ${result.passed ? 'pass' : 'fail'} | ${result.actual.replace(/\|/g, '\\|')} |`
+                )
+              ]
+            : []),
+          ...(multi ? [] : [`实际：${results[0]?.actual ?? '（无结果）'}`]),
+          `命令：\`${results.map((result) => result.command.join(' ')).join(' | ')}\``,
           `记录：\`${displayPath(paths, dir)}/\``,
-          ...(observationRef === undefined ? [] : [`observationRef：\`${observationRef}\`（可作为 audit 的结构化证据）`])
-        ].join('\n');
+          ...observationRefs.map(
+            (entry) => `observationRef${entry.device === undefined ? '' : `（${entry.device}）`}：\`${entry.ref}\`（可作为 audit 的结构化证据）`
+          )
+        ];
         const files = [
-          safeDisplay(paths, `${dir}/uiassert.json`),
+          ...matrixFiles,
           safeDisplay(paths, `${dir}/result.json`),
           safeDisplay(paths, `${dir}/output.log`)
         ];
-        return passed
-          ? ok(`uiassert 通过：${selector} ${expect}`, {
-              detail,
+        const summary = multi
+          ? `uiassert all：${String(passedCount)}/${String(results.length)} 台通过`
+          : expect === 'fingerprint' && fingerprintArg === undefined
+            ? `uiassert 指纹：${results[0]?.fingerprint ?? '（未解析）'}`
+            : `uiassert ${allPassed ? '通过' : '未通过'}：${selector ?? 'fingerprint'} ${expect}`;
+        return allPassed
+          ? ok(summary, {
+              detail: detailLines.join('\n'),
               files,
-              next: '把 uiassert.json 写进审计 checks 的 evidenceFiles；断言通过不等于验收通过。'
+              next:
+                expect === 'fingerprint' && fingerprintArg === undefined
+                  ? '把采集到的 fingerprint 写进判据；下次用 expect=fingerprint + fingerprint 复核。'
+                  : '把 uiassert.json 写进审计 checks 的 evidenceFiles；断言通过不等于验收通过。'
             })
-          : fail(`uiassert 未通过：${selector} ${expect}（${actual}）`, {
-              detail,
+          : fail(summary, {
+              detail: detailLines.join('\n'),
               files,
-              next: '看 output.log 定位是元素不存在、超时还是数量不符；不要放宽判据来让它通过。'
+              next: '看 output.log 定位是元素不存在、超时、数量不符还是指纹变化；不要放宽判据来让它通过。'
             });
       }
 
@@ -1364,12 +1617,25 @@ export function createDevecoTool(
           if (device !== undefined) command.push('--device', device);
           if (applyFile !== undefined) command.push('--apply', applyFile);
           break;
-        case 'log':
+        case 'log': {
+          const logOp = opArg ?? 'raw';
+          if (logOp !== 'raw' && logOp !== 'crash' && logOp !== 'hilog') {
+            return fail(`log 的 op 只能是 raw / crash / hilog（收到 ${logOp}）。`);
+          }
           command.push('log');
-          if (level !== undefined) command.push('--level', level.toUpperCase());
-          if (crash) command.push('--crash');
+          if (logOp === 'crash') {
+            command.push('--crash');
+          } else if (logOp === 'hilog') {
+            if (level !== undefined) command.push('--level', level.toUpperCase());
+            if (bundleArg !== undefined) command.push('--bundle-name', bundleArg);
+          } else {
+            if (level !== undefined) command.push('--level', level.toUpperCase());
+            if (crash) command.push('--crash');
+          }
           if (device !== undefined) command.push('--device', device);
+          for (const token of extra) command.push(token);
           break;
+        }
         case 'lint':
           command.push('check', 'lint');
           break;
@@ -1550,7 +1816,9 @@ export function createDevecoTool(
       // Non-blocking execution: return a job id immediately, log to disk.
       const useBackground =
         args['background'] === true &&
-        (action === 'build' || action === 'run' || action === 'log' || (action === 'emulator' && (opArg ?? 'list') === 'start'));
+        ((action === 'build' || action === 'run') ||
+          (action === 'log' && (opArg ?? 'raw') === 'raw') ||
+          (action === 'emulator' && (opArg ?? 'list') === 'start'));
       if (useBackground) {
         await ensureShared(paths);
         let backgroundDevice: string | undefined;
@@ -1722,6 +1990,35 @@ export function createDevecoTool(
           specialFiles.push(displayPath(paths, `${dir}/compat.json`));
         } else if (result.stdout.trim().length > 0) {
           extraSummary = 'compat：已返回文本结果（未解析为 JSON）';
+        }
+      }
+      if (action === 'log' && result.code === 0) {
+        const logOp = opArg ?? 'raw';
+        if (logOp === 'crash') {
+          const reports = parseCrashLog(result.stdout);
+          await writeTextAtomic(
+            `${dir}/crash.json`,
+            `${JSON.stringify({ schemaVersion: 1, capturedAt: now, ...(device === undefined ? {} : { device }), reports }, null, 2)}\n`
+          );
+          specialFiles.push(displayPath(paths, `${dir}/crash.json`));
+          extraSummary =
+            reports.length === 0
+              ? 'crash：未解析到 crash 记录'
+              : `crash：${String(reports.length)} 条记录（${reports.map((report) => report.type).join('/')}），栈顶：${
+                  reports[0]?.topFrame ?? '（无栈）'
+                }`;
+        } else if (logOp === 'hilog') {
+          const hilogSummary = parseHilog(result.stdout, {
+            ...(regexArg === undefined ? {} : { regex: regexArg }),
+            ...(pidArg >= 0 ? { pid: pidArg } : {})
+          });
+          await writeTextAtomic(
+            `${dir}/hilog-summary.json`,
+            `${JSON.stringify({ schemaVersion: 1, capturedAt: now, ...(device === undefined ? {} : { device }), ...hilogSummary }, null, 2)}\n`
+          );
+          specialFiles.push(displayPath(paths, `${dir}/hilog-summary.json`));
+          const errorCount = hilogSummary.errors.reduce((sum, entry) => sum + entry.count, 0);
+          extraSummary = `hilog：${String(hilogSummary.total)} 行 · 错误 ${String(errorCount)} 条 · ${String(hilogSummary.folded.length)} 类模板`;
         }
       }
 

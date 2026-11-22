@@ -236,6 +236,73 @@ export interface ApiTag {
   readonly line: number;
 }
 
+/** A single API declaration marked `@deprecated`. */
+export interface DeprecatedSymbol {
+  readonly module: string;
+  readonly name: string;
+  readonly since?: string;
+  readonly deprecated: string;
+}
+
+const DECLARATION_PATTERNS: readonly RegExp[] = [
+  /^\s*(?:export\s+)?(?:declare\s+)?(?:default\s+)?(?:function|interface|class|type|enum|const|let|var|namespace)\s+([A-Za-z_$][\w$]*)/,
+  /^\s*(?:export\s+)?(?:default\s+)?([A-Za-z_$][\w$]*)\s*\(/,
+  /^\s*([A-Za-z_$][\w$]*)\s*:\s*\(/
+];
+
+/**
+ * List declarations marked `@deprecated` in one SDK module's `.d.ts`.
+ * Read-only and capped, so a scan over a project import set stays cheap.
+ */
+export function listDeprecatedSymbols(layout: SdkLayout, rawModule: string): DeprecatedSymbol[] {
+  const moduleName = normalizeModuleName(rawModule);
+  if (!/^[@\w.]+$/.test(moduleName)) return [];
+  const located = locateDeclarations(layout, moduleName);
+  if (located === null) return [];
+  let info;
+  try {
+    info = statSync(located.file);
+  } catch {
+    return [];
+  }
+  if (info.size > 4 * 1024 * 1024) return [];
+  let text: string;
+  try {
+    text = readFileSync(located.file, 'utf8');
+  } catch {
+    return [];
+  }
+  const lines = text.split('\n');
+  const symbols: DeprecatedSymbol[] = [];
+  const seen = new Set<string>();
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? '';
+    const match = /@deprecated\b\s*(.*)$/.exec(line);
+    if (match === null) continue;
+    let since: string | undefined;
+    for (let lookBack = Math.max(0, index - 12); lookBack < index; lookBack += 1) {
+      const sinceMatch = /@since\b\s*(.*)$/.exec(lines[lookBack] ?? '');
+      if (sinceMatch !== null) {
+        since = (sinceMatch[1] ?? '').trim();
+        break;
+      }
+    }
+    const deprecated = (match[1] ?? '').trim().length === 0 ? 'deprecated' : (match[1] ?? '').trim().slice(0, 200);
+    for (let lookAhead = index + 1; lookAhead < Math.min(lines.length, index + 30); lookAhead += 1) {
+      const candidate = lines[lookAhead] ?? '';
+      const declaration = DECLARATION_PATTERNS.map((pattern) => pattern.exec(candidate)).find((entry) => entry !== null);
+      if (declaration === undefined) continue;
+      const name = declaration[1];
+      if (name === undefined || name.length < 2 || seen.has(name)) break;
+      seen.add(name);
+      symbols.push({ module: moduleName, name, ...(since === undefined ? {} : { since }), deprecated });
+      break;
+    }
+    if (symbols.length >= 200) break;
+  }
+  return symbols;
+}
+
 /** Result of one SDK API lookup. */
 export interface ApiLookup {
   readonly module: string;

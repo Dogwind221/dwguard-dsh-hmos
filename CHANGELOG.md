@@ -4,6 +4,41 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.3 — 2026-11-22
+
+取证闭环：把崩溃、日志、UI 指纹、废弃 API 变成结构化证据，并让审计自动复核 UI 断言。
+
+### Added
+
+- `dwguard_deveco` `log op=crash`：解析 jscrash / cppcrash / appfreeze
+  （JSON 或 faultlog 文本），提取 pid / process / faultTime / reason / signal /
+  `frames` / `topFrame`，写 `crash.json`。
+- `dwguard_deveco` `log op=hilog`：结构化摘要（级别 / pid / tag 分布，重复消息
+  折叠，错误模板），支持 `regex` 与 `pid` 插件侧过滤，写 `hilog-summary.json`；
+  `--tail` / `--keyword` / `--from` / `--to` 通过 `args` 透传。
+- `uiassert expect=fingerprint`：布局树归一化指纹（保留 id/type/text/
+  accessibilityId/交互标志/子节点顺序，丢弃 bounds），支持采集与复核。
+- `uiassert device=all`：按 `device.pool` 逐台执行同一断言，输出逐台表格 +
+  `uiassert-matrix.json`（每台另有 `uiassert-<i>-<sn>.json` 与 observation）。
+- `api op=scan`：扫描工程源码中 `@deprecated` SDK API 的调用点，写
+  `api-scan.json`；附兼容性判据模板（见 `docs/1.0.3-forensics.md`）。
+- `dwguard_audit`：自动复核 `uiassert` 证据（observationRef 或 evidenceFiles 中的
+  `uiassert*.json`），`passed !== true` 的断言直接判失败，不进入四维闸门。
+- 文档：`docs/1.0.3-forensics.md`。
+- 测试：`tests/audit-uiassert.test.mjs` + `tests/deveco-actions.test.mjs` 新增用例。
+
+### Verification
+
+- `npm test`：219/219。
+- 本机 Mate X7 模拟器（HarmonyOS 6.1.1）实测：`log op=hilog --tail 200` 解析
+  199 行 / 46 条错误 / 30 类模板；`log op=crash` 无崩溃时返回空记录而非报错；
+  `uiassert` 指纹采集与 `device=all` 逐台表由单元测试覆盖。
+
+### Compatibility
+
+- 工具数仍是 17，动作数仍是 25；新增字段与子动作均为 additive。
+- `log` 的 `op` 缺省仍是 `raw`，旧用法（`crash: true`）保持不变。
+
 ## 1.0.2 — 2026-11-22
 
 `dwguard_deveco` 扩展到 25 个 action（工具数仍是 17）：补上设备/工程/SDK 侧的工作台动作。

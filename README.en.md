@@ -33,7 +33,7 @@ This plugin makes the hand-off explicit:
   accepted paradigm pack only after a passed audit + user confirmation, and
   learns from pack feedback/benchmarks.
 
-## Capability surface (1.0.2) and neighbours
+## Capability surface (1.0.3) and neighbours
 
 **17 tools / 25 actions**: orchestration + audit (`dwguard_spec` / `prereview` /
 `dispatch` / `audit` / `calibration` / `confirm` / `knowledge` / `status` /
@@ -41,8 +41,10 @@ This plugin makes the hand-off explicit:
 via `dwguard_deveco` (25 actions: `env / build / sign / run / log / lint /
 device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach /
 jobs / stop` + **`emulator / app / file / uiassert / trace / project / api /
-compat`**), zero-click executor (`dwguard_code`) and scan tools
-(`dwguard_scan` / `dwguard_rules` / `dwguard_shadow`).
+compat`**; since 1.0.3 `log` supports `op=crash|hilog`, `uiassert` supports
+`fingerprint` / `device=all`, and `api` supports `op=scan`), zero-click executor
+(`dwguard_code`) and scan tools (`dwguard_scan` / `dwguard_rules` /
+`dwguard_shadow`).
 
 These plugins are layers, not substitutes:
 
@@ -60,7 +62,8 @@ These plugins are layers, not substitutes:
 > Recommended combo: **dwguard-dsh-hmos (acceptance) + dsh-hdc-bridge (device/knowledge) + dsh-deveco (Inspector)**.
 > Among the peers, only this plugin implements a four-dimension acceptance gate +
 > independent external audit; the 1.0.2 `uiassert` / `trace` / `project` / `api` /
-> `compat` actions remove most manual screenshot comparisons.
+> `compat` actions and the 1.0.3 crash/hilog parsing, UI fingerprints and
+> deprecated-API scan remove most manual screenshot comparisons.
 
 ## Design reference loop
 
@@ -193,7 +196,7 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.2).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.3).
 
 > **1.0.0 is the first public baseline**: self-use scale for other developers.
 > 191/191 tests, 86.92% line coverage, scan p95 19.51ms, queue-lock fix, and a
@@ -261,9 +264,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.2`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.2` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.2` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.3`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.3` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.3` |
 
 Omit the version to follow the latest release.
 
@@ -272,7 +275,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.2`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.3`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -281,7 +284,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@1.0.2   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.3   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -344,7 +347,7 @@ produces evidence — acceptance stays with `dwguard_audit`.
 | `dwguard_dispatch` | Generate the Goal-mode brief and the dispatch record (`cli-brief.md` in CLI mode) |
 | `dwguard_code` | Zero-click executor: `run` starts `deveco run --dir <project> --format json` in the background on the frozen Goal brief, streams JSON events to `artifacts/code-<n>/events.jsonl` and job state to `meta.json`; `status` / `stop` / `list` manage the job. `--auto` is off by default; one job per project directory; default timeout `codeTimeoutMinutes` (45). It produces evidence only and never replaces `dwguard_audit` |
 | `dwguard_scan` | Independent ArkTS/ArkUI static scan with stable rule IDs |
-| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop` + 1.0.2 workbench actions `emulator / app / file / uiassert / trace / project / api / compat`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; `project`/`api` are read-only, `uiassert` is a deterministic UI assertion, `trace` captures raw hitrace data; device actions use per-device leases (token/expiry/heartbeat) and background jobs hold theirs for their whole lifetime |
+| `dwguard_deveco` | DevEco CLI evidence: `env / build / sign / run / log / lint / device / uiHelp / ui / screenshot / layout / a11y / verify / pipeline / attach / jobs / stop` + 1.0.2 workbench actions `emulator / app / file / uiassert / trace / project / api / compat` + 1.0.3 `log op=crash\|hilog`, `uiassert fingerprint/device=all`, `api op=scan`; `pipeline` runs sign→build→run→screenshot→layout with per-step evidence, stop-on-failure, `resume` and automatic fallback; `project`/`api` are read-only, `uiassert` is a deterministic UI assertion, `trace` captures raw hitrace data; device actions use per-device leases (token/expiry/heartbeat) and background jobs hold theirs for their whole lifetime |
 | `dwguard_shadow` | Read-only shadow review during execution (incremental, optional UI tree) |
 | `dwguard_rules` | Query the rule catalog (`list`/`get`) and the local official-docs corpus (`search`) |
 | `dwguard_audit_dimension` | Record one dimension as its sub-agent returns |
@@ -362,6 +365,15 @@ produces evidence — acceptance stays with `dwguard_audit`.
 Device actions default to the configured device pool; `project` / `api` execute
 nothing (read-only); `uiassert` writes a deterministic `uiassert.json` that can
 be cited as audit evidence. See [docs/1.0.2-deveco-actions.md](docs/1.0.2-deveco-actions.md).
+
+**1.0.3 forensics loop**: `log op=crash` parses jscrash/cppcrash/appfreeze and
+extracts the top frame (`crash.json`); `log op=hilog` folds duplicate errors and
+filters by `regex`/`pid` (`hilog-summary.json`); `uiassert expect=fingerprint`
+hashes a normalized layout tree (stable across screen sizes) and `device=all`
+produces a per-device table (`uiassert-matrix.json`); `api op=scan` reports
+`@deprecated` API call sites in project sources (`api-scan.json`); `dwguard_audit`
+re-checks uiassert evidence automatically, so a failed assertion cannot be cited
+as a pass. See [docs/1.0.3-forensics.md](docs/1.0.3-forensics.md).
 
 `dwguard_aesthetic` closes the aesthetic loop: a preference is proposed from
 confirmed user wording or project resource files, the user picks between

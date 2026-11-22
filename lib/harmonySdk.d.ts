@@ -35,6 +35,18 @@ export interface ApiTag {
     readonly value: string;
     readonly line: number;
 }
+/** A single API declaration marked `@deprecated`. */
+export interface DeprecatedSymbol {
+    readonly module: string;
+    readonly name: string;
+    readonly since?: string;
+    readonly deprecated: string;
+}
+/**
+ * List declarations marked `@deprecated` in one SDK module's `.d.ts`.
+ * Read-only and capped, so a scan over a project import set stays cheap.
+ */
+export declare function listDeprecatedSymbols(layout: SdkLayout, rawModule: string): DeprecatedSymbol[];
 /** Result of one SDK API lookup. */
 export interface ApiLookup {
     readonly module: string;
