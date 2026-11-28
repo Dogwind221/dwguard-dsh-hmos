@@ -122,7 +122,8 @@ intentionally breaking:
 5. Per-device leases (`token`, expiry, heartbeat); background jobs hold the
    lease for their whole lifetime; release must match the token.
 6. Design packs validate name/path/realpath before any write; evidence files use
-   collision-free names + `wx`; the board is loopback-only or `boardToken`,
+   collision-free names + `wx`; the board requires DSH Connection admission
+   (`ctx.connection.requestRejection`) on top of loopback-only or `boardToken`,
    `cwd` must be a registered workspace, and paths are not returned.
 
 See [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md).
@@ -199,7 +200,7 @@ See [docs/0.8.6-hardening.md](docs/0.8.6-hardening.md).
 
 ## Install
 
-npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.6).
+npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos) (current 1.0.7).
 
 > **1.0.0 is the first public baseline**: self-use scale for other developers.
 > 191/191 tests, 86.92% line coverage, scan p95 19.51ms, queue-lock fix, and a
@@ -267,9 +268,9 @@ npm package: [`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos
 
 | Entry | Command / action |
 | --- | --- |
-| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.6`) |
-| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.6` |
-| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.6` |
+| Desktop app | **Plugins → Add plugin**, package `dwguard-dsh-hmos` (pin `dwguard-dsh-hmos@1.0.7`) |
+| CLI profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.7` |
+| No `dsh` on PATH | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.7` |
 
 Omit the version to follow the latest release.
 
@@ -278,7 +279,7 @@ refuses `dsh plugin --profile desktop …`. Pick the path that matches how you r
 DSH:
 
 **Desktop app** — open **Plugins** in the left sidebar → **Add plugin** → enter
-the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.6`)
+the package name `dwguard-dsh-hmos` (pin a version with `dwguard-dsh-hmos@1.0.7`)
 → install and choose the layer. *Install third-party plugin* in the same dialog
 also takes a Git URL or a local directory. Restart DSH afterwards.
 
@@ -287,7 +288,7 @@ pnpm, so pnpm must be on `PATH`:
 
 ```powershell
 dsh plugin --profile web add dwguard-dsh-hmos
-dsh plugin --profile web add dwguard-dsh-hmos@1.0.6   # pin a version
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.7   # pin a version
 # without a global dsh CLI:
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
 ```
@@ -548,7 +549,7 @@ git clone --depth 1 --filter=blob:none --sparse https://github.com/openharmony/d
     maxDesignSearches: 12  # hard cap on design searches per round
     harnessMaxRetries: 3   # attempts per harness step before human decision
     strictEvidence: true   # must+pass needs structured evidence; self-report is an error
-    boardToken: ""         # empty = loopback-only; otherwise x-dwguard-token is required
+    boardToken: ""         # empty = loopback-only; otherwise x-dwguard-token is required (DSH session admission applies either way)
     designEmbeddingModelVersion: ""  # part of the embedding cache identity
     designClipModelVersion: ""       # part of the CLIP cache identity
     maxDevecoLogBytes: 10485760      # rotate/truncate background logs above this

@@ -104,7 +104,7 @@ flowchart TD
 
 要求：DSH `>=0.2.1-rc.0 <0.3.0`（已在 0.2.1-rc.5 与 0.2.2-rc.1 上启动验证）。插件以 **bundle** 形式安装，注册一个 host 行。
 
-npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 1.0.6）。
+npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)（当前 1.0.7）。
 
 > **1.0.0 第一个公开基线**：面向其他开发者的自用级版本。191/191 测试、coverage 86.92% line、scan p95 19.51ms、并发队列锁修复、临时 profile clean install 已取证。**非生产级**：无 SLA/监控/备份/on-call/多租户，物理设备未覆盖时明确 `blocked`。发布说明见 [CHANGELOG.md](CHANGELOG.md)，基线说明见 [docs/1.0.0-baseline.md](docs/1.0.0-baseline.md)，边界见 [docs/known-limitations.md](docs/known-limitations.md)。
 >
@@ -132,9 +132,9 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 
 | 入口 | 命令 / 操作 |
 | --- | --- |
-| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@1.0.6`） |
-| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.6` |
-| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.6` |
+| 桌面版 | 侧栏 **插件 → 添加插件**，包名填 `dwguard-dsh-hmos`（固定版本 `dwguard-dsh-hmos@1.0.7`） |
+| 命令行 profile | `dsh plugin --profile web add dwguard-dsh-hmos@1.0.7` |
+| 没有 `dsh` 命令 | `npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos@1.0.7` |
 
 安装器会从 npm registry 解析版本；想跟最新版就省略版本号。下文分别说明桌面版与 CLI profile 的细节。
 
@@ -148,7 +148,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 ### 桌面版：应用内安装
 
 1. 左侧栏打开 **插件** → 右上 **添加插件**；
-2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@1.0.6`）→ 安装、选配置层、确认；
+2. 包名填 `dwguard-dsh-hmos`（固定版本就填 `dwguard-dsh-hmos@1.0.7`）→ 安装、选配置层、确认；
 3. 装完按提示重启应用（托盘里也要退出）。
 
 同一个对话框里的 **安装第三方插件** 也接受 Git 仓库地址和本地目录，所以「GitHub 直装 / 本地 checkout」在桌面版也走这里。
@@ -160,7 +160,7 @@ npm 包：[`dwguard-dsh-hmos`](https://www.npmjs.com/package/dwguard-dsh-hmos)�
 dsh plugin --profile web add dwguard-dsh-hmos
 
 # 固定版本
-dsh plugin --profile web add dwguard-dsh-hmos@1.0.6
+dsh plugin --profile web add dwguard-dsh-hmos@1.0.7
 
 # 机器上没有 dsh 命令时，用 npm 上的 CLI 包
 npx @deepseek-ai/dsh@0.2.2-rc.1 plugin --profile web add dwguard-dsh-hmos
@@ -280,7 +280,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 | `accepted` | 知识沉淀（等待 `dwguard_confirm`） |
 | `confirmed` | 整张图全绿、无 spinner（本轮已由用户确认） |
 
-数据来自插件注册的只读接口 `GET /dwguard/board`（同源、无写入、`cache-control: no-store`）。工作区列表来自工具调用时记录的 `~/.dsh/dwguard/workspaces.json`——**先跑一次任意 DwGuard 工具，看板才有工作区可选**。
+数据来自插件注册的只读接口 `GET /dwguard/board`（同源、无写入、`cache-control: no-store`，每个请求先过 DSH Connection 的 `ctx.connection.requestRejection`：Host/Origin 围栏 + 浏览器会话认证）。工作区列表来自工具调用时记录的 `~/.dsh/dwguard/workspaces.json`——**先跑一次任意 DwGuard 工具，看板才有工作区可选**。
 
 右侧栏是**按会话**的：没有打开的会话时，入口会提示「右侧栏打不开」，打开会话后再点即可。
 
@@ -384,7 +384,7 @@ dsh --profile web --patch "preset/dwguard-hmos.cordis.yml"
 3. **设备身份**：矩阵模式校验设备属于 `devicePool` 且屏幕族一致；matrix 的 must+pass 必须带采集器 `actual.observationRef`，并校验采集设备与 specVersion。
 4. **并发**：state 使用锁 + revision；四维进度拆成 `audit-progress/<specVersion>/<dimension>.json`；编号在锁内预留；所有工具支持 `commandId` 幂等。
 5. **设备 lease**：每台设备独立 `.device-locks/<hash>.json`，带 token/过期时间；后台任务全生命周期持锁并心跳；释放必须匹配 token。
-6. **路径与看板**：设计包强校验包名、路径包含与 realpath，导入前完成全部校验；证据文件用 `000001-<sha256>` 唯一名 + `wx` 独占创建；看板默认仅 loopback，或配置 `boardToken`，cwd 必须是已登记 workspace，响应不再返回绝对路径。
+6. **路径与看板**：设计包强校验包名、路径包含与 realpath，导入前完成全部校验；证据文件用 `000001-<sha256>` 唯一名 + `wx` 独占创建；看板每个请求先过 DSH Connection 的会话校验（`ctx.connection.requestRejection`），再叠加仅 loopback 或 `boardToken`、cwd 必须是已登记 workspace、响应不返回绝对路径。
 
 详细映射与限制见 [docs/0.8.5-hardening.md](docs/0.8.5-hardening.md)。
 
@@ -599,7 +599,7 @@ Skill 正文在 `skills/*.md`，可以直接改；插件启动时按包内相对
     maxDesignSearches: 12                 # 本轮设计检索次数硬上限
     harnessMaxRetries: 3                  # 同一 step 自动重试上限，超过转人工
     strictEvidence: true                  # must+pass 必须有结构化证据；自述直接 error
-    boardToken: ""                        # 空 = 看板仅 loopback；非空时要求 x-dwguard-token
+    boardToken: ""                        # 空 = 看板仅 loopback；非空时要求 x-dwguard-token（两者都先过 DSH 会话校验）
     designEmbeddingModelVersion: ""       # 进入 embedding cache 身份；换版本不复用旧向量
     designClipModelVersion: ""            # 进入 CLIP cache 身份
     maxDevecoLogBytes: 10485760           # 后台日志超过此大小轮转/截断
@@ -672,7 +672,7 @@ npm install --no-save typescript @types/node @deepseek-ai/dsh-tools@0.2.2-rc.1 @
 
 CI 在 [`.github/workflows/ci.yml`](.github/workflows/ci.yml)：ubuntu + windows、Node 22，依次跑 `typecheck → build → test`。
 
-发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v1.0.6 && git push origin v1.0.6`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
+发版：`npm run release:dry` 预览版本号，`npm run release -- --bump=minor` 更新 `package.json`、重建 `lib/` 并 `npm pack`；脚本**不会**自动 publish。打 tag 并推送即触发 CI 用 **trusted publishing (OIDC)** 自动发布到 npm（附 provenance，无需 `NPM_TOKEN`）：`git tag v1.0.7 && git push origin v1.0.7`。版本记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 验证顺序（与本次交付一致）：
 

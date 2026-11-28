@@ -3,7 +3,10 @@
  *
  * `dsh-host-webserver` exposes a named-route registry; this module claims one
  * exact path and answers the Web client with the same projection the tools
- * derive from `.shared/`. It never writes and refuses cross-site callers.
+ * derive from `.shared/`. It never writes, refuses cross-site callers, and
+ * requires the DSH Connection browser-session admission: the carrier itself
+ * owns no authentication, so a route that skips `ctx.connection.requestRejection`
+ * is reachable by any page the user's browser happens to have open.
  *
  * The row may mount before the web server does, so registration goes through
  * `ctx.inject(['webServer'])` when the service is not there yet — the same
@@ -41,6 +44,19 @@ interface WebServerLike {
     path: string;
     handler: (request: IncomingLike, response: ServerResponseLike) => void | Promise<void>;
   }): () => void;
+}
+
+/**
+ * The DSH Connection service surface this route consults.
+ *
+ * `requestRejection` is Connection's Host/Origin fence plus browser-session
+ * authentication: it returns the status to answer with, or `undefined` when the
+ * request may be served. The service is optional at compile time so the plugin
+ * still loads in a host that mounts `webServer` without Connection; the handler
+ * then fails closed instead of serving unauthenticated data.
+ */
+interface ConnectionLike {
+  requestRejection?(request: { readonly headers: IncomingLike['headers'] }): 401 | 403 | undefined;
 }
 
 interface BoardResponse {
@@ -96,6 +112,31 @@ function mount(ctx: PluginContext, options: Options): void {
       async handler(request: IncomingLike, response: ServerResponseLike): Promise<void> {
         if ((request.method ?? 'GET').toUpperCase() !== 'GET') {
           sendJson(response, 405, { error: 'method not allowed' });
+          return;
+        }
+        const connection = ctx.get?.('connection') as ConnectionLike | undefined;
+        if (connection?.requestRejection === undefined) {
+          // No Connection row in this composition: there is no browser-session
+          // admission to apply, so fail closed rather than serve the board to
+          // whoever can reach the port.
+          ctx.logger?.warn?.('[dwguard-hmos] 未检测到 connection 服务，看板接口拒绝所有请求');
+          sendJson(response, 503, { error: 'DSH access check unavailable' });
+          return;
+        }
+        let rejection: 401 | 403 | undefined;
+        try {
+          rejection = connection.requestRejection({ headers: request.headers });
+        } catch (error) {
+          ctx.logger?.warn?.(
+            `[dwguard-hmos] 看板接口访问检查失败：${error instanceof Error ? error.message : String(error)}`
+          );
+          sendJson(response, 403, { error: 'DSH access check failed' });
+          return;
+        }
+        if (rejection !== undefined) {
+          sendJson(response, rejection, {
+            error: rejection === 401 ? 'authentication required' : 'request refused by DSH access check'
+          });
           return;
         }
         const site = headerValue(request, 'sec-fetch-site');

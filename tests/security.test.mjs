@@ -289,12 +289,15 @@ test('P0-6: board route is loopback/token gated and only accepts registered work
   await rememberWorkspace(cwd, now);
   let handler;
   const ctx = {
-    get: () => ({
-      register: (route) => {
-        handler = route.handler;
-        return () => {};
-      }
-    }),
+    get: (name) =>
+      name === 'webServer'
+        ? {
+            register: (route) => {
+              handler = route.handler;
+              return () => {};
+            }
+          }
+        : { requestRejection: () => undefined },
     effect: () => {},
     logger: {}
   };
@@ -333,18 +336,95 @@ test('P0-6: board route is loopback/token gated and only accepts registered work
   assert.equal((await call('/dwguard/board', { 'sec-fetch-site': 'cross-site' })).status, 403);
 
   const tokenCtx = {
-    get: () => ({
-      register: (route) => {
-        handler = route.handler;
-        return () => {};
-      }
-    }),
+    get: (name) =>
+      name === 'webServer'
+        ? {
+            register: (route) => {
+              handler = route.handler;
+              return () => {};
+            }
+          }
+        : { requestRejection: () => undefined },
     effect: () => {},
     logger: {}
   };
   registerBoardRoute(tokenCtx, resolveOptions({ boardToken: 'secret' }));
   assert.equal((await call('/dwguard/board', { host: '10.0.0.5:56100' })).status, 403);
   assert.equal((await call('/dwguard/board', { host: '10.0.0.5:56100', 'x-dwguard-token': 'secret' })).status, 200);
+});
+
+test('1.0.7: board route requires the DSH Connection access check', async () => {
+  const cwd = await workspace();
+  await rememberWorkspace(cwd, now);
+
+  let handler;
+  let seenHeaders;
+  const mountWith = (connection) => {
+    const ctx = {
+      get: (name) => {
+        if (name === 'webServer') {
+          return {
+            register: (route) => {
+              handler = route.handler;
+              return () => {};
+            }
+          };
+        }
+        return name === 'connection' ? connection : undefined;
+      },
+      effect: () => {},
+      logger: { warn: () => {} }
+    };
+    registerBoardRoute(ctx, resolveOptions({ boardToken: '' }));
+  };
+  const call = async (headers = {}) => {
+    const response = {
+      status: 0,
+      body: '',
+      writeHead(status) {
+        this.status = status;
+      },
+      end(body) {
+        this.body = body ?? '';
+      }
+    };
+    await handler(
+      { method: 'GET', url: '/dwguard/board', headers: { host: '127.0.0.1:56100', ...headers } },
+      response
+    );
+    return { status: response.status, body: response.body ? JSON.parse(response.body) : null };
+  };
+
+  mountWith(undefined);
+  const missing = await call();
+  assert.equal(missing.status, 503, 'a composition without Connection must fail closed');
+  assert.match(missing.body.error, /access check unavailable/);
+
+  mountWith({
+    requestRejection(request) {
+      seenHeaders = request.headers;
+      return 401;
+    }
+  });
+  const anonymous = await call();
+  assert.equal(anonymous.status, 401);
+  assert.match(anonymous.body.error, /authentication/);
+  assert.equal(seenHeaders.host, '127.0.0.1:56100', 'Connection must see the request headers');
+
+  mountWith({ requestRejection: () => 403 });
+  assert.equal((await call()).status, 403);
+
+  mountWith({
+    requestRejection: () => {
+      throw new Error('connection down');
+    }
+  });
+  assert.equal((await call()).status, 403, 'an access-check error must fail closed');
+
+  mountWith({ requestRejection: () => undefined });
+  const admitted = await call({ cookie: 'dsh-session=ok' });
+  assert.equal(admitted.status, 200);
+  assert.equal(admitted.body.workspaces[0].id, admitted.body.active);
 });
 
 test('0.8.6: PNG decoder rejects oversized dimensions before inflate', () => {

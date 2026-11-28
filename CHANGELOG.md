@@ -4,6 +4,32 @@ All notable changes to this plugin are recorded here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.0.7 — 2026-11-28
+
+看板接口补上 DSH 的访问检查：`GET /dwguard/board` 先过
+`ctx.connection.requestRejection`（Host/Origin 围栏 + 浏览器会话认证），
+不再只靠 loopback / `boardToken` 兜底。
+
+### Fixed
+
+- `GET /dwguard/board` 此前没有 DSH 访问检查：任何网页只要能让浏览器发出请求，
+  或本机进程直接连端口，就能读到工作区列表与看板投影。现在每个请求先调用
+  `ctx.connection.requestRejection(request)`，返回 401/403 时原样拒绝；检查本身
+  抛错按 403 处理（fail closed）。
+- 组合里没有 `connection` 行时接口返回 503，而不是退回自带的 Host/Origin 白名单。
+  标准 `web` / `desktop` 组合由 `@deepseek-ai/dsh-client-connection` 提供该服务，
+  面板的同源 fetch 自带会话 cookie，行为不变。
+- 原有 Host/Origin、`sec-fetch-site`、loopback/`boardToken` 与已登记 workspace
+  校验保留，作为纵深防御。
+
+### Verification
+
+- `tests/security.test.mjs` 新增 5 条路径：无 connection → 503；`requestRejection`
+  返回 401 / 403 → 原样返回；检查抛错 → 403；放行 → 200，且请求头传给 Connection。
+- 修复前实测：无凭据 `GET http://127.0.0.1:52088/dwguard/board` 返回 200 与
+  工作区/看板数据；修复后同一请求在无会话凭据时按 401 拒绝（单测覆盖）。
+- `npm test`：238/238。
+
 ## 1.0.6 — 2026-11-22
 
 发布包瘦身：`docs/` 不再随 npm 包发布；扫描规则在真实第三方工程上修掉三处误报。
